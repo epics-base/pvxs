@@ -15,14 +15,14 @@ DEFINE_LOGGER(io, "pvxs.cli.io");
 namespace pvxs {
 namespace client {
 
-Discovery::Discovery(const std::shared_ptr<ContextImpl> &context)
-    :OperationBase (Discover, context->tcp_loop)
+Discovery::Discovery(const std::shared_ptr<ContextImpl> &context, const std::string& name)
+    :OperationBase (Operation::Discover, context->tcp_loop, name)
     ,context(context)
 {}
 
 Discovery::~Discovery() {
     if(loop.assertInRunningLoop())
-        _cancel();
+        _cancel(true);
 }
 
 bool Discovery::cancel()
@@ -30,14 +30,14 @@ bool Discovery::cancel()
     decltype (notify) junk;
     bool ret;
     loop.call([this, &junk, &ret](){
-        ret = _cancel();
+        ret = _cancel(false);
         junk = std::move(notify);
         // leave opByIOID for GC
     });
     return ret;
 }
 
-bool Discovery::_cancel() {
+bool Discovery::_cancel(bool implicit) {
     bool active = running;
 
     if(active) {
@@ -63,13 +63,13 @@ std::shared_ptr<Operation> DiscoverBuilder::exec()
     auto context(ctx->impl->shared_from_this());
     auto ping(_ping);
 
-    auto op(std::make_shared<Discovery>(context));
+    auto op(std::make_shared<Discovery>(context, std::string()));
     op->notify = std::move(_fn);
 
     auto syncCancel(_syncCancel);
     std::shared_ptr<Discovery> external(op.get(), [op, syncCancel](Discovery*) mutable {
         // (maybe) user thread
-        const auto loop(op->context->tcp_loop);
+        auto loop(op->context->tcp_loop);
         auto temp(std::move(op));
         loop.tryInvoke(syncCancel, std::bind([](const std::shared_ptr<Discovery>& operation){
                            // on worker

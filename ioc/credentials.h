@@ -19,12 +19,10 @@ namespace pvxs {
 namespace ioc {
 
 /**
- * @brief Credentials class
- *
- * @details This class is used to store the credentials for a client or server.
- *
- * @param clientCredentials The client credentials to be used for the credentials object
- *
+ * eg.
+ * "username"  implies "ca/" prefix
+ * "krb/principle"
+ * "role/groupname"
  */
 class Credentials {
 public:

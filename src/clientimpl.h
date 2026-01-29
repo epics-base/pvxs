@@ -54,6 +54,7 @@ struct ResultWaiter {
 struct OperationBase : public Operation
 {
     const evbase loop;
+    const std::string channelName;
     // remaining members only accessibly from loop worker
     std::shared_ptr<Channel> chan;
     uint32_t ioid = 0;
@@ -61,7 +62,7 @@ struct OperationBase : public Operation
     bool done = false;
     std::shared_ptr<ResultWaiter> waiter;
 
-    OperationBase(operation_t op, const evbase& loop);
+    OperationBase(operation_t op, const evbase& loop, const std::string& name);
     virtual ~OperationBase();
 
     virtual void createOp() =0;
@@ -97,6 +98,7 @@ struct Connection final : public ConnBase, public std::enable_shared_from_this<C
 
     // While HoldOff, the time until re-connection
     // While Connected, periodic Echo
+    // After early connect() failure, deferred notification
     const evevent echoTimer;
 
     bool ready = false;
@@ -120,18 +122,14 @@ struct Connection final : public ConnBase, public std::enable_shared_from_this<C
 
     Connection(const std::shared_ptr<ContextImpl>& context,
                const SockAddr &peerAddr,
-               bool reconn
-      , bool isTLS
-               );
+               bool reconn, bool isTLS);
     virtual ~Connection();
 
     static
     std::shared_ptr<Connection> build(const std::shared_ptr<ContextImpl>& context,
                                       const SockAddr& serv,
-                                      bool reconn
-#ifdef PVXS_ENABLE_OPENSSL
-                                    , bool isTLS
-#endif
+                                      bool reconn,
+                                      bool isTLS
                                       );
 
 private:
@@ -140,7 +138,7 @@ private:
 #ifdef PVXS_ENABLE_OPENSSL
     void peerStatusCallback(certs::cert_status_category_t status_category) override;
 #endif
-    public:
+public:
 
     void createChannels();
     void proceedWithCreatingChannels();
@@ -256,12 +254,12 @@ struct Discovery final : public OperationBase
     std::function<void(const Discovered &)> notify;
     bool running = false;
 
-    Discovery(const std::shared_ptr<ContextImpl>& context);
+    Discovery(const std::shared_ptr<ContextImpl>& context, const std::string& name);
     ~Discovery();
 
     virtual bool cancel() override final;
 private:
-    bool _cancel();
+    bool _cancel(bool implicit);
 
     // unused for this special case
     virtual void _reExecGet(std::function<void (Result &&)> &&resultcb) override final;
@@ -270,10 +268,9 @@ private:
     virtual void disconnected(const std::shared_ptr<OperationBase> &self) override final;
 };
 
-struct ContextImpl : std::enable_shared_from_this<ContextImpl>
+struct ContextImpl : public std::enable_shared_from_this<ContextImpl>
 {
     SockAttach attach;
-    IfaceMap& ifmap;
 
     enum state_t {
         Init,
@@ -342,7 +339,14 @@ struct ContextImpl : std::enable_shared_from_this<ContextImpl>
     std::vector<uint8_t> searchMsg;
 
     // search destination address and whether to set the unicast flag
-    std::vector<std::pair<SockEndpoint, bool>> searchDest;
+    struct SearchDest {
+        const SockEndpoint dest;
+        const bool isucast;
+        bool lastSuccess = true;
+        SearchDest(SockEndpoint dest, bool isu) :dest(dest), isucast(isu) {}
+    };
+
+    std::vector<SearchDest> searchDest;
 
     size_t currentBucket = 0u;
     // Channels where we have yet to send out an initial search request
@@ -359,7 +363,6 @@ struct ContextImpl : std::enable_shared_from_this<ContextImpl>
     std::map<std::pair<std::string, std::string>, std::shared_ptr<Channel>> chanByName;
     const evbase tcp_loop;
 
-#ifdef PVXS_ENABLE_OPENSSL
     std::shared_ptr<ossl::SSLContext> tls_context;
 
     // pair (addr, useTLS)
@@ -372,9 +375,6 @@ struct ContextImpl : std::enable_shared_from_this<ContextImpl>
     //       so that by time SSL_CTX is freed there won't be any peer statuses
     //       left
     std::map<std::pair<SockAddr, bool>, std::weak_ptr<Connection>> connByAddr;
-#else
-    std::map<SockAddr, std::weak_ptr<Connection>> connByAddr;
-#endif
 
     std::vector<std::pair<SockEndpoint, std::shared_ptr<Connection>>> nameServers;
 

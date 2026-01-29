@@ -316,7 +316,7 @@ struct GPROp : public OperationBase
                 // nothing more needed
 
             } else {
-                throw std::logic_error(SB()<<"Invalid state "<<state<<" for GPR sendReply() ");
+                throw std::logic_error(SB()<<"Invalid state "<<int(state)<<" for GPR sendReply() ");
             }
         }
         chan->statTx += chan->conn->enqueueTxBody(state==GPROp::Done ? CMD_DESTROY_REQUEST :  (pva_app_msg_t)op);
@@ -627,7 +627,7 @@ std::shared_ptr<Operation> GetBuilder::_exec_get()
     if(!ctx)
         throw std::logic_error("NULL Builder");
 
-    const auto context(ctx->impl->shared_from_this());
+    auto context(ctx->impl->shared_from_this());
 
     auto op(std::make_shared<GPROp>(Operation::Get, context->tcp_loop, _name));
     op->setDone(std::move(_result), std::move(_onInit));
@@ -642,7 +642,7 @@ std::shared_ptr<Operation> PutBuilder::exec()
     if(!ctx)
         throw std::logic_error("NULL Builder");
 
-    const auto context(ctx->impl->shared_from_this());
+    auto context(ctx->impl->shared_from_this());
 
     auto op(std::make_shared<GPROp>(Operation::Put, context->tcp_loop, _name));
     op->setDone(std::move(_result), std::move(_onInit));
@@ -674,7 +674,7 @@ std::shared_ptr<Operation> RPCBuilder::exec()
     if(!_autoexec)
         throw std::logic_error("autoExec(false) not possible for rpc()");
 
-    const auto context(ctx->impl->shared_from_this());
+    auto context(ctx->impl->shared_from_this());
 
     auto op(std::make_shared<GPROp>(Operation::RPC, context->tcp_loop, _name));
     op->setDone(std::move(_result), nullptr);

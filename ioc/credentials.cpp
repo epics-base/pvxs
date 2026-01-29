@@ -15,22 +15,25 @@ namespace pvxs {
 namespace ioc {
 
 /**
- * @brief Credentials constructor
+ * eg.
+ * "username"  implies "ca/" prefix
+ * "krb/principle"
+ * "role/groupname"
  *
  * @param clientCredentials The client credentials to be used for the credentials object
  */
 
 Credentials::Credentials(const server::ClientCredentials& clientCredentials) {
-    // Extract host name part (or whole thing if no colon present)
-    auto pos = clientCredentials.peer.find_first_of(':');
-    host = clientCredentials.peer.substr(0, pos);
+    SockAddr addr(clientCredentials.peer);
+    addr.setPort(0);
+    host = std::string(SB()<<addr.map6to4());
     method = clientCredentials.method;
     authority = clientCredentials.authority;
     issuer_id = clientCredentials.issuer_id;
     serial = clientCredentials.serial;
     cred.emplace_back(clientCredentials.account);
 
-    for (const auto& role: static_cast<PeerCredentials>(clientCredentials).roles()) {
+    for (const auto& role: clientCredentials.roles()) {
         cred.emplace_back(SB() << "role/" << role);
     }
 }

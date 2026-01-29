@@ -33,10 +33,6 @@
 #include "ownedptr.h"
 #include "pvaproto.h"
 
-#ifdef PVXS_ENABLE_OPENSSL
-constexpr timeval status_ready_polling_interval{0, 100000};
-#endif
-
 namespace pvxs {namespace impl {
 
 template<typename T>
@@ -109,14 +105,6 @@ private:
     std::unique_ptr<mdetail::VFunctor0> fn;
 };
 
-struct DelayedDispatcher {
-    mfunction fn;
-    std::function<bool()> dispatch_when_condition;
-    DelayedDispatcher(mfunction &&fn, const std::function<bool()> &&dispatch_when_condition)
-      : fn(std::move(fn))
-      , dispatch_when_condition(dispatch_when_condition){}
-};
-
 struct PVXS_API evbase {
     evbase() = default;
     explicit evbase(const std::string& name, unsigned prio=0);
@@ -148,7 +136,6 @@ public:
     void dispatch(mfunction&& fn) const {
         _dispatch(std::move(fn), true);
     }
-
     inline
     bool tryDispatch(mfunction&& fn) const {
         return _dispatch(std::move(fn), false);
@@ -160,19 +147,18 @@ public:
         else
             return tryDispatch(std::move(fn));
     }
-    void assertInLoop() const;
 
+    void assertInLoop() const;
     //! Caller must be on the worker, or the worker must be stopped.
     //! @returns true if working is running.
     bool assertInRunningLoop() const;
 
     inline void reset() { pvt.reset(); }
 
-  private:
+private:
     struct Pvt;
     std::shared_ptr<Pvt> pvt;
-
-  public:
+public:
     event_base* base = nullptr;
 };
 
@@ -214,9 +200,6 @@ struct PVXS_API evsocket
     evsocket& operator=(const evsocket&) = delete;
 
     ~evsocket();
-
-    // caller takes ownership of socket
-    void release();
 
     SockAddr sockname() const;
 
@@ -269,51 +252,57 @@ struct PVXS_API evsocket
 
 struct PVXS_API IfaceMap {
     static
-    IfaceMap& instance();
+    IfaceMap instance();
     static
     void cleanup();
 
-    IfaceMap();
-
     // return true if ifindex is valid, and addr an interface address assigned to it.
-    bool has_address(uint64_t ifindex, const SockAddr& addr);
+    bool has_address(uint64_t ifindex, const SockAddr& addr) const;
     // lookup interface name by index
-    std::string name_of(uint64_t index);
+    std::string name_of(uint64_t index) const;
     // find (an) interface name with this address.  useful for IPv4.  returns empty string if not found.
-    std::string name_of(const SockAddr& addr);
+    std::string name_of(const SockAddr& addr) const;
     // returns 0 if not found
-    uint64_t index_of(const std::string& name);
+    uint64_t index_of(const std::string& name) const;
+    // lookup interface index by interface address (not broadcast addr)
+    uint64_t index_of(const SockAddr& addr) const;
     // is this a valid interface or broadcast address?
-    bool is_iface(const SockAddr& addr);
+    bool is_iface(const SockAddr& addr) const;
+    // is this index the/a loopback interface?
+    bool is_lo(uint64_t index) const;
     // is this a valid interface or broadcast address?
-    bool is_broadcast(const SockAddr& addr);
+    bool is_broadcast(const SockAddr& addr) const;
     // look up interface address.  useful for IPV4.  returns AF_UNSPEC if not found
-    SockAddr address_of(const std::string& name);
+    SockAddr address_of(const std::string& name) const;
     // all interface names except LO
-    std::set<std::string> all_external();
-
-    // caller must hold lock
-    void refresh(bool force=false);
+    std::set<std::string> all_external() const;
 
     struct Iface {
         std::string name;
         uint64_t index;
         bool isLO;
-        // interface address(s) -> (maybe) broadcast addr
-        std::map<SockAddr, SockAddr, SockAddrOnlyLess> addrs;
+        // addrs - interface address -> (maybe) broadcast addr
+        // bcast - broadcast -> interface address
+        std::map<SockAddr, SockAddr, SockAddrOnlyLess> addrs, bcast;
         Iface(const std::string& name, uint64_t index, bool isLO) :name(name), index(index), isLO(isLO) {}
     };
 
-    SockAttach attach;
-    epicsMutex lock;
-    std::map<uint64_t, Iface> byIndex;
-    std::map<std::string, Iface*> byName;
-    // map address to tuple of interface and broadcast?
-    std::multimap<SockAddr, std::pair<Iface*, bool>, SockAddrOnlyLess> byAddr;
-    epicsTime updated;
+    struct Current {
+        std::map<uint64_t, Iface> byIndex;
+        std::map<std::string, Iface*> byName;
+        // map address to tuple of interface and broadcast?
+        std::multimap<SockAddr, std::pair<Iface*, bool>, SockAddrOnlyLess> byAddr;
+    };
+    std::shared_ptr<const Current> current;
+
+    IfaceMap() = default;
+    IfaceMap(const IfaceMap&) = default;
+    IfaceMap(std::shared_ptr<const Current>&& cur) : current(std::move(cur)) {}
+    static
+    std::shared_ptr<const Current> refresh();
 private:
     static
-    decltype (byIndex) _refresh();
+    decltype (Current::byIndex) _refresh();
 };
 
 } // namespace impl

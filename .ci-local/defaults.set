@@ -1,7 +1,7 @@
 # EPICS Base
 BASE_DIRNAME=base
 BASE_REPONAME=epics-base
-BASE_REPOOWNER=george-mcintyre
-BASE=7.0
+BASE_REPOOWNER=epics-base
+BASE=7.0-secure-pvaccess
 BASE_VARNAME=EPICS_BASE
 BASE_RECURSIVE=no

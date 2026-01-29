@@ -120,32 +120,18 @@ Connection::~Connection()
     cleanup();
 }
 
-#ifdef PVXS_ENABLE_OPENSSL
-
 std::shared_ptr<Connection> Connection::build(const std::shared_ptr<ContextImpl>& context,
                                               const SockAddr& serv, bool reconn, bool tls)
-#else
-std::shared_ptr<Connection> Connection::build(const std::shared_ptr<ContextImpl>& context,
-                                              const SockAddr& serv, bool reconn)
-#endif
 {
     if(!context->isRunning())
         throw std::logic_error("Context close()d");
 
-#ifdef PVXS_ENABLE_OPENSSL
-    const auto pair(std::make_pair(serv, tls));
+    auto pair(std::make_pair(serv, tls));
     std::shared_ptr<Connection> ret;
     auto it = context->connByAddr.find(pair);
-    if (it == context->connByAddr.end() || !((ret = it->second.lock()))) {
+    if(it==context->connByAddr.end() || !(ret = it->second.lock())) {
         context->connByAddr[pair] = ret = std::make_shared<Connection>(context, serv, reconn, tls);
     }
-#else
-    std::shared_ptr<Connection> ret;
-    auto it = context->connByAddr.find(serv);
-    if(it==context->connByAddr.end() || !(ret = it->second.lock())) {
-        context->connByAddr[serv] = ret = std::make_shared<Connection>(context, serv, reconn, false);
-    }
-#endif
     return ret;
 }
 
@@ -153,20 +139,26 @@ void Connection::startConnecting() {
     assert(!this->bev);
 
     evsocket sock(peerAddr.family(), SOCK_STREAM, 0);
-    decltype(this->bev) bev;
-
+    decltype(this->bev) bev(__FILE__, __LINE__,
+                bufferevent_socket_new(context->tcp_loop.base, -1,
+                                       BEV_OPT_CLOSE_ON_FREE|BEV_OPT_DEFER_CALLBACKS));
 #ifdef PVXS_ENABLE_OPENSSL
-    if (isTLS) {
+    if(isTLS) {
         if (!context || !context->isTlsConfigured()) {
             log_debug_printf(connsetup, "Client context not ready for TLS connection%s\n", "");
             return;
         }
 
-        const auto ctx(SSL_new(context->tls_context->ctx.get()));
-        if (!ctx) throw std::runtime_error("SSL_new");
+        auto ctx(SSL_new(context->tls_context->ctx.get()));
+        if(!ctx)
+            throw ossl::SSLError("SSL_new");
 
         // w/ BEV_OPT_CLOSE_ON_FREE calls SSL_free() on error
-        bev.reset(bufferevent_openssl_socket_new(context->tcp_loop.base, sock.sock, ctx, BUFFEREVENT_SSL_CONNECTING, BEV_OPT_CLOSE_ON_FREE | BEV_OPT_DEFER_CALLBACKS));
+        bev.reset(bufferevent_openssl_socket_new(context->tcp_loop.base,
+                                                 -1,
+                                                 ctx,
+                                                 BUFFEREVENT_SSL_CONNECTING,
+                                                 BEV_OPT_CLOSE_ON_FREE|BEV_OPT_DEFER_CALLBACKS));
 
         // added with libevent 2.2.1-alpha
         //(void)bufferevent_ssl_set_flags(bev.get(), BUFFEREVENT_SSL_DIRTY_SHUTDOWN);
@@ -178,16 +170,17 @@ void Connection::startConnecting() {
     } else
 #endif
     {
-        bev.reset(bufferevent_socket_new(context->tcp_loop.base, sock.sock, BEV_OPT_CLOSE_ON_FREE | BEV_OPT_DEFER_CALLBACKS));
+        bev.reset(bufferevent_socket_new(context->tcp_loop.base,
+                                         -1,
+                                         BEV_OPT_CLOSE_ON_FREE|BEV_OPT_DEFER_CALLBACKS));
     }
-    sock.release(); // hand-off ownership to bev
 
     bufferevent_setcb(bev.get(), &bevReadS, nullptr, &bevEventS, this);
 
     timeval tmo(totv(context->effective.tcpTimeout));
     bufferevent_set_timeouts(bev.get(), &tmo, &tmo);
 
-    if (bufferevent_socket_connect(bev.get(), const_cast<sockaddr*>(&peerAddr->sa), peerAddr.size())) {
+    if(bufferevent_socket_connect(bev.get(), const_cast<sockaddr*>(&peerAddr->sa), peerAddr.size())) {
         // non-blocking connect() failed immediately.
         // try to defer notification.
         state = Disconnected;
@@ -201,11 +194,8 @@ void Connection::startConnecting() {
 
     connect(std::move(bev));
 
-#ifdef PVXS_ENABLE_OPENSSL
-    log_debug_printf(io, "Connecting to %s, RX readahead %zu%s\n", peerName.c_str(), readahead, isTLS ? " TLS" : "");
-#else
-    log_debug_printf(io, "Connecting to %s, RX readahead %zu\n", peerName.c_str(), readahead);
-#endif
+    log_debug_printf(io, "Connecting to %s, RX readahead %zu%s\n",
+                     peerName.c_str(), readahead, isTLS ? " TLS" : "");
 }
 
 #ifdef PVXS_ENABLE_OPENSSL
@@ -332,10 +322,10 @@ void Connection::bevEvent(short events) {
 
         {
             // after async connect() to avoid winsock specific race.
-            const auto fd(bufferevent_getfd(bev.get()));
+            auto fd(bufferevent_getfd(bev.get()));
             int opt = 1;
             if(setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, (char*)&opt, sizeof(opt))<0) {
-                const auto err(SOCKERRNO);
+                auto err(SOCKERRNO);
                 log_warn_printf(io, "Unable to TCP_NODELAY: %d on %d\n", err, fd);
             }
         }
@@ -346,7 +336,7 @@ void Connection::bevEvent(short events) {
         // start echo timer
         // tcpTimeout(40) -> 15 second echo period
         // bound echo to range [1, 15]
-        const timeval tmo(totv(std::max(1.0, std::min(15.0, context->effective.tcpTimeout*3.0/8.0))));
+        timeval tmo(totv(std::max(1.0, std::min(15.0, context->effective.tcpTimeout*3.0/8.0))));
         if(event_add(echoTimer.get(), &tmo))
             log_err_printf(io, "Server %s error starting echoTimer\n", peerName.c_str());
 
@@ -375,7 +365,9 @@ void Connection::peerStatusCallback(certs::cert_status_category_t status_categor
             ready = true;
             log_debug_printf(status_cli, "%24.24s = %-12s : %-41s\n", "Connection::ready", ready ? "true" : "false", "Connection::peerStatusCallback()");
         }
-        proceedWithCreatingChannels();
+        context->tcp_loop.dispatch([this](){
+            proceedWithCreatingChannels();
+        });
     } else if (status_category == certs::BAD_STATUS) {
         log_debug_printf(certs, "Cancel Wait to Creating Channels: BAD CERT STATUS%s\n", "");
         disconnect();
@@ -408,11 +400,7 @@ void Connection::cleanup()
         }
     }
 
-#ifdef PVXS_ENABLE_OPENSSL
     context->connByAddr.erase(std::make_pair(peerAddr, isTLS));
-#else
-    context->connByAddr.erase(peerAddr);
-#endif
 
     if(bev)
         bev.reset();
@@ -579,6 +567,7 @@ void Connection::handle_CONNECTION_VALIDATED()
             log_debug_printf(status_cli, "%24.24s = %-12s : %-41s: %s\n", "Connection::ready", ready ? "true" : "false", "Connection::handle_CONNECTION_VALIDATED()", chan->name.c_str());
         }
     }
+
     createChannels();
 
     if(nameserver) {
@@ -636,15 +625,24 @@ void Connection::handle_CREATE_CHANNEL()
     chan->statRx += rxlen;
 
     if(!sts.isSuccess()) {
-        // server refuses to create a channel, but presumably responded positively to search
+        if(chan->forcedServer.addr.family()==AF_UNSPEC) {
+            // server refuses to create a channel, but presumably responded positively to search.
+            // try again
 
-        chan->state = Channel::Searching;
-        log_debug_printf(status_cli, "%24.24s = %-12s : %-41s: %s\n", "Channel::state", "Searching", "Connection::handle_CREATE_CHANNEL()", chan->name.c_str());
-        context->searchBuckets[context->currentBucket].push_back(chan);
+            log_warn_printf(io, "Server %s refuses channel to '%s' : %s\n", peerName.c_str(),
+                            chan->name.c_str(), sts.msg.c_str());
 
-        log_warn_printf(io, "Server %s refuses channel to '%s' : %s\n", peerName.c_str(),
-                        chan->name.c_str(), sts.msg.c_str());
-
+            chan->state = Channel::Searching;
+            context->searchBuckets[context->currentBucket].push_back(chan);
+            log_debug_printf(status_cli, "%24.24s = %-12s : %-41s: %s\n", "Channel::state", "Searching", "Connection::handle_CREATE_CHANNEL()", chan->name.c_str());
+        } else {
+            // server refused after we bypassed search, so can't use usual retry method.
+            // refuse to create a tight retry loop, and drop on the floor for now.
+            // retry on reconnect.
+            log_err_printf(io, "Server %s refuses direct channel to '%s' : %s\n", peerName.c_str(),
+                            chan->name.c_str(), sts.msg.c_str());
+            return;
+        }
     } else {
         chan->state = Channel::Active;
         log_debug_printf(status_cli, "%24.24s = %-12s : %-41s: %s\n", "Channel::state", "Active", "Connection::handle_CREATE_CHANNEL()", chan->name.c_str());
@@ -717,23 +715,18 @@ void Connection::handle_MESSAGE()
     if(!M.good())
         throw std::runtime_error(SB()<<M.file()<<':'<<M.line()<<" Decode error for Message");
 
-    auto it = opByIOID.find(ioid);
-    if(it==opByIOID.end()) {
-        log_debug_printf(connsetup, "Server %s Message on non-existent ioid\n", peerName.c_str());
-        return;
-    }
-    auto op = it->second.handle.lock();
+    auto lvl(mtype2level(mtype));
+    const char *chan = "<no channel>";
 
-    Level lvl;
-    switch(mtype) {
-    case 0:  lvl = Level::Info; break;
-    case 1:  lvl = Level::Warn; break;
-    case 2:  lvl = Level::Err; break;
-    default: lvl = Level::Crit; break;
+    auto it = opByIOID.find(ioid);
+    if(it!=opByIOID.end()) {
+        if(auto op = it->second.handle.lock()) {
+            chan = op->chan->name.c_str();
+    }
     }
 
     log_printf(remote, lvl, "%s : %s\n",
-               op && op->chan ? op->chan->name.c_str() : "<dead>", msg.c_str());
+               chan, msg.c_str());
 }
 
 void Connection::tickEcho()
@@ -745,6 +738,11 @@ void Connection::tickEcho()
             log_err_printf(io, "Server %s error Disabling echoTimer\n", peerName.c_str());
 
         startConnecting();
+
+    }else if(state==Disconnected) {
+        // deferred notification of early connect() failure.
+        // TODO: avoid a misleading "closed by peer" error
+        bevEvent(BEV_EVENT_EOF);
 
     } else {
         log_debug_printf(io, "Server %s ping\n", peerName.c_str());

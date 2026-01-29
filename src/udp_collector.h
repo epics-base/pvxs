@@ -37,7 +37,7 @@ struct PVXS_API UDPManager
         std::string proto;
         SockAddr server;
         ServerGUID guid;
-        uint8_t peerVersion;
+        uint8_t peerVersion=0;
         Beacon(const SockAddr& src) :src(src) {}
     };
     //! Create subscription for Beacon messages.
@@ -49,13 +49,16 @@ struct PVXS_API UDPManager
 
     struct PVXS_API Search {
         std::vector<std::string> otherproto; // any protocols other than "tcp"
-        SockAddr src;
-        SockAddr server;
-        uint32_t searchID;
-        uint8_t peerVersion;
+        SockAddr origSrc; // sender/client address
+        SockAddr origDest; // destination IP used by client
+        SockAddr replySrc; // reply source address selects outgoing interface (port not used)
+        SockAddr replyDest;
+        const IfaceMap::Iface* srcIface = nullptr;
+        uint32_t searchID=0;
+        uint8_t peerVersion=0;
         bool protoTCP = false; // included protocol "tcp"
         bool protoTLS = false;
-        bool mustReply;
+        bool mustReply=false;
         struct Name {
             const char *name;
             uint32_t id;

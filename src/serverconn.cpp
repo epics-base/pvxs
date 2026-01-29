@@ -110,8 +110,9 @@ ServerConn::ServerConn(ServIface* iface, evutil_socket_t sock, struct sockaddr *
 #ifdef PVXS_ENABLE_OPENSSL
     if (iface->isTLS) {
         assert(iface->server->tls_context->ctx);
-        const auto ssl(SSL_new(iface->server->tls_context->ctx.get()));
-        if (!ssl) throw ossl::SSLError("SSL_new()");
+        auto ssl(SSL_new(iface->server->tls_context->ctx.get()));
+        if (!ssl)
+            throw ossl::SSLError("SSL_new()");
 
         if (!iface->server->tls_context->stapling_disabled && !iface->server->tls_context->status_check_disabled) {
             try {
@@ -124,10 +125,13 @@ ServerConn::ServerConn(ServIface* iface, evutil_socket_t sock, struct sockaddr *
             }
         }
 
-        const auto rawconn = bev.release();
+        auto rawconn = bev.release();
         // BEV_OPT_CLOSE_ON_FREE will free on error
         evbufferevent tlsconn(__FILE__, __LINE__,
-                              bufferevent_openssl_filter_new(iface->server->acceptor_loop.base, rawconn, ssl, BUFFEREVENT_SSL_ACCEPTING,
+                              bufferevent_openssl_filter_new(iface->server->acceptor_loop.base,
+                                                             rawconn,
+                                                             ssl,
+                                                             BUFFEREVENT_SSL_ACCEPTING,
                                                              BEV_OPT_CLOSE_ON_FREE | BEV_OPT_DEFER_CALLBACKS));
         bev = std::move(tlsconn);
 
@@ -146,13 +150,15 @@ ServerConn::ServerConn(ServIface* iface, evutil_socket_t sock, struct sockaddr *
         this->cred = std::move(cred);
     }
 
-    // TODO Sends the event to handle the, sets timeout, and
     bufferevent_setcb(bev.get(), &bevReadS, &bevWriteS, &bevEventS, this);
 
-    const timeval tmo(totv(iface->server->effective.tcpTimeout));
+    timeval tmo(totv(iface->server->effective.tcpTimeout));
     bufferevent_set_timeouts(bev.get(), &tmo, &tmo);
 
-    const auto tx = bufferevent_get_output(bev.get());
+    // set threshold to begin clearing backlog
+    bufferevent_setwatermark(this->bev.get(), EV_WRITE, tcp_tx_limit, 0);
+
+    auto tx = bufferevent_get_output(bev.get());
 
     std::vector<uint8_t> buf(128);
 
@@ -161,31 +167,25 @@ ServerConn::ServerConn(ServIface* iface, evutil_socket_t sock, struct sockaddr *
         VectorOutBuf M(sendBE, buf);
         to_wire(M, Header{pva_ctrl_msg::SetEndian, pva_flags::Control|pva_flags::Server, 0});
 
-        const auto save = M.save();
+        auto save = M.save();
         M.skip(8, __FILE__, __LINE__); // placeholder for header
-        const auto bstart = M.save();
+        auto bstart = M.save();
 
         // serverReceiveBufferSize, not used
-        to_wire(M, static_cast<uint32_t>(0x10000));
+        to_wire(M, uint32_t(0x10000));
         // serverIntrospectionRegistryMaxSize, also not used
-        to_wire(M, static_cast<uint16_t>(0x7fff));
+        to_wire(M, uint16_t(0x7fff));
 
         /* list given in reverse order of priority.
          * Old pvAccess* was missing a "break" when looping,
          * so it took the last known plugin.
          */
-        to_wire(M, Size{
-#ifdef PVXS_ENABLE_OPENSSL
-          iface->isTLS ? 3u :
-#endif
-          2u});
+        to_wire(M, Size{iface->isTLS ? 3u : 2u});
         to_wire(M, "anonymous");
         to_wire(M, "ca");
-#ifdef PVXS_ENABLE_OPENSSL
         if(iface->isTLS)
             to_wire(M, "x509");
-#endif
-        const auto bend = M.save();
+        auto bend = M.save();
 
         FixedBuf H(sendBE, save, 8);
         to_wire(H, Header{CMD_CONNECTION_VALIDATION, pva_flags::Server, uint32_t(bend-bstart)});
@@ -202,7 +202,8 @@ ServerConn::ServerConn(ServIface* iface, evutil_socket_t sock, struct sockaddr *
         throw std::logic_error("Unable to enable BEV");
 }
 
-ServerConn::~ServerConn() = default;
+ServerConn::~ServerConn()
+{}
 
 const std::shared_ptr<ServerChan>& ServerConn::lookupSID(uint32_t sid)
 {
@@ -213,6 +214,23 @@ const std::shared_ptr<ServerChan>& ServerConn::lookupSID(uint32_t sid)
         //throw std::runtime_error(SB()<<"Client "<<peerName<<" non-existent SID "<<sid);
     }
     return it->second;
+}
+
+void ServerConn::logRemote(uint32_t ioid, Level lvl, const std::string& msg)
+{
+    // TODO: respect TX throttle
+    if(!connection())
+        return;
+    {
+        (void)evbuffer_drain(txBody.get(), evbuffer_get_length(txBody.get()));
+
+        EvOutBuf R(sendBE, txBody.get());
+        to_wire(R, ioid);
+        to_wire(R, level2mtype(lvl));
+        to_wire(R, msg);
+    }
+
+    enqueueTxBody(CMD_MESSAGE);
 }
 
 void ServerConn::handle_ECHO()
@@ -278,9 +296,7 @@ void ServerConn::handle_CONNECTION_VALIDATION()
 
 
     auto C(std::make_shared<server::ClientCredentials>(*cred));
-#ifdef PVXS_ENABLE_OPENSSL
     C->isTLS = iface->isTLS;
-#endif
 
     if(selected=="ca") {
         auth["user"].as<std::string>([&C, &selected](const std::string& user) {
@@ -294,7 +310,6 @@ void ServerConn::handle_CONNECTION_VALIDATION()
         });
     }
 #ifdef PVXS_ENABLE_OPENSSL
-    // Don't rely on the selected being "x509" - see Hacker Central
     else if (iface->isTLS && selected == "x509" && bev) {
         const auto ctx = bufferevent_openssl_get_ssl(bev.get());
         assert(ctx);
@@ -641,24 +656,24 @@ ServerOp::~ServerOp()
  */
 void ServerOp::cleanup()
 {
-    if(state==Dead)
+    if(state==ServerOp::Dead)
         return;
 
-    if(state==Executing && onCancel) {
-        const auto fn(std::move(onCancel));
+    if(state==ServerOp::Executing && onCancel) {
+        auto fn(std::move(onCancel));
         fn();
     }
 
-    state = Dead;
+    state = ServerOp::Dead;
 
     onCancel = nullptr;
     auto closer(std::move(onClose));
     bool notify = closer.operator bool();
 
-    if(const auto ch = chan.lock()) {
+    if(auto ch = chan.lock()) {
         ch->opByIOID.erase(ioid);
 
-        if(const auto conn = ch->conn.lock()) {
+        if(auto conn = ch->conn.lock()) {
             conn->opByIOID.erase(ioid);
 
             if(notify) {

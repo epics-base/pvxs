@@ -343,6 +343,9 @@ std::ostream& operator<<(std::ostream& strm, const Server& serv)
                 auto& first = serv.pvt->interfaces.front();
                 strm<<" TCP_Port: "<<first.bind_addr.port();
             }
+            if(auto evmethod = event_base_get_method(serv.pvt->acceptor_loop.base)) {
+                strm<<" evmethod: "<<evmethod;
+            }
             strm<<"\n";
 
 #ifdef PVXS_ENABLE_OPENSSL
@@ -366,9 +369,7 @@ std::ostream& operator<<(std::ostream& strm, const Server& serv)
                     <<" backlog="<<conn->backlog.size()
                     <<" TX="<<conn->statTx<<" RX="<<conn->statRx
                     <<" auth="<<(conn->cred? conn->cred->method :"")
-#ifdef PVXS_ENABLE_OPENSSL
-                  <<(conn->iface && conn->iface->isTLS ? " TLS" : "")
-#endif
+                    <<(conn->iface && conn->iface->isTLS ? " TLS" : "")
                     <<"\n";
 
                 if(detail<=2)
@@ -379,9 +380,10 @@ std::ostream& operator<<(std::ostream& strm, const Server& serv)
                 strm<<indent{}<<"Cred: "<<*conn->cred<<"\n";
 #ifdef PVXS_ENABLE_OPENSSL
                 if (conn->iface && conn->iface->isTLS && conn->connection()) {
-                    const auto ctx = bufferevent_openssl_get_ssl(conn->connection());
+                    auto ctx = bufferevent_openssl_get_ssl(conn->connection());
                     assert(ctx);
-                    if (const auto cert = SSL_get0_peer_certificate(ctx)) strm << indent{} << "Cert: " << ossl::ShowX509{cert} << "\n";
+                    if(auto cert = SSL_get0_peer_certificate(ctx))
+                        strm<<indent{}<<"Cert: "<<ossl::ShowX509{cert}<<"\n";
                 }
 #endif
 
@@ -783,27 +785,40 @@ void Server::Pvt::onSearch(const UDPManager::Search& msg)
     // on UDPManager worker
 
     for(const auto& addr : ignoreList) { // expected to be a short list
-        if(msg.src.family()!=addr.family()) {
+        if(msg.origSrc.family()!=addr.family()) {
             // skip
-        } else if(msg.src->in.sin_addr.s_addr != addr->in.sin_addr.s_addr) {
+        } else if(msg.origSrc->in.sin_addr.s_addr != addr->in.sin_addr.s_addr) {
             // skip
         } else if(addr->in.sin_port==0) {
             // ignore all ports
             return;
-        } else if(msg.src->in.sin_port == addr->in.sin_port) {
+        } else if(msg.origSrc->in.sin_port == addr->in.sin_port) {
             // ignore specific sender port
             return;
         }
     }
 
-    log_debug_printf(serverio, "%s searching\n", msg.src.tostring().c_str());
+    log_debug_printf(serverio, "%s searching\n", msg.origSrc.tostring().c_str());
 
     searchOp._names.resize(msg.names.size());
     for(auto i : range(msg.names.size())) {
         searchOp._names[i]._name = msg.names[i].name;
         searchOp._names[i]._claim = false;
     }
-    ipAddrToDottedIP(&msg.server->in, searchOp._src, sizeof(searchOp._src));
+    static_assert(sizeof(searchOp._src) >= INET6_ADDRSTRLEN+1, "");
+    switch(msg.replyDest.family()) {
+    case AF_INET:
+        evutil_inet_ntop(AF_INET, &msg.replyDest->in.sin_addr,
+                         searchOp._src, sizeof(searchOp._src)-1);
+        break;
+    case AF_INET6:
+        evutil_inet_ntop(AF_INET6, msg.replyDest->in6.sin6_addr.s6_addr,
+                         searchOp._src, sizeof(searchOp._src)-1);
+        break;
+    default:
+        strcpy(searchOp._src, "?");
+        break;
+    }
 
     {
         auto G(sourcesLock.lockReader());
@@ -842,11 +857,11 @@ void Server::Pvt::onSearch(const UDPManager::Search& msg)
     to_wire(M, msg.searchID);
     to_wire(M, SockAddr::any(AF_INET));
 
-    if (msg.protoTLS && canRespondToTlsSearch()) {
-        to_wire(M, effective.tls_port);
+    if(msg.protoTLS && canRespondToTlsSearch()) {
+        to_wire(M, uint16_t(effective.tls_port));
         to_wire(M, "tls");
-    } else {
-        to_wire(M, effective.tcp_port);
+    } else{
+        to_wire(M, uint16_t(effective.tcp_port));
         to_wire(M, "tcp");
     }
     // "found" flag
@@ -1013,6 +1028,7 @@ void Source::show(std::ostream& strm)
 }
 
 OpBase::~OpBase() {}
+RemoteLogger::~RemoteLogger() {}
 
 ChannelControl::~ChannelControl() {}
 

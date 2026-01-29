@@ -65,13 +65,10 @@ SockEndpoint::SockEndpoint(const char* ep, const impl::ConfigCommon* conf, uint1
         auto schemeLen = sep - ep;
         if (!conf) {
             throw std::runtime_error("URI unsupported in this context");
-        }
-#ifdef PVXS_ENABLE_OPENSSL
-        if (schemeLen == 4u && strncmp(ep, "pvas", 4) == 0) {
+        } else if(schemeLen==4u && strncmp(ep, "pvas", 4)==0) {
             scheme = TLS;
-            defport = conf->tls_port;
+            defport = conf ? conf->tls_port : defdefport;
         } else
-#endif
         if (schemeLen == 3u && strncmp(ep, "pva", 3) == 0) {
             scheme = Plain;
         } else {
@@ -92,31 +89,32 @@ SockEndpoint::SockEndpoint(const char* ep, const impl::ConfigCommon* conf, uint1
     auto comma = strchr(ep, ',');
     auto at = strchr(ep, '@');
 
-    if (comma && at && comma > at) {
-        throw std::runtime_error(SB() << '"' << escape(ep) << "\" comma expected before @");
+    if(comma && at && comma > at) {
+        throw std::runtime_error(SB()<<'"'<<escape(ep)<<"\" comma expected before @");
     }
 
-    if (!comma && !at) {
+    if(!comma && !at) {
         addr.setAddress(ep, defport);
 
-    } else {  // comma || at
+    } else { // comma || at
         auto firstsep = comma ? comma : at;
-        addr.setAddress(std::string(ep, firstsep - ep), defport);
+        addr.setAddress(std::string(ep, firstsep-ep), defport);
 
-        if (comma && !at) {
-            ttl = parseTo<int64_t>(comma + 1);
+        if(comma && !at) {
+            ttl = parseTo<int64_t>(comma+1);
 
-        } else if (comma) {
-            ttl = parseTo<int64_t>(std::string(comma + 1, at - comma - 1));
+        } else if(comma) {
+            ttl = parseTo<int64_t>(std::string(comma+1, at-comma-1));
         }
 
-        if (at) iface = at + 1;
+        if(at)
+            iface = at+1;
     }
 
-    auto& ifmap = IfaceMap::instance();
+    auto ifmap(IfaceMap::instance());
 
-    if (addr.family() == AF_INET6) {
-        if (iface.empty() && addr->in6.sin6_scope_id) {
+    if(addr.family()==AF_INET6) {
+        if(iface.empty() && addr->in6.sin6_scope_id) {
             // interface index provide with IPv6 address
             // we map back to symbolic name for storage
             iface = ifmap.name_of(addr->in6.sin6_scope_id);
@@ -141,7 +139,7 @@ SockEndpoint::SockEndpoint(const char* ep, const impl::ConfigCommon* conf, uint1
 MCastMembership SockEndpoint::resolve() const {
     if (!addr.isMCast()) throw std::logic_error("not mcast");
 
-    auto& ifmap = IfaceMap::instance();
+    auto ifmap(IfaceMap::instance());
 
     MCastMembership m;
     m.af = addr.family();
@@ -322,57 +320,65 @@ std::vector<SockEndpoint> parseAddresses(const std::vector<std::string>& addrs) 
     return ret;
 }
 
-void printAddresses(std::vector<std::string>& out, const std::vector<SockEndpoint>& inp) {
+void printAddresses(std::vector<std::string>& out, const std::vector<SockEndpoint>& inp)
+{
     std::vector<std::string> temp;
     temp.reserve(inp.size());
 
-    for (auto& addr : inp) {
-        temp.emplace_back(SB() << addr);
+    for(auto& addr : inp) {
+        temp.emplace_back(SB()<<addr);
     }
     out = std::move(temp);
 }
 
 // Fill out address list by appending broadcast addresses
 // of any and all local interface addresses already included
-void expandAddrList(const std::vector<SockEndpoint>& ifaces, std::vector<SockEndpoint>& addrs) {
+void expandAddrList(const std::vector<SockEndpoint>& ifaces,
+                    std::vector<SockEndpoint>& addrs,
+                    const IfaceMap& ifmap)
+{
     SockAttach attach;
     evsocket dummy(AF_INET, SOCK_DGRAM, 0);
 
-    for (auto& saddr : ifaces) {
+    for(auto& saddr : ifaces) {
         auto matchAddr = &saddr.addr;
 
-        if (evsocket::ipstack == evsocket::Linsock && saddr.addr.family() == AF_INET6 && saddr.addr.isAny()) {
+        if(evsocket::ipstack==evsocket::Linsock && saddr.addr.family()==AF_INET6 && saddr.addr.isAny()) {
             // special case handling to match "promote" in server::Config::expand()
             // treat [::] as 0.0.0.0
             matchAddr = nullptr;
 
-        } else if (saddr.addr.family() != AF_INET) {
+        } else if(saddr.addr.family()!=AF_INET) {
             continue;
         }
 
-        for (auto& addr : dummy.broadcasts(matchAddr)) {
+        for(auto& addr : dummy.broadcasts(matchAddr)) {
             addr.setPort(0u);
             addrs.emplace_back(addr);
         }
     }
 }
 
-void addGroups(std::vector<SockEndpoint>& ifaces, const std::vector<SockEndpoint>& addrs) {
-    auto& ifmap = IfaceMap::instance();
+void addGroups(std::vector<SockEndpoint>& ifaces,
+               const std::vector<SockEndpoint>& addrs,
+               const IfaceMap& ifmap)
+{
     std::set<std::string> allifaces;
 
-    for (const auto& addr : addrs) {
-        if (!addr.addr.isMCast()) continue;
+    for(const auto& addr : addrs) {
+        if(!addr.addr.isMCast())
+            continue;
 
-        if (!addr.iface.empty()) {
+        if(!addr.iface.empty()) {
             // interface already specified
             ifaces.push_back(addr);
 
         } else {
             // no interface specified, treat as wildcard
-            if (allifaces.empty()) allifaces = ifmap.all_external();
+            if(allifaces.empty())
+                allifaces = ifmap.all_external();
 
-            for (auto& iface : allifaces) {
+            for(auto& iface : allifaces) {
                 auto ifaceaddr(addr);
                 ifaceaddr.iface = iface;
                 ifaces.push_back(ifaceaddr);
@@ -381,7 +387,8 @@ void addGroups(std::vector<SockEndpoint>& ifaces, const std::vector<SockEndpoint
     }
 }
 
-void enforceTimeout(double& tmo) {
+void enforceTimeout(double& tmo)
+{
     /* Inactivity timeouts with PVA have a long (and growing) history.
      *
      * - Originally pvAccessCPP clients didn't send CMD_ECHO, and servers would never timeout.
@@ -394,9 +401,9 @@ void enforceTimeout(double& tmo) {
      * - As a compromise, continue to send echo at least every 15 seconds,
      *   and increase default timeout to 40.
      */
-    if (!std::isfinite(tmo) || tmo <= 0.0 || tmo >= double(std::numeric_limits<time_t>::max()))
+    if(!std::isfinite(tmo) || tmo <= 0.0 || tmo >= double(std::numeric_limits<time_t>::max()))
         tmo = 40.0;
-    else if (tmo < 2.0)
+    else if(tmo < 2.0)
         tmo = 2.0;
 }
 
@@ -648,7 +655,7 @@ void Config::expand() {
         ifaces.emplace_back(SockAddr::any(AF_INET));
     }
 
-    auto& ifmap = IfaceMap::instance();
+    auto ifmap(IfaceMap::instance());
 
     for (size_t i = 0; i < ifaces.size(); i++) {
         auto& ep = ifaces[i];
@@ -668,8 +675,8 @@ void Config::expand() {
         // use interface list add ipv4 broadcast addresses to beaconDestinations.
         // 0.0.0.0 -> adds all bcasts
         // otherwise add bcast for each iface address
-        expandAddrList(ifaces, bdest);
-        addGroups(ifaces, bdest);
+        expandAddrList(ifaces, bdest, ifmap);
+        addGroups(ifaces, bdest, ifmap);
         auto_beacon = false;
     }
 
@@ -833,20 +840,25 @@ void Config::updateDefs(defs_t& defs) const {
 #endif  // PVXS_ENABLE_OPENSSL
 }
 
-void Config::expand() {
-    if (udp_port == 0)
+void Config::expand()
+{
+    auto ifmap(IfaceMap::instance());
+
+    if(udp_port==0)
         throw std::runtime_error("Client can't use UDP random port");
 
-    if (tcp_port == 0) tcp_port = 5075;
+    if(tcp_port==0)
+        tcp_port = 5075;
 
     auto ifaces(parseAddresses(interfaces));
     auto addrs(parseAddresses(addressList));
 
-    if (ifaces.empty()) ifaces.emplace_back(SockAddr::any(AF_INET));
+    if(ifaces.empty())
+        ifaces.emplace_back(SockAddr::any(AF_INET));
 
-    if (autoAddrList) {
-        expandAddrList(ifaces, addrs);
-        addGroups(ifaces, addrs);
+    if(autoAddrList) {
+        expandAddrList(ifaces, addrs, ifmap);
+        addGroups(ifaces, addrs, ifmap);
         autoAddrList = false;
     }
 

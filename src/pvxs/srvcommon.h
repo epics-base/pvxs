@@ -21,6 +21,7 @@
 #include <pvxs/netcommon.h>
 
 namespace pvxs {
+enum struct Level;
 namespace server {
 
 /** Credentials presented by a client.
@@ -71,9 +72,18 @@ public:
     OpBase& operator=(const OpBase&) = delete;
     virtual ~OpBase() =0;
 };
+//! Log to remote peer
+//! @since 1.4.0
+struct PVXS_API RemoteLogger {
+    virtual ~RemoteLogger() =0;
+
+    //! Request log message to peer
+    //! @since 1.4.0
+    virtual void logRemote(Level lvl, const std::string& msg) =0;
+};
 
 //! Handle when an operation is being executed
-struct PVXS_API ExecOp : public OpBase {
+struct PVXS_API ExecOp : public OpBase, public RemoteLogger {
     //! Issue a reply without data.  (eg. to complete a PUT)
     virtual void reply() =0;
     //! Issue a reply with data.  For a GET or RPC  (or PUT/Get)
@@ -105,7 +115,9 @@ public:
 #ifdef PVXS_EXPERT_API_ENABLED
     //! Create/start timer.  cb runs on worker associated with Channel of this Operation.
     //! @since 0.2.0
-    Timer timerOneShot(double delay, std::function<void()>&& cb) { return _timerOneShot(delay, std::move(cb)); }
+    Timer timerOneShot(double delay, std::function<void()>&& cb) {
+        return _timerOneShot(delay, std::move(cb));
+    }
 #endif // PVXS_EXPERT_API_ENABLED
 private:
     virtual Timer _timerOneShot(double delay, std::function<void()>&& cb) =0;

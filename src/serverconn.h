@@ -63,6 +63,27 @@ struct ServerOp
     virtual void show(std::ostream& strm) const =0;
 };
 
+// helper for implementing OpBase::logRemote
+template<typename Control>
+void doLogRemote(Control *self, Level lvl, const std::string& msg)
+{
+    auto serv = self->server.lock();
+    if(!serv)
+        return;
+    std::string m(msg); // copy for bind
+    auto wop(self->op); // copy weak for bind
+    serv->acceptor_loop.dispatch([wop, lvl, m](){
+        // op, chan, or conn may be dead or dissociated by this point...
+        if(auto oper = wop.lock()) {
+            if(auto chan = oper->chan.lock()) {
+                if(auto conn = chan->conn.lock()) {
+                    conn->logRemote(oper->ioid, lvl, m);
+                }
+            }
+        }
+    });
+}
+
 struct ServerChannelControl : public server::ChannelControl
 {
     ServerChannelControl(const std::shared_ptr<ServerConn>& conn, const std::shared_ptr<ServerChan>& chan);
@@ -137,6 +158,8 @@ struct ServerConn final : public ConnBase, public std::enable_shared_from_this<S
     ~ServerConn();
 
     const std::shared_ptr<ServerChan>& lookupSID(uint32_t sid);
+
+    void logRemote(uint32_t ioid, Level lvl, const std::string& msg);
 
 private:
     void proceedWithConnectionValidation();
@@ -279,11 +302,6 @@ struct Server::Pvt
         Running,
         Stopping,
     } state;
-
-#ifdef PVXS_ENABLE_OPENSSL
-    ossl_ptr<uint8_t> cached_ocsp_response;
-    time_t cached_ocsp_status_date;
-#endif
 
     INST_COUNTER(ServerPvt);
 

@@ -79,6 +79,7 @@ int main(int argc, char *argv[])
 #ifdef PVXS_ENABLE_OPENSSL
         conf.request_timeout_specified = timeout;
 #endif
+
         auto ctxt = conf.build();
 
         if(verbose)

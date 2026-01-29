@@ -405,16 +405,24 @@ SigInt::~SigInt() {}
 #endif // !defined(__rtems__) && !defined(vxWorks)
 
 
-SockAddr::SockAddr(int af)
+SockAddr::SockAddr(int af, unsigned short port)
     :store{}
 {
     store.sa.sa_family = af;
-    if(af!=AF_INET
-#ifdef AF_INET6
-            && af!=AF_INET6
-#endif
-            && af!=AF_UNSPEC)
+    switch(af) {
+    case AF_INET:
+        store.in.sin_port = htons(port);
+        break;
+    case AF_INET6:
+        store.in6.sin6_port = htons(port);
+        break;
+    case AF_UNSPEC:
+        if(port)
+            throw std::invalid_argument("AF_UNSPEC can not specify port");
+        break;
+    default:
         throw std::invalid_argument("Unsupported address family");
+    }
 }
 
 SockAddr::SockAddr(const char *address, unsigned short port)
@@ -636,6 +644,23 @@ SockAddr SockAddr::map4to6() const
     return ret;
 }
 
+SockAddr SockAddr::map6to4() const
+{
+    constexpr uint8_t is4[12] = {0,0,0,0, 0,0,0,0, 0,0,0xff,0xff};
+    SockAddr ret;
+    if(family()==AF_INET6 && memcmp(store.in6.sin6_addr.s6_addr, is4, 12)==0) {
+        ret->in.sin_family = AF_INET;
+        memcpy(&ret->in.sin_addr.s_addr,
+               &store.in6.sin6_addr.s6_addr[12],
+                4);
+        ret->in.sin_port = store.in6.sin6_port;
+
+    } else {
+        ret = *this;
+    }
+    return ret;
+}
+
 std::string SockAddr::tostring() const
 {
     std::ostringstream strm;
@@ -726,6 +751,9 @@ std::ostream& operator<<(std::ostream& strm, const SockAddr& addr)
 
 GetAddrInfo::GetAddrInfo(const char *name)
 {
+    // evutil_getaddrinfo() wrapper implicitly expects result pointer to be zerod
+    // when applying various compatibility "hacks" on some targets.
+    info = nullptr;
     if(auto err = evutil_getaddrinfo(name, nullptr, nullptr, &info)) {
         throw std::runtime_error(SB()<<"Error resolving \""<<escape(name)<<"\" : "<<evutil_gai_strerror(err));
     }

@@ -181,11 +181,11 @@ struct ServerGPRConnect : public server::ConnectOp
 
     virtual void connect(const Value& prototype) override final
     {
-        const auto serv = server.lock();
+        auto serv = server.lock();
         if(!serv)
             return;
         serv->acceptor_loop.call([this, &prototype](){
-            if(const auto oper = op.lock()) {
+            if(auto oper = op.lock()) {
                 if(oper->state!=ServerOp::Creating)
                     return;
 
@@ -208,12 +208,12 @@ struct ServerGPRConnect : public server::ConnectOp
     {
         if(msg.empty())
             throw std::invalid_argument("Must provide error message");
-        const auto serv = server.lock();
+        auto serv = server.lock();
         if(!serv)
             return;
         auto op(this->op);
         serv->acceptor_loop.dispatch([op, msg](){
-            if(const auto oper = op.lock()) {
+            if(auto oper = op.lock()) {
                 if(oper->state==ServerOp::Creating)
                     oper->doReply(Value(), msg);
             }
@@ -222,31 +222,31 @@ struct ServerGPRConnect : public server::ConnectOp
 
     virtual void onGet(std::function<void(std::unique_ptr<server::ExecOp>&&)>&& fn) override final
     {
-        const auto serv = server.lock();
+        auto serv = server.lock();
         if(!serv)
             return;
         serv->acceptor_loop.call([this, &fn](){
-            if(const auto oper = op.lock())
+            if(auto oper = op.lock())
                 oper->onGet = std::move(fn);
         });
     }
     virtual void onPut(std::function<void(std::unique_ptr<server::ExecOp>&&, Value&&)>&& fn) override final
     {
-        const auto serv = server.lock();
+        auto serv = server.lock();
         if(!serv)
             return;
         serv->acceptor_loop.call([this, &fn](){
-            if(const auto oper = op.lock())
+            if(auto oper = op.lock())
                 oper->onPut = std::move(fn);
         });
     }
     virtual void onClose(std::function<void(const std::string&)>&& fn) override final
     {
-        const auto serv = server.lock();
+        auto serv = server.lock();
         if(!serv)
             return;
         serv->acceptor_loop.call([this, &fn](){
-            if(const auto oper = op.lock())
+            if(auto oper = op.lock())
                 oper->onClose = std::move(fn);
         });
     }
@@ -299,12 +299,12 @@ struct ServerGPRExec : public server::ExecOp
     {
         if(msg.empty())
             throw std::invalid_argument("Must provide error message");
-        const auto serv = server.lock();
+        auto serv = server.lock();
         if(!serv)
             return;
         auto op(this->op);
         serv->acceptor_loop.dispatch([op, msg](){
-            if(const auto oper = op.lock()) {
+            if(auto oper = op.lock()) {
                 oper->doReply(Value(), msg);
             }
         });
@@ -312,18 +312,18 @@ struct ServerGPRExec : public server::ExecOp
 
     virtual void onCancel(std::function<void()>&& fn) override final
     {
-        const auto serv = server.lock();
+        auto serv = server.lock();
         if(!serv)
             return;
         serv->acceptor_loop.call([this, &fn](){
-            if(const auto oper = op.lock())
+            if(auto oper = op.lock())
                 oper->onCancel = std::move(fn);
         });
     }
 
     virtual Timer _timerOneShot(double delay, std::function<void()>&& fn) override final
     {
-        const auto serv = server.lock();
+        auto serv = server.lock();
         if(!serv)
             throw std::logic_error("Can't start timer on deal server");
 
@@ -346,7 +346,7 @@ DEFINE_INST_COUNTER(ServerGPRExec);
 
 void ServerConn::handle_GPR(pva_app_msg_t cmd)
 {
-    const auto rxlen = 8u + evbuffer_get_length(segBuf.get());
+    auto rxlen = 8u + evbuffer_get_length(segBuf.get());
     EvInBuf M(peerBE, segBuf.get(), 16);
 
     uint32_t sid = -1, ioid = -1;

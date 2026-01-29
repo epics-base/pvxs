@@ -178,14 +178,14 @@ struct PVXS_API Config : public impl::ConfigCommon {
     //! Supplemented only if auto_beacon==true
     std::vector<std::string> beaconDestinations;
     //! Whether to populate the beacon address list automatically.  (recommended)
-    bool auto_beacon;
+    bool auto_beacon = true;
 
     //! Server unique ID.  Only meaningful in readback via Server::config()
     ServerGUID guid;
 
 private:
-    bool BE;
-    bool UDP;
+    bool BE = EPICS_BYTE_ORDER==EPICS_ENDIAN_BIG;
+    bool UDP = true;
 public:
 
     // compat

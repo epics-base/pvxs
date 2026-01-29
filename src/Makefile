@@ -140,10 +140,6 @@ endif
 
 LIB_SYS_LIBS += $(LIBEVENT_SYS_LIBS)
 
-#ifeq ($(EVENT2_HAS_OPENSSL),YES)
-#include $(SECURITY)/Makefile
-#endif
-
 #===========================
 
 include $(TOP)/configure/RULES
