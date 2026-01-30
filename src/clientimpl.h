@@ -362,9 +362,12 @@ struct ContextImpl : public std::enable_shared_from_this<ContextImpl>
     std::map<std::pair<std::string, std::string>, std::shared_ptr<Channel>> chanByName;
     const evbase tcp_loop;
 
+#ifdef PVXS_ENABLE_OPENSSL
     std::shared_ptr<ossl::SSLContext> tls_context;
+#endif
 
     // pair (addr, useTLS)
+#ifdef PVXS_ENABLE_OPENSSL
     // @note order member `pvxs::client::ContextImpl::connByAddr` after
     //      `pvxs::client::ContextImpl::tls_context` so that
     //       destruction order will be `connByAddr`'s `Connections`
@@ -373,6 +376,7 @@ struct ContextImpl : public std::enable_shared_from_this<ContextImpl>
     //       stored in `CertStatusExData` which is attached to the SSL_CTX,
     //       so that by time SSL_CTX is freed there won't be any peer statuses
     //       left
+#endif
     std::map<std::pair<SockAddr, bool>, std::weak_ptr<Connection>> connByAddr;
 
     std::vector<std::pair<SockEndpoint, std::shared_ptr<Connection>>> nameServers;
