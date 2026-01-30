@@ -93,7 +93,6 @@ struct RequestInfo {
 };
 
 struct Connection final : public ConnBase, public std::enable_shared_from_this<Connection> {
-    epicsMutex lock;
     std::shared_ptr<ContextImpl> context;
 
     // While HoldOff, the time until re-connection
