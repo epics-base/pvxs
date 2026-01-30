@@ -310,7 +310,7 @@ public:
                 }
                 nreaders--;
             }
-            // wake up a writer since the queue will have an empty entry
+            // wakeup a writer since the queue will have an empty entry
             wakeupW = nwriters;
             T tmp(std::move(Q.front()));
             Q.pop_front();

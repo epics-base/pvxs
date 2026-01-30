@@ -92,7 +92,7 @@ ServerConn::ServerConn(ServIface* iface, evutil_socket_t sock, struct sockaddr *
            iface->isTLS,
            iface->server->effective.sendBE(),
             evbufferevent(__FILE__, __LINE__, bufferevent_socket_new(iface->server->acceptor_loop.base, sock, BEV_OPT_CLOSE_ON_FREE|BEV_OPT_DEFER_CALLBACKS)),
-            SockAddr(peer))
+              SockAddr(peer))
     ,iface(iface)
     ,tcp_tx_limit(evsocket::get_buffer_size(sock, true) * tcp_tx_limit_mult)
 {
@@ -108,7 +108,7 @@ ServerConn::ServerConn(ServIface* iface, evutil_socket_t sock, struct sockaddr *
     }
 
 #ifdef PVXS_ENABLE_OPENSSL
-    if (iface->isTLS) {
+    if(iface->isTLS) {
         assert(iface->server->tls_context->ctx);
         auto ssl(SSL_new(iface->server->tls_context->ctx.get()));
         if (!ssl)
@@ -132,7 +132,7 @@ ServerConn::ServerConn(ServIface* iface, evutil_socket_t sock, struct sockaddr *
                                                              rawconn,
                                                              ssl,
                                                              BUFFEREVENT_SSL_ACCEPTING,
-                                                             BEV_OPT_CLOSE_ON_FREE | BEV_OPT_DEFER_CALLBACKS));
+                                                             BEV_OPT_CLOSE_ON_FREE|BEV_OPT_DEFER_CALLBACKS));
         bev = std::move(tlsconn);
 
         // added with libevent 2.2.1-alpha
@@ -290,39 +290,39 @@ void ServerConn::handle_CONNECTION_VALIDATION()
         }
     }
 
-    log_debug_printf(connsetup, "Client %s authenticates using %s and %s\n",
-                     peerName.c_str(), selected.c_str(),
-                     std::string(SB()<<auth).c_str());
+            log_debug_printf(connsetup, "Client %s authenticates using %s and %s\n",
+                       peerName.c_str(), selected.c_str(),
+                       std::string(SB()<<auth).c_str());
 
 
-    auto C(std::make_shared<server::ClientCredentials>(*cred));
-    C->isTLS = iface->isTLS;
+            auto C(std::make_shared<server::ClientCredentials>(*cred));
+            C->isTLS = iface->isTLS;
 
-    if(selected=="ca") {
-        auth["user"].as<std::string>([&C, &selected](const std::string& user) {
+            if(selected=="ca") {
+                auth["user"].as<std::string>([&C, &selected](const std::string& user) {
             const auto pos = user.find_last_of('/');
             if ( pos  == std::string::npos) {
                 C->account = user;
             } else {
                 C->account = user.substr(pos + 1);
             }
-            C->method = selected;
-        });
-    }
+                    C->method = selected;
+                });
+            }
 #ifdef PVXS_ENABLE_OPENSSL
-    else if (iface->isTLS && selected == "x509" && bev) {
+            else if(iface->isTLS && selected=="x509" && bev) {
         const auto ctx = bufferevent_openssl_get_ssl(bev.get());
-        assert(ctx);
+                assert(ctx);
         ossl::SSLContext::getPeerCredentials(*C, ctx);
-    }
+            }
 #endif
 
-    if(C->method.empty()) {
-        C->account = C->method = "anonymous";
-    }
-    C->raw = auth;
+            if(C->method.empty()) {
+                C->account = C->method = "anonymous";
+            }
+            C->raw = auth;
 
-    cred = std::move(C);
+            cred = std::move(C);
 
     log_debug_printf(connsetup, "Client credentials. account: %s, method: %s, authority: %s\n",
                      cred->account.c_str(), cred->method.c_str(), cred->authority.c_str());
@@ -336,7 +336,7 @@ void ServerConn::handle_CONNECTION_VALIDATION()
 
     // Proceed with the validation
     proceedWithConnectionValidation();
-}
+    }
 
 #ifdef PVXS_ENABLE_OPENSSL
 /**
@@ -577,17 +577,17 @@ void ServerConn::bevWrite()
 
 
 ServIface::ServIface(const SockAddr &addr, server::Server::Pvt *server, bool fallback, bool isTLS)
-    : server(server)
-    , isTLS(isTLS)
-    , bind_addr(addr)
+    :server(server)
+    ,isTLS(isTLS)
+    ,bind_addr(addr)
 {
     server->acceptor_loop.assertInLoop();
     const auto orig_port = bind_addr.port();
 
-    sock = evsocket(bind_addr.family(), SOCK_STREAM, 0);
+        sock = evsocket(bind_addr.family(), SOCK_STREAM, 0);
 
-    if(evutil_make_listen_socket_reuseable(sock.sock))
-        log_warn_printf(connsetup, "Unable to make socket reusable%s", "\n");
+        if(evutil_make_listen_socket_reuseable(sock.sock))
+            log_warn_printf(connsetup, "Unable to make socket reusable%s", "\n");
 
     // try to bind to the requested port, then fallback to a random port
     while(true) {

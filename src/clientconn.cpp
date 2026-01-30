@@ -96,10 +96,10 @@ DEFINE_LOGGER(status_cli, "pvxs.st.cli");
 Connection::Connection(const std::shared_ptr<ContextImpl>& context,
                        const SockAddr& peerAddr,
                        bool reconn,
-                       bool isTLS )
+                       bool isTLS)
     : ConnBase (true, isTLS, context->effective.sendBE(), nullptr, peerAddr)
-    , context(context)
-    , echoTimer(__FILE__, __LINE__,
+    ,context(context)
+    ,echoTimer(__FILE__, __LINE__,
                event_new(context->tcp_loop.base, -1, EV_TIMEOUT|EV_PERSIST, &tickEchoS, this))
 {
     if(reconn) {
@@ -310,7 +310,7 @@ void Connection::bevEvent(short events) {
 #ifdef PVXS_ENABLE_OPENSSL
         peerCred->isTLS = isTLS;
 
-        if (isTLS) {
+        if(isTLS) {
             const auto ctx = bufferevent_openssl_get_ssl(bev.get());
             if (ctx) {
                 ossl::SSLContext::getPeerCredentials(*peerCred, ctx);
@@ -717,7 +717,7 @@ void Connection::handle_MESSAGE()
     if(it!=opByIOID.end()) {
         if(auto op = it->second.handle.lock()) {
             chan = op->chan->name.c_str();
-    }
+        }
     }
 
     log_printf(remote, lvl, "%s : %s\n",

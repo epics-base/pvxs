@@ -172,19 +172,19 @@ void ConnBase::bevEvent(const short events) {
 #endif
 
     // If any socket warnings / errors, then log and disconnect
-    if (events & (BEV_EVENT_EOF | BEV_EVENT_ERROR | BEV_EVENT_TIMEOUT)) {
-        if (events & BEV_EVENT_ERROR) {
+    if(events&(BEV_EVENT_EOF|BEV_EVENT_ERROR|BEV_EVENT_TIMEOUT)) {
+        if(events&BEV_EVENT_ERROR) {
             const char *msg = evutil_socket_error_to_string(err);
             if (err) {
-                log_err_printf(connio, "connection to %s %s closed with socket error %d : %s\n", peerLabel(), peerName.c_str(), err, msg);
+            log_err_printf(connio, "connection to %s %s closed with socket error %d : %s\n", peerLabel(), peerName.c_str(), err, msg);
             } else {
                 log_debug_printf(connio, "connection to %s %s closed\n", peerLabel(), peerName.c_str());
             }
         }
-        if (events & BEV_EVENT_EOF) {
+        if(events&BEV_EVENT_EOF) {
             log_debug_printf(connio, "connection to %s %s closed by peer\n", peerLabel(), peerName.c_str());
         }
-        if (events & BEV_EVENT_TIMEOUT) {
+        if(events&BEV_EVENT_TIMEOUT) {
             log_warn_printf(connio, "connection to %s %s timeout\n", peerLabel(), peerName.c_str());
         }
         state = Disconnected;
@@ -192,7 +192,7 @@ void ConnBase::bevEvent(const short events) {
         bev.reset();
     }
 
-    if (!bev)
+    if(!bev)
         cleanup();
 }
 
@@ -321,10 +321,10 @@ void ConnBase::bevRead()
 
                     case CMD_MESSAGE: handle_MESSAGE(); break;
 
-                    default:
-                        log_debug_printf(connio, "%s %s Ignore unexpected command 0x%02x\n", peerLabel(), peerName.c_str(), segCmd);
-                        evbuffer_drain(segBuf.get(), evbuffer_get_length(segBuf.get()));
-                        break;
+                default:
+                    log_debug_printf(connio, "%s %s Ignore unexpected command 0x%02x\n", peerLabel(), peerName.c_str(), segCmd);
+                    evbuffer_drain(segBuf.get(), evbuffer_get_length(segBuf.get()));
+                    break;
                 }
             }catch(std::exception& e){
                 log_exc_printf(connio, "%s Error while processing cmd 0x%02x%s: %s\n",

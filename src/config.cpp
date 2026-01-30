@@ -61,9 +61,9 @@ SockEndpoint::SockEndpoint(const char* ep, const impl::ConfigCommon* conf, uint1
     uint16_t defport = conf ? conf->tcp_port : defdefport;
     // look for URI-ish prefix
     std::string urlstore;
-    if (auto sep = strstr(ep, "://")) {
-        auto schemeLen = sep - ep;
-        if (!conf) {
+    if(auto sep = strstr(ep, "://")) {
+        auto schemeLen = sep-ep;
+        if(!conf) {
             throw std::runtime_error("URI unsupported in this context");
         } else if(schemeLen==4u && strncmp(ep, "pvas", 4)==0) {
             scheme = TLS;
@@ -72,12 +72,12 @@ SockEndpoint::SockEndpoint(const char* ep, const impl::ConfigCommon* conf, uint1
         if (schemeLen == 3u && strncmp(ep, "pva", 3) == 0) {
             scheme = Plain;
         } else {
-            throw std::runtime_error(SB() << "Unsupported scheme '" << ep << "'");
+            throw std::runtime_error(SB()<<"Unsupported scheme '"<<ep<<"'");
         }
-        ep = sep + 3u;                     // skip past prefix
-        if (auto end = strchr(ep, '/')) {  // trailing '/'
+        ep = sep+3u; // skip past prefix
+        if(auto end = strchr(ep, '/')) { // trailing '/'
             // copy only host_ip:port
-            urlstore.assign(ep, end - ep);
+            urlstore.assign(ep, end-ep);
             ep = urlstore.c_str();
         }
     }
@@ -121,17 +121,17 @@ SockEndpoint::SockEndpoint(const char* ep, const impl::ConfigCommon* conf, uint1
         }
         addr->in6.sin6_scope_id = 0;
 
-    } else if (addr.family() == AF_INET && addr.isMCast() && !iface.empty()) {
+    } else if(addr.family()==AF_INET && addr.isMCast() && !iface.empty()) {
         SockAddr ifaddr(AF_INET);
 
-        if (evutil_inet_pton(AF_INET, iface.c_str(), &ifaddr->in.sin_addr.s_addr) == 1) {
+        if(evutil_inet_pton(AF_INET, iface.c_str(), &ifaddr->in.sin_addr.s_addr)==1) {
             // map interface address to symbolic name
 
             iface = ifmap.name_of(ifaddr);
         }
     }
 
-    if (!iface.empty() && !ifmap.index_of(iface)) {
+    if(!iface.empty() && !ifmap.index_of(iface)) {
         log_warn_printf(config, "Invalid interface address or name: \"%s\"\n", iface.c_str());
     }
 }
@@ -143,24 +143,24 @@ MCastMembership SockEndpoint::resolve() const {
 
     MCastMembership m;
     m.af = addr.family();
-    if (m.af == AF_INET) {
+    if(m.af==AF_INET) {
         auto& req = m.req.in;
         req.imr_multiaddr.s_addr = addr->in.sin_addr.s_addr;
 
-        if (!iface.empty()) {
+        if(!iface.empty()) {
             auto iface = ifmap.address_of(this->iface);
-            if (iface.family() == AF_INET) {
+            if(iface.family()==AF_INET) {
                 req.imr_interface.s_addr = iface->in.sin_addr.s_addr;
             }
         }
 
-    } else if (m.af == AF_INET6) {
+    } else if(m.af==AF_INET6) {
         auto& req = m.req.in6;
         req.ipv6mr_multiaddr = addr->in6.sin6_addr;
 
-        if (!iface.empty()) {
+        if(!iface.empty()) {
             req.ipv6mr_interface = ifmap.index_of(this->iface);
-            if (!req.ipv6mr_interface) {
+            if(!req.ipv6mr_interface) {
                 log_warn_printf(config, "Unable to resolve interface '%s'\n", iface.c_str());
             }
         }
@@ -173,8 +173,8 @@ MCastMembership SockEndpoint::resolve() const {
 
 std::ostream& operator<<(std::ostream& strm, const SockEndpoint& addr) {
     if (addr.scheme == SockEndpoint::TLS) strm << "pvas://";
-    strm << addr.addr;
-    if (addr.addr.isMCast()) {
+    strm<<addr.addr;
+    if(addr.addr.isMCast()) {
         if (addr.ttl) strm << ',' << addr.ttl;
         if (!addr.iface.empty()) strm << '@' << addr.iface;
     }
@@ -190,10 +190,10 @@ namespace {
  * factor.
  * https://github.com/epics-base/pvAccessCPP/issues/171
  */
-constexpr double tmoScale = 4.0 / 3.0;  // 40 second idle timeout / 30 configured
+constexpr double tmoScale = 4.0/3.0; // 40 second idle timeout / 30 configured
 
 // remove duplicates while preserving order of first appearance
-template <typename A>
+template<typename A>
 void removeDups(std::vector<A>& addrs) {
     std::sort(addrs.begin(), addrs.end());
     addrs.erase(std::unique(addrs.begin(), addrs.end()), addrs.end());
@@ -201,39 +201,39 @@ void removeDups(std::vector<A>& addrs) {
 
 // special handling for SockEndpoint where duplication is based on
 // address,interface.  Duplicates are combined with the longest TTL.
-template <>
+template<>
 void removeDups(std::vector<SockEndpoint>& addrs) {
     std::map<std::pair<SockAddr, std::string>, size_t> seen;
-    for (size_t i = 0; i < addrs.size();) {
+    for(size_t i=0; i<addrs.size(); ) {
         auto& ep = addrs[i];
         auto key = std::make_pair(ep.addr, ep.iface);
         auto it = seen.find(key);
-        if (it == seen.end()) {  // first sighting
+        if(it==seen.end()) { // first sighting
             seen[key] = i++;
 
-        } else {  // duplicate
+        } else { // duplicate
             auto& orig = addrs[it->second];
 
-            if (ep.ttl > orig.ttl) {  // w/ longer TTL
+            if(ep.ttl > orig.ttl) { // w/ longer TTL
                 orig.ttl = ep.ttl;
             }
 
-            addrs.erase(addrs.begin() + i);
+            addrs.erase(addrs.begin()+i);
             // 'ep' and 'orig' are invalidated
         }
     }
 }
 
 void split_into(std::vector<std::string>& out, const std::string& inp) {
-    size_t pos = 0u;
+    size_t pos=0u;
 
-    while (pos < inp.size()) {
+    while(pos<inp.size()) {
         auto start = inp.find_first_not_of(" \t\r\n", pos);
         auto end = inp.find_first_of(" \t\r\n", start);
         pos = end;
 
-        if (start < end) {
-            out.push_back(inp.substr(start, end == std::string::npos ? end : end - start));
+        if(start<end) {
+            out.push_back(inp.substr(start, end==std::string::npos ? end : end-start));
         }
     }
 
@@ -259,12 +259,12 @@ void split_addr_into(const char* name, std::vector<std::string>& out, const std:
 
     // parse, resolve host names, then re-print.
     // Catch syntax errors early, and normalize prior to removing duplicates
-    for (auto& temp : raw) {
+    for(auto& temp : raw) {
         try {
             SockEndpoint ep(temp, conf, defaultPort);
-            out.push_back(SB() << ep);
+            out.push_back(SB()<<ep);
 
-        } catch (std::exception& e) {
+        } catch(std::exception& e){
             if (required) throw std::runtime_error(SB() << "invalid endpoint \"" << temp << "\" " << e.what());
             log_err_printf(config, "%s ignoring invalid '%s' : %s\n", name, temp.c_str(), e.what());
         }
@@ -273,21 +273,21 @@ void split_addr_into(const char* name, std::vector<std::string>& out, const std:
 
 std::string join_addr(const std::vector<std::string>& in) {
     std::ostringstream strm;
-    bool first = true;
-    for (auto& addr : in) {
-        if (first)
+    bool first=true;
+    for(auto& addr : in) {
+        if(first)
             first = false;
         else
-            strm << ' ';
-        strm << addr;
+            strm<<' ';
+        strm<<addr;
     }
     return strm.str();
 }
 
 void parse_bool(bool& dest, const std::string& name, const std::string& val) {
-    if (epicsStrCaseCmp(val.c_str(), "YES") == 0 || val == "1") {
+    if(epicsStrCaseCmp(val.c_str(), "YES")==0 || val=="1") {
         dest = true;
-    } else if (epicsStrCaseCmp(val.c_str(), "NO") == 0 || val == "0") {
+    } else if(epicsStrCaseCmp(val.c_str(), "NO")==0 || val=="0") {
         dest = false;
     } else {
         log_err_printf(config, "%s invalid bool value (YES/NO) : '%s'\n", name.c_str(), val.c_str());
@@ -301,18 +301,18 @@ void parse_timeout(double& dest, const std::string& name, const std::string& val
 
         if (!std::isfinite(temp) || temp < 0.0 || temp > double(std::numeric_limits<time_t>::max())) throw std::out_of_range("Out of range");
 
-        dest = temp * tmoScale;
-    } catch (std::exception& e) {
+        dest = temp*tmoScale;
+    } catch(std::exception& e) {
         log_err_printf(serversetup, "%s invalid double value : '%s'\n", name.c_str(), val.c_str());
     }
 }
 
 std::vector<SockEndpoint> parseAddresses(const std::vector<std::string>& addrs) {
     std::vector<SockEndpoint> ret;
-    for (const auto& addr : addrs) {
+    for(const auto& addr : addrs) {
         try {
             ret.emplace_back(addr);
-        } catch (std::runtime_error& e) {
+        }catch(std::runtime_error& e){
             log_warn_printf(config, "Ignoring %s : %s\n", addr.c_str(), e.what());
             continue;
         }
@@ -412,17 +412,17 @@ void parseTLSOptions(ConfigCommon& conf, const std::string& options) {
     std::vector<std::string> opts;
     split_into(opts, options);
 
-    for (auto opt : opts) {
+    for(auto opt : opts) {
         auto sep(opt.find_first_of('='));
         if ( sep == std::string::npos)
             sep = opt.size();
         auto key(opt.substr(0, sep));
-        auto val(sep <= key.size() ? opt.substr(sep + 1) : std::string());
+        auto val(sep<=key.size() ? opt.substr(sep+1) : std::string());
 
-        if (key == "client_cert") {
-            if (val == "require") {
+        if(key=="client_cert") {
+            if(val=="require") {
                 conf.tls_client_cert_required = ConfigCommon::Require;
-            } else if (val == "optional") {
+            } else if(val=="optional") {
                 conf.tls_client_cert_required = ConfigCommon::Optional;
             } else {
                 log_warn_printf(config, "Ignore unknown TLS option `client_cert` value %s.  expected `require` or `optional`\n", opt.c_str());
@@ -484,7 +484,7 @@ std::string printTLSOptions(const ConfigCommon& conf) {
 }
 #endif
 
-}  // namespace
+} // namespace
 
 namespace server {
 
@@ -492,39 +492,39 @@ void Config::fromDefs(Config& self, const std::map<std::string, std::string>& de
     PickOne pickone{defs, useenv};
     PickOne pick_another_one{defs, useenv};
 
-    if (pickone({"EPICS_PVAS_SERVER_PORT", "EPICS_PVA_SERVER_PORT"})) {
+    if(pickone({"EPICS_PVAS_SERVER_PORT", "EPICS_PVA_SERVER_PORT"})) {
         try {
             self.tcp_port = parseTo<uint64_t>(pickone.val);
-        } catch (std::exception& e) {
+        }catch(std::exception& e) {
             log_err_printf(serversetup, "%s invalid integer : %s", pickone.name.c_str(), e.what());
         }
     }
 
-    if (pickone({"EPICS_PVAS_BROADCAST_PORT", "EPICS_PVA_BROADCAST_PORT"})) {
+    if(pickone({"EPICS_PVAS_BROADCAST_PORT", "EPICS_PVA_BROADCAST_PORT"})) {
         try {
             self.udp_port = parseTo<uint64_t>(pickone.val);
-        } catch (std::exception& e) {
+        }catch(std::exception& e) {
             log_err_printf(serversetup, "%s invalid integer : %s", pickone.name.c_str(), e.what());
         }
     }
 
-    if (pickone({"EPICS_PVAS_INTF_ADDR_LIST"})) {
+    if(pickone({"EPICS_PVAS_INTF_ADDR_LIST"})) {
         split_addr_into(pickone.name.c_str(), self.interfaces, pickone.val, nullptr, self.tcp_port, true);
     }
 
-    if (pickone({"EPICS_PVAS_IGNORE_ADDR_LIST"})) {
+    if(pickone({"EPICS_PVAS_IGNORE_ADDR_LIST"})) {
         split_addr_into(pickone.name.c_str(), self.ignoreAddrs, pickone.val, nullptr, 0, true);
     }
 
-    if (pickone({"EPICS_PVAS_BEACON_ADDR_LIST", "EPICS_PVA_ADDR_LIST"})) {
+    if(pickone({"EPICS_PVAS_BEACON_ADDR_LIST", "EPICS_PVA_ADDR_LIST"})) {
         split_addr_into(pickone.name.c_str(), self.beaconDestinations, pickone.val, nullptr, self.udp_port);
     }
 
-    if (pickone({"EPICS_PVAS_AUTO_BEACON_ADDR_LIST", "EPICS_PVA_AUTO_ADDR_LIST"})) {
+    if(pickone({"EPICS_PVAS_AUTO_BEACON_ADDR_LIST", "EPICS_PVA_AUTO_ADDR_LIST"})) {
         parse_bool(self.auto_beacon, pickone.name, pickone.val);
     }
 
-    if (pickone({"EPICS_PVA_CONN_TMO"})) {
+    if(pickone({"EPICS_PVA_CONN_TMO"})) {
         parse_timeout(self.tcpTimeout, pickone.name, pickone.val);
     }
 
@@ -551,7 +551,7 @@ void Config::fromDefs(Config& self, const std::map<std::string, std::string>& de
         std::string filename = SB() << getXdgPvaConfigHome() << OSI_PATH_SEPARATOR << "server.p12";
         std::ifstream file(filename.c_str());
         if (file.good()) tls_keychain_file = filename;
-    }
+}
 
     // EPICS_PVAS_TLS_OPTIONS
     if (pickone({"EPICS_PVAS_TLS_OPTIONS", "EPICS_PVA_TLS_OPTIONS"})) {
@@ -587,17 +587,17 @@ Config Config::isolated(int family) {
     ret.udp_port = 0u;
     ret.tcp_port = 0u;
     ret.auto_beacon = false;
-    switch (family) {
-        case AF_INET:
-            ret.interfaces.emplace_back("127.0.0.1");
-            ret.beaconDestinations.emplace_back("127.0.0.1");
-            break;
-        case AF_INET6:
-            ret.interfaces.emplace_back("::1");
-            ret.beaconDestinations.emplace_back("::1");
-            break;
-        default:
-            throw std::logic_error(SB() << "Unsupported address family " << family);
+    switch(family) {
+    case AF_INET:
+        ret.interfaces.emplace_back("127.0.0.1");
+        ret.beaconDestinations.emplace_back("127.0.0.1");
+        break;
+    case AF_INET6:
+        ret.interfaces.emplace_back("::1");
+        ret.beaconDestinations.emplace_back("::1");
+        break;
+    default:
+        throw std::logic_error(SB()<<"Unsupported address family "<<family);
     }
 
 #ifdef PVXS_ENABLE_OPENSSL
@@ -651,19 +651,19 @@ void Config::expand() {
 
     // empty interface address list implies the wildcard
     // (because no addresses isn't interesting...)
-    if (ifaces.empty()) {
+    if(ifaces.empty()) {
         ifaces.emplace_back(SockAddr::any(AF_INET));
     }
 
     auto ifmap(IfaceMap::instance());
 
-    for (size_t i = 0; i < ifaces.size(); i++) {
+    for(size_t i=0; i<ifaces.size(); i++) {
         auto& ep = ifaces[i];
 
-        if (!ep.addr.isMCast()) {
+        if(!ep.addr.isMCast()) {
             // no-op
 
-        } else if (!ep.iface.empty()) {
+        } else if(!ep.iface.empty()) {
             ifaces.emplace_back(ifmap.address_of(ep.iface));
         } else {
             ifaces.emplace_back(SockAddr::any(ep.addr.family()));
@@ -671,7 +671,7 @@ void Config::expand() {
         // ep invalidated by emplace()
     }
 
-    if (auto_beacon) {
+    if(auto_beacon) {
         // use interface list add ipv4 broadcast addresses to beaconDestinations.
         // 0.0.0.0 -> adds all bcasts
         // otherwise add bcast for each iface address
@@ -694,7 +694,7 @@ std::ostream& operator<<(std::ostream& strm, const Config& conf) {
     Config::defs_t defs;
     conf.updateDefs(defs);
 
-    for (const auto& pair : defs) {
+    for(const auto& pair : defs) {
         // only print the server variant
         static constexpr char prefix[] = "EPICS_PVAS_";
         static constexpr char cert_auth_prefix[] = "EPICS_CERT_AUTH_";
@@ -703,60 +703,60 @@ std::ostream& operator<<(std::ostream& strm, const Config& conf) {
         static constexpr char auth_prefix[] = "EPICS_AUTH_";
 
         if (MATCHING_DEF() || MATCHING_DEF(cert_auth_) || MATCHING_DEF(pvacms_) || MATCHING_DEF(ocsp_) || MATCHING_DEF(auth_))
-            strm << indent{} << pair.first << '=' << pair.second << '\n';
+            strm<<indent{}<<pair.first<<'='<<pair.second<<'\n';
     }
 
     return strm;
 }
 #undef MATCHING_DEF
-}  // namespace server
+} // namespace server
 
 namespace client {
 
 void Config::fromDefs(Config& self, const std::map<std::string, std::string>& defs, bool useenv) {
     PickOne pickone{defs, useenv};
 
-    if (pickone({"EPICS_PVA_BROADCAST_PORT"})) {
+    if(pickone({"EPICS_PVA_BROADCAST_PORT"})) {
         try {
             self.udp_port = parseTo<uint64_t>(pickone.val);
-        } catch (std::exception& e) {
+        }catch(std::exception& e) {
             log_warn_printf(clientsetup, "%s invalid integer : %s", pickone.name.c_str(), e.what());
         }
     }
-    if (self.udp_port == 0u) {
+    if(self.udp_port==0u) {
         log_warn_printf(clientsetup, "ignoring EPICS_PVA_BROADCAST_PORT=%d\n", 0);
         self.udp_port = 5076;
     }
 
-    if (pickone({"EPICS_PVA_SERVER_PORT", "EPICS_PVAS_SERVER_PORT"})) {
+    if(pickone({"EPICS_PVA_SERVER_PORT", "EPICS_PVAS_SERVER_PORT"})) {
         try {
             self.tcp_port = parseTo<uint64_t>(pickone.val);
-        } catch (std::exception& e) {
+        }catch(std::exception& e) {
             log_warn_printf(clientsetup, "%s invalid integer : %s", pickone.name.c_str(), e.what());
         }
     }
-    if (self.tcp_port == 0u && !self.nameServers.empty()) {
+    if(self.tcp_port==0u && !self.nameServers.empty()) {
         log_warn_printf(clientsetup, "ignoring EPICS_PVA_SERVER_PORT=%d\n", 0);
         self.tcp_port = 5075;
     }
 
-    if (pickone({"EPICS_PVA_ADDR_LIST"})) {
+    if(pickone({"EPICS_PVA_ADDR_LIST"})) {
         split_addr_into(pickone.name.c_str(), self.addressList, pickone.val, nullptr, self.udp_port);
     }
 
-    if (pickone({"EPICS_PVA_NAME_SERVERS"})) {
+    if(pickone({"EPICS_PVA_NAME_SERVERS"})) {
         split_addr_into(pickone.name.c_str(), self.nameServers, pickone.val, &self, 0);
     }
 
-    if (pickone({"EPICS_PVA_AUTO_ADDR_LIST"})) {
+    if(pickone({"EPICS_PVA_AUTO_ADDR_LIST"})) {
         parse_bool(self.autoAddrList, pickone.name, pickone.val);
     }
 
-    if (pickone({"EPICS_PVA_INTF_ADDR_LIST"})) {
+    if(pickone({"EPICS_PVA_INTF_ADDR_LIST"})) {
         split_addr_into(pickone.name.c_str(), self.interfaces, pickone.val, nullptr, 0);
     }
 
-    if (pickone({"EPICS_PVA_CONN_TMO"})) {
+    if(pickone({"EPICS_PVA_CONN_TMO"})) {
         parse_timeout(self.tcpTimeout, pickone.name, pickone.val);
     }
 
@@ -768,7 +768,7 @@ void Config::fromDefs(Config& self, const std::map<std::string, std::string>& de
         std::string filename = SB() << getXdgPvaConfigHome() << OSI_PATH_SEPARATOR << "client.p12";
         std::ifstream file(filename.c_str());
         if (file.good()) tls_keychain_file = filename;
-    }
+}
 
     // EPICS_PVA_TLS_KEYCHAIN_PWD_FILE
     if (pickone({"EPICS_PVA_TLS_KEYCHAIN_PWD_FILE"})) {
@@ -873,13 +873,13 @@ std::ostream& operator<<(std::ostream& strm, const Config& conf) {
     Config::defs_t defs;
     conf.updateDefs(defs);
 
-    for (const auto& pair : defs) {
-        strm << indent{} << pair.first << '=' << pair.second << '\n';
+    for(const auto& pair : defs) {
+        strm<<indent{}<<pair.first<<'='<<pair.second<<'\n';
     }
 
     return strm;
 }
 
-}  // namespace client
+} // namespace client
 
-}  // namespace pvxs
+} // namespace pvxs

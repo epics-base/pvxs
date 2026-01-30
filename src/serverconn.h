@@ -323,7 +323,7 @@ struct Server::Pvt
     bool canRespondToTlsSearch() const { return false; }
 #endif
 
-   private:
+private:
     void onSearch(const UDPManager::Search& msg);
     void doBeacons(short evt);
     static void doBeaconsS(evutil_socket_t fd, short evt, void *raw);

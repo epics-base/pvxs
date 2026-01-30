@@ -352,9 +352,9 @@ std::ostream& operator<<(std::ostream& strm, const Server& serv)
             if (serv.pvt->tls_context && serv.pvt->tls_context->ctx) {
                 auto cert(serv.pvt->tls_context->getEntityCertificate());
                 assert(cert);
-                strm << indent{} << "TLS Cert. " << ossl::ShowX509{cert} << "\n";
+                strm<<indent{}<<"TLS Cert. "<<ossl::ShowX509{cert}<<"\n";
             } else {
-                strm << indent{} << "TLS Cert. not loaded\n";
+                strm<<indent{}<<"TLS Cert. not loaded\n";
             }
 #else
             strm<<indent{}<<"TLS Support not enabled\n";
@@ -426,7 +426,7 @@ std::ostream& operator<<(std::ostream& strm, const Server& serv)
 }
 
 #ifndef PVXS_ENABLE_OPENSSL
-Server::Pvt::Pvt(const Config& conf)
+Server::Pvt::Pvt(const Config &conf)
     :
 #else
 Server::Pvt::Pvt(Server& svr, const Config& conf)
@@ -576,38 +576,38 @@ Server::Pvt::Pvt(Server& svr, const Config& conf)
 
         decltype(tcpifaces) tlsifaces(tcpifaces); // copy before any setPort()
 #endif
-            bool firstiface = true;
-            for (auto& addr : tcpifaces) {
+        bool firstiface = true;
+        for(auto& addr : tcpifaces) {
                 if (addr.port() == 0) addr.setPort(effective.tcp_port);
 
-                interfaces.emplace_back(addr, this, firstiface, false);
+            interfaces.emplace_back(addr, this, firstiface, false);
 
                 if (firstiface || effective.tcp_port == 0) effective.tcp_port = interfaces.back().bind_addr.port();
-                firstiface = false;
-            }
+            firstiface = false;
+        }
 
 #ifdef PVXS_ENABLE_OPENSSL
             // Set this up as long as TLS is configured, even if its configured badly
             // or if the certificates are invalid, because the state may change and
             // we may need to listen for TLS traffic once it does
             if (effective.isTlsConfigured()) {
-                firstiface = true;
-                for (auto& addr : tlsifaces) {
-                    // unconditionally set port to avoid clash with plain TCP listener
-                    addr.setPort(effective.tls_port);
+            firstiface = true;
+            for(auto& addr : tlsifaces) {
+                // unconditionally set port to avoid clash with plain TCP listener
+                addr.setPort(effective.tls_port);
 
-                    interfaces.emplace_back(addr, this, firstiface, true);
+                interfaces.emplace_back(addr, this, firstiface, true);
 
                     if (firstiface || effective.tls_port == 0) effective.tls_port = interfaces.back().bind_addr.port();
-                    firstiface = false;
-                }
+                firstiface = false;
             }
+        }
 #endif
 
-            for (const auto& addr : effective.beaconDestinations) {
+        for(const auto& addr : effective.beaconDestinations) {
                 beaconDest.emplace_back(addr.c_str(), &effective);
                 log_debug_printf(serversetup, "Will send beacons to %s\n", std::string(SB() << beaconDest.back()).c_str());
-            }
+        }
     });
 
     {
@@ -771,7 +771,7 @@ void Server::Pvt::stop()
 #ifdef PVXS_ENABLE_OPENSSL
         log_debug_printf(status_svr, "%24.24s = %-12s : %-41s: %p\n", "Server::Pvt::state", "Stopped", "Server::Pvt::stop()", tls_context.get());
 #endif
-});
+    });
 
     /* Cycle through once more to ensure any callbacks queue during the previous call have completed.
      * TODO: this is partly a crutch as eg. SharedPV::attach() binds strong self references

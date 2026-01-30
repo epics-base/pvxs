@@ -107,7 +107,7 @@ protected:
     bool isPeerStatusGood() const ;
 
 #endif
-  public:
+public:
     const bool isTLS;
 
     TypeStore rxRegistry;
@@ -155,7 +155,7 @@ protected:
     void connect(ev_owned_ptr<bufferevent> &&bev);
     void disconnect();
 
-  protected:
+protected:
     virtual void handle_ECHO();
     virtual void handle_SEARCH();
     virtual void handle_SEARCH_RESPONSE();
@@ -179,7 +179,7 @@ protected:
 
     virtual void handle_MESSAGE();
 
-    virtual std::shared_ptr<ConnBase> self_from_this() = 0;
+    virtual std::shared_ptr<ConnBase> self_from_this() =0;
     virtual void cleanup() =0;
 
     virtual void bevEvent(short events);

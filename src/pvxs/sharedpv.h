@@ -80,7 +80,7 @@ struct PVXS_API SharedPV {
     Value fetch() const;
 
     struct Impl;
-  private:
+private:
     std::shared_ptr<Impl> impl;
 };
 

@@ -522,7 +522,7 @@ struct StaticSource::Impl final : public Source
             } else {
                 // not mine
                 log_debug_printf(logsource, "%p can't create '%s'\n", this, searched_name.c_str());
-            }
+        }
         }
     }
 

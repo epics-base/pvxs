@@ -36,7 +36,7 @@ struct SharedPV;
 struct Source;
 struct Config;
 
-/** PVAccess protocol server instance
+/** PV Access protocol server instance
  *
  * Use a Config to determine how this server will bind, listen,
  * and announce itself.

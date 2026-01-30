@@ -1071,7 +1071,7 @@ public:
     // compat
     static inline Config from_env() { return Config{}.applyEnv(); }
     //! Default configuration using process environment
-    static inline Config fromEnv() { return Config{}.applyEnv(); }
+    static inline Config fromEnv()  { return Config{}.applyEnv(); }
     //! update using defined EPICS_PVA* environment variables
     virtual Config &applyEnv();
 

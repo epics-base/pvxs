@@ -22,7 +22,7 @@
 #include "evhelper.h"
 
 #ifdef PVXS_ENABLE_OPENSSL
-#include <event2/bufferevent_ssl.h>
+#  include <event2/bufferevent_ssl.h>
 #endif
 
 #include <epicsTime.h>

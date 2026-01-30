@@ -194,7 +194,7 @@ void Channel::disconnect(const std::shared_ptr<Channel>& self)
 
     state = Channel::Searching;
     log_debug_printf(status_cli, "%24.24s = %-12s : %-41s: %s\n", "Channel::state", "Searching", "Channel::disconnect()", name.c_str());
-    sid = 0xdeadbeef;  // spoil
+    sid = 0xdeadbeef; // spoil
 
     auto conns(connectors); // copy list
 
@@ -567,7 +567,7 @@ ContextImpl::ContextImpl(const Config& conf, const evbase tcp_loop)
     ,cacheCleaner(__FILE__, __LINE__,
                   event_new(tcp_loop.base, -1, EV_TIMEOUT|EV_PERSIST, &ContextImpl::cacheCleanS, this))
     ,nsChecker(__FILE__, __LINE__,
-           event_new(tcp_loop.base, -1, EV_TIMEOUT|EV_PERSIST, &ContextImpl::onNSCheckS, this))
+               event_new(tcp_loop.base, -1, EV_TIMEOUT|EV_PERSIST, &ContextImpl::onNSCheckS, this))
 #ifdef PVXS_ENABLE_OPENSSL
     ,cert_expiration_timer(__FILE__, __LINE__,
            event_new(tcp_loop.base, -1, EV_TIMEOUT | EV_PERSIST, &ContextImpl::certExpirationHandlerS, nullptr))
@@ -586,12 +586,12 @@ ContextImpl::ContextImpl(const Config& conf, const evbase tcp_loop)
             log_debug_printf(setup, "Created a client context for certificate status%s", "\n");
             tls_context = ossl::SSLContext::for_client(effective, inner, tcp_loop);
             log_debug_printf(setup, "Created TLS context for: %s\n", effective.tls_keychain_file.c_str());
-        } catch (std::exception& e) {
+        }catch(std::exception& e){
             log_debug_printf(setup, "Failed to configure TLS for client: %s\n", e.what());
             if (tls_context) {
                 tls_context->setDegradedMode(true);
                 log_warn_printf(setup, "TLS disabled for client: %s\n", e.what());
-            }
+        }
         }
     } else if (tls_context) {
         tls_context->setDegradedMode(true);
@@ -1235,7 +1235,7 @@ void ContextImpl::tickSearch(SearchKind kind, bool poked)
             FixedBuf H(true, searchMsg.data(), 8);
             to_wire(H, Header{CMD_SEARCH, 0, uint32_t(consumed-8u)});
         }
-        for (auto& pair : searchDest) {
+        for(auto& pair : searchDest) {
             auto& dest = pair.dest.addr.family()==AF_INET ? searchTx4 : searchTx6;
 
             if(pair.isucast) {
@@ -1600,6 +1600,6 @@ void ContextImpl::removeTlsPeer(const Connection* client_conn) const {
     }
 }
 #endif
-}  // namespace client
+} // namespace client
 
-}  // namespace pvxs
+} // namespace pvxs
