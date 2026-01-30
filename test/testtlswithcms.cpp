@@ -79,7 +79,7 @@ struct Tester {
     server::ServerEv pvacms;
     client::Context client;
     CounterMap cert_status_request_counters;
-    epicsMutex counter_lock;
+    epicsEvent cert_status_evt;
 
     Tester()
         : now(time(nullptr)),
@@ -89,13 +89,14 @@ struct Tester {
     {
         // Set up the Mock PVACMS server certificate (does not contain custom status extension)
         source->add(getCertStatusPv("CERT", issuer_id), status_pv);
-        // Set up mock source that counts requests
-        const auto pvacms_mock   = std::make_shared<server::MockSource>(source, [this] (std::string const& pv_name) {
-            if (cert_status_request_counters.find(pv_name) == cert_status_request_counters.end()) {
-                cert_status_request_counters[pv_name] = std::make_shared<std::atomic<uint32_t>>(0);
+        // Set up mock source that counts actual certificate-status subscriptions
+        const auto pvacms_mock = std::make_shared<server::MockSource>(source, [this](std::string const& pv_name) {
+            auto it = cert_status_request_counters.find(pv_name);
+            if (it == cert_status_request_counters.end()) {
+                it = cert_status_request_counters.emplace(pv_name, std::make_shared<std::atomic<uint32_t>>(0)).first;
             }
-            cert_status_request_counters[pv_name]->fetch_add(1);
-
+            it->second->fetch_add(1);
+            cert_status_evt.signal();
         });
 
         auto pvacms_config = ConfigCms::mockCms();
@@ -321,7 +322,7 @@ struct Tester {
             auto reply(cli.get(TEST_PV).exec()->wait(5.0));
             testEq(reply[TEST_PV_FIELD].as<int32_t>(), 42);
             // Both client and server should verify the server's certificate
-            testCounterEq(cert_status_request_counters, server1, 2);
+            waitCounterAtLeast(cert_status_request_counters, cert_status_evt, server1, 2);
         } catch (std::exception& e) {
             testFail("Timeout: %s", e.what());
         }
@@ -364,14 +365,12 @@ struct Tester {
         test_pv.open(test_pv_value.update(TEST_PV_FIELD, 42));
         serv.start();
 
-        sleep(1); // Enough time for the server status request to be processed
-        testCounterEq(cert_status_request_counters, server1, 1);
-        testCounterEq(cert_status_request_counters, client1, 0);
+        waitCounterAtLeast(cert_status_request_counters, cert_status_evt, server1, 1);
+        waitCounterAtLeast(cert_status_request_counters, cert_status_evt, client1, 0);
 
         auto cli(cli_conf.build());
-        sleep(1); // Enough time for the client status request to be processed
-        testCounterEq(cert_status_request_counters, server1, 1);
-        testCounterEq(cert_status_request_counters, client1, 1);
+        waitCounterAtLeast(cert_status_request_counters, cert_status_evt, server1, 1);
+        waitCounterAtLeast(cert_status_request_counters, cert_status_evt, client1, 1);
 
         auto conn(cli.connect(TEST_PV).onConnect([](const client::Connected& c) { testTrue(c.cred && c.cred->isTLS); }).exec());
 
@@ -379,8 +378,8 @@ struct Tester {
             auto reply(cli.get(TEST_PV).exec()->wait(5.0));
             testEq(reply[TEST_PV_FIELD].as<int32_t>(), 42);
             // peer status requests must have been processed by time we have a value
-            testCounterEq(cert_status_request_counters, server1, 2);
-            testCounterEq(cert_status_request_counters, client1, 2);
+            waitCounterAtLeast(cert_status_request_counters, cert_status_evt, server1, 2);
+            waitCounterAtLeast(cert_status_request_counters, cert_status_evt, client1, 2);
         } catch (std::exception& e) {
             testFail("Timeout: %s", e.what());
         }
@@ -435,17 +434,17 @@ struct Tester {
             testTrue(e.cred->isTLS);
             testEq(e.cred->method, TLS_METHOD_STRING);
             testEq(e.cred->account, CERT_CN_IOC1);
-            testCounterEq(cert_status_request_counters, ioc, 2);
-            testCounterEq(cert_status_request_counters, client1, 2);
-            testCounterEq(cert_status_request_counters, client2, 0);
+            waitCounterAtLeast(cert_status_request_counters, cert_status_evt, ioc, 2);
+            waitCounterAtLeast(cert_status_request_counters, cert_status_evt, client1, 2);
+            waitCounterAtLeast(cert_status_request_counters, cert_status_evt, client2, 0);
         }
         testDiag("Connect");
 
         Value update = pop(sub, evt);
         testEq(update[TEST_PV_FIELD].as<std::string>(), TLS_METHOD_STRING "/" CERT_CN_CLIENT1);
-        testCounterEq(cert_status_request_counters, ioc, 2);
-        testCounterEq(cert_status_request_counters, client1, 2);
-        testCounterEq(cert_status_request_counters, client2, 0);
+        waitCounterAtLeast(cert_status_request_counters, cert_status_evt, ioc, 2);
+        waitCounterAtLeast(cert_status_request_counters, cert_status_evt, client1, 2);
+        waitCounterAtLeast(cert_status_request_counters, cert_status_evt, client2, 0);
 
         cli_conf = cli.config();
         cli_conf.tls_keychain_file = CLIENT2_KEYCHAIN_FILE;
@@ -461,9 +460,9 @@ struct Tester {
             testFail("Missing expected Connected");
         } catch (client::Connected& e) {
             testOk1(e.cred && e.cred->isTLS);
-            testCounterEq(cert_status_request_counters, ioc, 3);
-            testCounterEq(cert_status_request_counters, client1, 2);
-            testCounterEq(cert_status_request_counters, client2, 2);
+            waitCounterAtLeast(cert_status_request_counters, cert_status_evt, ioc, 3);
+            waitCounterAtLeast(cert_status_request_counters, cert_status_evt, client1, 2);
+            waitCounterAtLeast(cert_status_request_counters, cert_status_evt, client2, 2);
         } catch (...) {
             testFail("Unexpected exception instead of Connected");
         }
@@ -471,10 +470,10 @@ struct Tester {
 
         update = pop(sub, evt);
         testEq(update[TEST_PV_FIELD].as<std::string>(), TLS_METHOD_STRING "/" CERT_CN_CLIENT2);
-        // Cached responses so no checks
-        testCounterEq(cert_status_request_counters, ioc, 3);
-        testCounterEq(cert_status_request_counters, client1, 2);
-        testCounterEq(cert_status_request_counters, client2, 2);
+        // Cached responses so no new subscriptions
+        waitCounterAtLeast(cert_status_request_counters, cert_status_evt, ioc, 3);
+        waitCounterAtLeast(cert_status_request_counters, cert_status_evt, client1, 2);
+        waitCounterAtLeast(cert_status_request_counters, cert_status_evt, client2, 2);
     }
 
     /**
@@ -515,17 +514,17 @@ struct Tester {
             testTrue(e.cred->isTLS);
             testEq(e.cred->method, TLS_METHOD_STRING);
             testEq(e.cred->account, CERT_CN_SERVER1);
-            testCounterEq(cert_status_request_counters, server1, 2);
-            testCounterEq(cert_status_request_counters, client1, 2);
-            testCounterEq(cert_status_request_counters, ioc, 0);
+            waitCounterAtLeast(cert_status_request_counters, cert_status_evt, server1, 2);
+            waitCounterAtLeast(cert_status_request_counters, cert_status_evt, client1, 2);
+            waitCounterAtLeast(cert_status_request_counters, cert_status_evt, ioc, 0);
         }
         testDiag("Connect");
 
         Value update = pop(sub, evt);
         testEq(update[TEST_PV_FIELD].as<std::string>(), TLS_METHOD_STRING "/" CERT_CN_CLIENT1);
-        testCounterEq(cert_status_request_counters, server1, 2);
-        testCounterEq(cert_status_request_counters, client1, 2);
-        testCounterEq(cert_status_request_counters, ioc, 0);
+        waitCounterAtLeast(cert_status_request_counters, cert_status_evt, server1, 2);
+        waitCounterAtLeast(cert_status_request_counters, cert_status_evt, client1, 2);
+        waitCounterAtLeast(cert_status_request_counters, cert_status_evt, ioc, 0);
 
         serv_conf = serv.config();
         serv_conf.tls_keychain_file = IOC1_KEYCHAIN_FILE;
@@ -543,17 +542,17 @@ struct Tester {
             testTrue(e.cred->isTLS);
             testEq(e.cred->method, TLS_METHOD_STRING);
             testEq(e.cred->account, CERT_CN_IOC1);
-            testCounterEq(cert_status_request_counters, server1, 2);
-            testCounterEq(cert_status_request_counters, client1, 3);
-            testCounterEq(cert_status_request_counters, ioc, 2);
+            waitCounterAtLeast(cert_status_request_counters, cert_status_evt, server1, 2);
+            waitCounterAtLeast(cert_status_request_counters, cert_status_evt, client1, 3);
+            waitCounterAtLeast(cert_status_request_counters, cert_status_evt, ioc, 2);
         }
         testDiag("Reconnect");
 
         update = pop(sub, evt);
         testEq(update[TEST_PV_FIELD].as<std::string>(), TLS_METHOD_STRING "/" CERT_CN_CLIENT1);
-        testCounterEq(cert_status_request_counters, server1, 2);
-        testCounterEq(cert_status_request_counters, client1, 3);
-        testCounterEq(cert_status_request_counters, ioc, 2);
+        waitCounterAtLeast(cert_status_request_counters, cert_status_evt, server1, 2);
+        waitCounterAtLeast(cert_status_request_counters, cert_status_evt, client1, 3);
+        waitCounterAtLeast(cert_status_request_counters, cert_status_evt, ioc, 2);
     }
 
     /**
@@ -589,27 +588,30 @@ struct Tester {
 
         auto cli_conf(serv.clientConfig());
         cli_conf.tls_keychain_file = CLIENT1_KEYCHAIN_FILE;
+        auto cli2_conf(serv.clientConfig());
+        cli2_conf.tls_keychain_file = CLIENT2_KEYCHAIN_FILE;
 
         auto cli(cli_conf.build());
+        auto cli2(cli2_conf.build());
 
         test_pv.open(test_pv_value.update(TEST_PV_FIELD, 42));
         serv.start();
 
-        testDiag("Get with uncached-status");
+        testDiag("Get with uncached-status server cert status");
         auto reply(cli.get(TEST_PV).exec()->wait(5.0));
         testEq(reply[TEST_PV_FIELD].as<int32_t>(), 42);
-        testCounterEq(cert_status_request_counters, server1, 2);
-        testCounterEq(cert_status_request_counters, client1, 2);
+        waitCounterAtLeast(cert_status_request_counters, cert_status_evt, server1, 2);
+        waitCounterAtLeast(cert_status_request_counters, cert_status_evt, client1, 2);
 
         // Sleep a bit, but not long enough for the status validity to expire
         sleep(1);
 
-        testDiag("Get with cached-status");
-        auto reply_2(cli.get(TEST_PV).exec()->wait(5.0));
+        testDiag("Get with cached-status (same server)");
+        auto reply_2(cli2.get(TEST_PV).exec()->wait(5.0));
         testEq(reply_2[TEST_PV_FIELD].as<int32_t>(), 42);
         // Note that counters don't increment
-        testCounterEq(cert_status_request_counters, server1, 2);
-        testCounterEq(cert_status_request_counters, client1, 2);
+        waitCounterAtLeast(cert_status_request_counters, cert_status_evt, server1, 2);
+        waitCounterAtLeast(cert_status_request_counters, cert_status_evt, client2, 2);
     }
 
     /**

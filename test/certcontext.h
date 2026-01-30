@@ -415,41 +415,95 @@ void resetCounter(CounterMap &counters, const CertCtx<Tag> &cert_context) {
     counters[cert_context.pv_name] = std::make_shared<std::atomic<uint32_t> >(0u);
 }
 
-/**
- * Test that the counter is equal to the expected value
- *
- * @tparam Tag the tag of the certificate context to check
- * @param counters
- * @param cert_context
- * @param expected
- */
 template <typename Tag>
-void testCounterEq(const CounterMap &counters, const CertCtx<Tag> &cert_context, const uint32_t expected) {
-    const auto it = counters.find(cert_context.pv_name);
-    if (it == counters.end()) {
-        testFail("No counter stored for PV \"%s\"", cert_context.pv_name.c_str());
+void waitCounterAtLeast(const CounterMap &counters, epicsEvent &cert_status_evt, const CertCtx<Tag> &cert_context, const uint32_t expected, const double timeout = 0.5) {
+    const auto counter = counters.find(cert_context.pv_name);
+    if (counter == counters.end()) {
+        testAbort("No counter stored for PV \"%s\"", cert_context.pv_name.c_str());
         return;
     }
-    const auto count = it->second->load();
-    testOk(count >= expected,
-           "Expected counter of requests for %s's cert to be at least %u, got %u",
-           cert_context.name.c_str(),
-           expected,
-           count);
+    while (true) {
+        const auto count = counter->second->load();
+        if (count >= expected) {
+            testOk(count >= expected,
+               "Expected counter of subscriptions to %s's cert to be at least %u, got %u",
+               cert_context.name.c_str(),
+               expected,
+               count);
+            return;
+        }
+        if (!cert_status_evt.wait(timeout)) {
+            testAbort("timeout waiting for subscription(s)to %s's cert (wanted %u, have %u)",
+                      cert_context.pv_name.c_str(),
+                      expected,
+                      count);
+            return;
+        }
+    }
 }
+
 }  // namespace certs
 
 namespace server {
 
 class MockSource final : public Source {
     std::shared_ptr<Source> next_;
-    std::function<void(const std::string &)> request_counter_;
+    std::function<void(const std::string &)> cert_status_subscribe_cb_;
+
+    struct WrapChan final : public ChannelControl {
+        std::unique_ptr<ChannelControl> inner_;
+        std::function<void(const std::string &)> cert_status_subscribe_cb_;
+
+        explicit WrapChan(std::unique_ptr<ChannelControl>&& inner,
+                          std::function<void(const std::string &)> cb)
+            : ChannelControl(inner->name(), inner->credentials(), inner->op())
+            , inner_(std::move(inner))
+            , cert_status_subscribe_cb_(std::move(cb))
+        {}
+
+        void onOp(std::function<void(std::unique_ptr<ConnectOp>&&)>&& fn) override {
+            inner_->onOp(std::move(fn));
+        }
+
+        void onRPC(std::function<void(std::unique_ptr<ExecOp>&&, Value&&)>&& fn) override {
+            inner_->onRPC(std::move(fn));
+        }
+
+        void onSubscribe(std::function<void(std::unique_ptr<MonitorSetupOp>&&)>&& fn) override {
+            auto cb = cert_status_subscribe_cb_;
+            auto fnptr = std::make_shared<std::function<void(std::unique_ptr<MonitorSetupOp>&&)>>(std::move(fn));
+            inner_->onSubscribe([cb, fnptr](std::unique_ptr<MonitorSetupOp>&& setup) mutable {
+                if (cb) {
+                    // setup->name() is the PV name being subscribed to
+                    cb(setup->name());
+                }
+                (*fnptr)(std::move(setup));
+            });
+        }
+
+        void onClose(std::function<void(const std::string&)>&& fn) override {
+            inner_->onClose(std::move(fn));
+        }
+
+        void close() override {
+            inner_->close();
+        }
+
+      private:
+        void _updateInfo(const std::shared_ptr<const ReportInfo>& info) override {
+#ifdef PVXS_EXPERT_API_ENABLED
+            inner_->updateInfo(info);
+#else
+            (void)info;
+#endif
+        }
+    };
 
  public:
     explicit MockSource(
         std::shared_ptr<Source> inner,
-        std::function<void(const std::string &)> request_counter = [](const std::string &) {})
-        : next_(std::move(inner)), request_counter_(std::move(request_counter)) {}
+        std::function<void(const std::string &)> cert_status_subscribe_cb = nullptr)
+        : next_(std::move(inner)), cert_status_subscribe_cb_(std::move(cert_status_subscribe_cb)) {}
 
     void onSearch(Search &req) override {
         next_->onSearch(req);
@@ -464,8 +518,8 @@ class MockSource final : public Source {
     }
 
     void onCreate(std::unique_ptr<ChannelControl> &&chan) override {
-        request_counter_(chan->name());
-        next_->onCreate(std::move(chan));
+        std::unique_ptr<ChannelControl> wrapped(new WrapChan(std::move(chan), cert_status_subscribe_cb_));
+        next_->onCreate(std::move(wrapped));
     }
 };
 

@@ -63,8 +63,8 @@ struct Tester {
 
         auto source = server::WildcardSource::build();
         source->add(getCertStatusPv("CERT", issuer_id), status_pv);
-        // Set up mock source that counts requests
-        const auto pvacms_mock   = std::make_shared<server::MockSource>(source, [this] (std::string const& pv_name) {
+        // Set up mock source that counts actual certificate-status subscriptions
+        const auto pvacms_mock = std::make_shared<server::MockSource>(source, [this](std::string const& pv_name) {
             if (cert_status_request_counters.find(pv_name) == cert_status_request_counters.end()) {
                 cert_status_request_counters[pv_name] = std::make_shared<std::atomic<uint32_t>>(0);
             }
