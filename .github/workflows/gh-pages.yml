@@ -45,6 +45,12 @@ jobs:
     - name: Generate Mermaid diagrams
       run: |
         set -euo pipefail
+        PUPPETEER_CONFIG="${RUNNER_TEMP}/mmdc-puppeteer-config.json"
+        printf '%s\n' \
+          '{' \
+          '  "args": ["--no-sandbox", "--disable-setuid-sandbox"]' \
+          '}' \
+          >"${PUPPETEER_CONFIG}"
         DIAGRAM_SPECS_DIR="documentation/diagram_specs"
         if [ -d "${DIAGRAM_SPECS_DIR}" ]; then
           for mmd_file in "${DIAGRAM_SPECS_DIR}"/*.mmd; do
@@ -52,7 +58,7 @@ jobs:
               base_name=$(basename "${mmd_file}" .mmd)
               output_file="documentation/${base_name}.png"
               echo "Processing ${mmd_file} -> ${output_file}"
-              npx --yes @mermaid-js/mermaid-cli -i "${mmd_file}" -o "${output_file}" -s 2
+              npx --yes @mermaid-js/mermaid-cli -i "${mmd_file}" -o "${output_file}" -s 2 -p "${PUPPETEER_CONFIG}"
             fi
           done
         fi
