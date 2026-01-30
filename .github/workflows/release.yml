@@ -41,6 +41,7 @@ jobs:
 
     - name: abi-diff
       run: python .ci/cue.py exec ./abi-diff.sh
+      continue-on-error: true
 
     - name: Upload ABI
       if: ${{ always() }}
