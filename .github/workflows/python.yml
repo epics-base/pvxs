@@ -74,7 +74,14 @@ jobs:
             ls /opt/python/
             /opt/python/${{ matrix.py }}/bin/python --version
 
-            yum -y install gdb || dnf -y install gdb || (apt update && apt -y install gdb)
+            # best-effort install for core dump analysis.  manylinux2010 images may have a broken/archived EPEL.
+            if command -v yum >/dev/null 2>&1; then
+                yum -y --disablerepo=epel install gdb || yum -y install gdb || true
+            elif command -v dnf >/dev/null 2>&1; then
+                dnf -y install gdb || true
+            elif command -v apt-get >/dev/null 2>&1; then
+                apt-get update && apt-get -y install gdb || true
+            fi
 
             export PATH="/opt/python/${{ matrix.py }}/bin:\$PATH"
             export SETUPTOOLS_DSO_PLAT_NAME="${{ matrix.ml }}"
