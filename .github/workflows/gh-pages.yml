@@ -19,11 +19,22 @@ jobs:
       with:
         fetch-depth: "0"
         submodules: true
+
+    - name: Setup Node.js (for mermaid-cli and sass)
+      uses: actions/setup-node@v4
+      with:
+        node-version: "20"
+
     - name: "apt-get install"
       run: |
         sudo apt-get update
-        sudo apt-get -y install libreadline-dev libevent-dev \
-         python3-sphinx python3-breathe inkscape
+        sudo apt-get -y install \
+         doxygen \
+         inkscape \
+         libevent-dev \
+         libreadline-dev \
+         python3-breathe \
+         python3-sphinx
 
     - name: Prepare and compile dependencies
       run: python .ci/cue.py prepare
@@ -31,10 +42,78 @@ jobs:
     - name: headers
       run: python .ci/cue.py build inc
 
+    - name: Generate Mermaid diagrams
+      run: |
+        set -euo pipefail
+        DIAGRAM_SPECS_DIR="documentation/diagram_specs"
+        if [ -d "${DIAGRAM_SPECS_DIR}" ]; then
+          for mmd_file in "${DIAGRAM_SPECS_DIR}"/*.mmd; do
+            if [ -f "${mmd_file}" ]; then
+              base_name=$(basename "${mmd_file}" .mmd)
+              output_file="documentation/${base_name}.png"
+              echo "Processing ${mmd_file} -> ${output_file}"
+              npx --yes @mermaid-js/mermaid-cli -i "${mmd_file}" -o "${output_file}" -s 2
+            fi
+          done
+        fi
+
+    - name: Prepare SPVA theme assets (pages-themes/merlot)
+      run: |
+        set -euo pipefail
+        THEME=merlot
+        THEME_DIR="${RUNNER_TEMP}/github_theme"
+        STATIC_DIR="documentation/_static"
+
+        rm -rf "${THEME_DIR}"
+        git clone --depth 1 "https://github.com/pages-themes/${THEME}.git" "${THEME_DIR}"
+
+        mkdir -p "${STATIC_DIR}"
+        grep -v "^-" "${THEME_DIR}/assets/css/style.scss" > "${THEME_DIR}/assets/css/no-frontmatter-style.scss"
+
+        rm -rf "${STATIC_DIR}/images"
+        cp -pr "${THEME_DIR}/assets" "${STATIC_DIR}"
+        if [ -d "${THEME_DIR}/assets/images" ]; then
+          cp -pr "${THEME_DIR}/assets/images" "${STATIC_DIR}"
+        fi
+        if [ -d "${THEME_DIR}/assets/css" ]; then
+          cp -pr "${THEME_DIR}/assets/css" "${STATIC_DIR}"
+        fi
+        if [ -d "${THEME_DIR}/assets/fonts" ]; then
+          cp -pr "${THEME_DIR}/assets/fonts" "${STATIC_DIR}"
+        fi
+
+        npx --yes sass --no-source-map --style=compressed \
+          --load-path="${THEME_DIR}/_sass" \
+          "${THEME_DIR}/assets/css/no-frontmatter-style.scss" \
+          "${STATIC_DIR}/style.css"
+        sed -i.bak 's/#main-content/div.body section/g' "${STATIC_DIR}/style.css" && rm -f "${STATIC_DIR}/style.css.bak"
+        printf '\n  ul, ol {\n      margin: 10px 0 10px 20px;\n      padding: 0;\n  }\n' >> "${STATIC_DIR}/style.css"
+
     - name: sphinx
       run: |
         make -C documentation gen
         touch documentation/html/.nojekyll
+        mkdir -p documentation/html/fonts documentation/html/images
+        if [ -d documentation/html/_static/images ]; then
+          cp -r documentation/html/_static/images/* documentation/html/images/ || true
+        fi
+        if [ -d documentation/html/_static/fonts ]; then
+          cp -r documentation/html/_static/fonts/* documentation/html/fonts/ || true
+        fi
+        fonts_dir="documentation/html/fonts"
+        for file in "${fonts_dir}"/*; do
+          if [ -f "${file}" ]; then
+            base=$(basename "${file}")
+            lower_base=$(echo "${base}" | tr '[:upper:]' '[:lower:]')
+            if [ "${base}" != "${lower_base}" ]; then
+              if [ -e "${fonts_dir}/${lower_base}" ]; then
+                rm -f "${file}"
+              else
+                mv "${file}" "${fonts_dir}/${lower_base}"
+              fi
+            fi
+          fi
+        done
 
     - name: Upload gh-pages preview
       id: ghpages
@@ -47,7 +126,7 @@ jobs:
   publish:
     runs-on: ubuntu-latest
 
-    if: github.ref=='refs/heads/master'
+    if: github.ref=='refs/heads/tls'
     needs: generate
 
     permissions:
@@ -57,9 +136,12 @@ jobs:
 
     environment:
       name: github-pages
-      url: ${{ steps.ghpages.outputs.page_url }}
+      url: ${{ steps.deployment.outputs.page_url }}
 
     steps:
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
