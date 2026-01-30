@@ -22,8 +22,8 @@ softIocPVX_DBD += softIoc.dbd
 softIocPVX_DBD += pvxsIoc.dbd
 
 # Ensure correct build order when generating the expanded DBD.
-# Some targets (eg. cross builds) may enter qsrv before pvxsIoc.dbd is present.
-$(COMMON_DIR)/softIocPVX.dbd: $(COMMON_DIR)/pvxsIoc.dbd
+# pvxsIoc.dbd is produced by ioc/ and installed into $(TOP)/dbd.
+$(COMMON_DIR)/softIocPVX.dbd: $(TOP)/dbd/pvxsIoc.dbd
 
 DB += softIocPVXExit.db
 
