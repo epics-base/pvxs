@@ -26,10 +26,10 @@ spec:
           {{- end }}
           volumeMounts:
             - name: pva-config
-              mountPath: /home/guest/.config/pva/1.4
+              mountPath: /home/guest/.config/pva/1.5
               subPath: guest
             - name: pva-config
-              mountPath: /home/operator/.config/pva/1.4
+              mountPath: /home/operator/.config/pva/1.5
               subPath: operator
       volumes:
         - name: pva-config

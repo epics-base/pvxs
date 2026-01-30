@@ -43,7 +43,7 @@ spec:
             {{- end }}
           volumeMounts:
             - name: pva-config
-              mountPath: /home/tstioc/.config/pva/1.4
+              mountPath: /home/tstioc/.config/pva/1.5
       volumes:
         - name: pva-config
           {{- if .Values.tstioc.persistence.enabled }}

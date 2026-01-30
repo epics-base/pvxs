@@ -313,7 +313,7 @@ Gateway service
 
 .. code-block:: console
 
-    Keychain file created   : /home/gateway/.config/pva/1.4/gateway.p12
+    Keychain file created   : /home/gateway/.config/pva/1.5/gateway.p12
     Certificate identifier  : bd537d5b:5611727325962034466
 
 - Leave the Gateway shell
@@ -341,7 +341,7 @@ IOC Services
 
 .. code-block:: console
 
-    Keychain file created   : /home/testioc/.config/pva/1.4/server.p12
+    Keychain file created   : /home/testioc/.config/pva/1.5/server.p12
     Certificate identifier  : bd537d5b:15412497381357095102
 
 - log out
@@ -364,7 +364,7 @@ IOC Services
 
 .. code-block:: console
 
-    Keychain file created   : /home/tstioc/.config/pva/1.4/server.p12
+    Keychain file created   : /home/tstioc/.config/pva/1.5/server.p12
     Certificate identifier  : bd537d5b:7295515860002315009
 
 - log out
@@ -397,7 +397,7 @@ Lab Control Room users
 
 .. code-block:: console
 
-    Keychain file created   : /home/guest/.config/pva/1.4/client.p12
+    Keychain file created   : /home/guest/.config/pva/1.5/client.p12
     Certificate identifier  : bd537d5b:8684117196707720985
 
 
@@ -427,7 +427,7 @@ Lab Control Room users
 
 .. code-block:: console
 
-    Keychain file created   : /home/operator/.config/pva/1.4/client.p12
+    Keychain file created   : /home/operator/.config/pva/1.5/client.p12
     Certificate identifier  : bd537d5b:6238724260668906348
 
 
@@ -706,7 +706,7 @@ Simulate an external client with a valid certificate:
 
 .. code-block:: console
 
-    Keychain file created   : /home/<youruser>/.config/pva/1.4/client.p12
+    Keychain file created   : /home/<youruser>/.config/pva/1.5/client.p12
     Certificate identifier  : bd537d5b:5631421150061257157
 
 
@@ -780,8 +780,8 @@ Finally, simulate an authorised remote operator with a valid certificate:
 
 .. code-block:: shell
 
-    mv ~/.config/pva/1.4/client.p12 ~/.config/pva/1.4/remote.p12
-    gw_cp lab operator '/home/operator/.config/pva/1.4/client.p12' ~/.config/pva/1.4/client.p12
+    mv ~/.config/pva/1.5/client.p12 ~/.config/pva/1.5/remote.p12
+    gw_cp lab operator '/home/operator/.config/pva/1.5/client.p12' ~/.config/pva/1.5/client.p12
 
 .. code-block:: console
 
@@ -789,12 +789,12 @@ Finally, simulate an authorised remote operator with a valid certificate:
 
 .. code-block:: shell
 
-    chmod 600 ~/.config/pva/1.4/client.p12
-    ls -l ~/.config/pva/1.4/client.p12
+    chmod 600 ~/.config/pva/1.5/client.p12
+    ls -l ~/.config/pva/1.5/client.p12
 
 .. code-block:: console
 
-    -rw-------  1 george  staff  4254 Jan 23 23:50 /home/<youruser>/.config/pva/1.4/client.p12
+    -rw-------  1 george  staff  4254 Jan 23 23:50 /home/<youruser>/.config/pva/1.5/client.p12
 
 - check that you have write permission to the field when properly authenticated as ``operator``
 
@@ -947,7 +947,7 @@ Create helper functions
      export EPICS_PVA_AUTO_ADDR_LIST=NO
      export EPICS_PVA_ADDR_LIST=""
      export EPICS_PVA_NAME_SERVERS="127.0.0.1:31075"
-     echo "INTERNET mode: PVA client->${EPICS_PVA_NAME_SERVERS} ; ~/.config/pva/1.4/client.p12"
+     echo "INTERNET mode: PVA client->${EPICS_PVA_NAME_SERVERS} ; ~/.config/pva/1.5/client.p12"
     }
 
 **go_in_to**
@@ -1194,15 +1194,15 @@ the user specified.
 
     #### [optional] Set path and name of the certificate database file (default: ./certs.db)
     # Environment: EPICS_PVACMS_DB
-    # Default    : ${XDG_DATA_HOME}/pva/1.4/certs.db
-    # export EPICS_PVACMS_DB=${XDG_DATA_HOME}/pva/1.4/certs.db
+    # Default    : ${XDG_DATA_HOME}/pva/1.5/certs.db
+    # export EPICS_PVACMS_DB=${XDG_DATA_HOME}/pva/1.5/certs.db
 
     #### SETUP Certificate Authority KEYCHAIN FILE
     # Place your certificate authority's certificate and key in this file if you have one
     # otherwise the certificate authority certificate will be created by PVACMS
     # Environment: EPICS_CERT_AUTH_TLS_KEYCHAIN
-    # Default    : ${XDG_CONFIG_HOME}/pva/1.4/cert_auth.p12
-    # export EPICS_CERT_AUTH_TLS_KEYCHAIN=${XDG_CONFIG_HOME}/pva/1.4/cert_auth.p12
+    # Default    : ${XDG_CONFIG_HOME}/pva/1.5/cert_auth.p12
+    # export EPICS_CERT_AUTH_TLS_KEYCHAIN=${XDG_CONFIG_HOME}/pva/1.5/cert_auth.p12
 
     # Specify the name of your certificate authority
     # Environment: EPICS_CERT_AUTH_NAME, EPICS_CERT_AUTH_ORGANIZATION, EPICS_CERT_AUTH_ORGANIZATIONAL_UNIT
@@ -1213,19 +1213,19 @@ the user specified.
 
     #### SETUP PVACMS KEYCHAIN FILE
     # Environment: EPICS_PVACMS_TLS_KEYCHAIN
-    # Default    : ${XDG_CONFIG_HOME}/pva/1.4/pvacms.p12
-    # export EPICS_PVACMS_TLS_KEYCHAIN=${XDG_CONFIG_HOME}/pva/1.4/pvacms.p12
+    # Default    : ${XDG_CONFIG_HOME}/pva/1.5/pvacms.p12
+    # export EPICS_PVACMS_TLS_KEYCHAIN=${XDG_CONFIG_HOME}/pva/1.5/pvacms.p12
 
     # Configure ADMIN user client certificate (will be created for you)
     # This file will be copied to the admin user
     # Environment: EPICS_ADMIN_TLS_KEYCHAIN
-    # Default    : ${XDG_CONFIG_HOME}/pva/1.4/admin.p12
-    # export EPICS_ADMIN_TLS_KEYCHAIN=${XDG_CONFIG_HOME}/pva/1.4/admin.p12
+    # Default    : ${XDG_CONFIG_HOME}/pva/1.5/admin.p12
+    # export EPICS_ADMIN_TLS_KEYCHAIN=${XDG_CONFIG_HOME}/pva/1.5/admin.p12
 
     # Configure PVACMS ADMIN user access control file
     # Environment: EPICS_PVACMS_ACF
-    # Default    : ${XDG_CONFIG_HOME}/pva/1.4/pvacms.acf
-    # export EPICS_PVACMS_ACF=${XDG_CONFIG_HOME}/pva/1.4/pvacms.acf
+    # Default    : ${XDG_CONFIG_HOME}/pva/1.5/pvacms.acf
+    # export EPICS_PVACMS_ACF=${XDG_CONFIG_HOME}/pva/1.5/pvacms.acf
 
     # set path
     export EPICS_HOST_ARCH=\$(\${PROJECT_HOME}/epics-base/startup/EpicsHostArch)
@@ -1245,8 +1245,8 @@ the user specified.
 
     #### SETUP ADMIN KEYCHAIN FILE (will be copied from PVACMS)
     # Environment: EPICS_PVA_TLS_KEYCHAIN
-    # Default    : ${XDG_CONFIG_HOME}/pva/1.4/client.p12
-    # export EPICS_PVA_TLS_KEYCHAIN=${XDG_CONFIG_HOME}/pva/1.4/client.p12
+    # Default    : ${XDG_CONFIG_HOME}/pva/1.5/client.p12
+    # export EPICS_PVA_TLS_KEYCHAIN=${XDG_CONFIG_HOME}/pva/1.5/client.p12
 
     #### SETUP ADMIN Organisation
     # Environment: EPICS_PVA_AUTH_ORGANIZATION
@@ -1380,8 +1380,8 @@ configuration can be controlled.
 
     #### SETUP SOFTIOC KEYCHAIN FILE
     # Environment: EPICS_PVAS_TLS_KEYCHAIN
-    # Default    : ${XDG_CONFIG_HOME}/pva/1.4/server.p12
-    # export EPICS_PVAS_TLS_KEYCHAIN=${XDG_CONFIG_HOME}/pva/1.4/server.p12
+    # Default    : ${XDG_CONFIG_HOME}/pva/1.5/server.p12
+    # export EPICS_PVAS_TLS_KEYCHAIN=${XDG_CONFIG_HOME}/pva/1.5/server.p12
 
     #### SETUP SOFTIOC Organisation
     # Environment: EPICS_PVAS_AUTH_ORGANIZATION
@@ -1558,8 +1558,8 @@ configuration can be controlled.
 
     #### SETUP SOFTIOC KEYCHAIN FILE
     # Environment: EPICS_PVAS_TLS_KEYCHAIN
-    # Default    : ${XDG_CONFIG_HOME}/pva/1.4/server.p12
-    # export EPICS_PVAS_TLS_KEYCHAIN=${XDG_CONFIG_HOME}/pva/1.4/server.p12
+    # Default    : ${XDG_CONFIG_HOME}/pva/1.5/server.p12
+    # export EPICS_PVAS_TLS_KEYCHAIN=${XDG_CONFIG_HOME}/pva/1.5/server.p12
 
     #### SETUP SOFTIOC Organisation
     # Environment: EPICS_PVAS_AUTH_ORGANIZATION
@@ -1736,8 +1736,8 @@ configuration can be controlled.
 
     #### SETUP guest KEYCHAIN FILE
     # Environment: EPICS_PVA_TLS_KEYCHAIN
-    # Default    : ${XDG_CONFIG_HOME}/pva/1.4/client.p12
-    # export EPICS_PVA_TLS_KEYCHAIN=${XDG_CONFIG_HOME}/pva/1.4/client.p12
+    # Default    : ${XDG_CONFIG_HOME}/pva/1.5/client.p12
+    # export EPICS_PVA_TLS_KEYCHAIN=${XDG_CONFIG_HOME}/pva/1.5/client.p12
 
     #### SETUP guest Organisation
     # Environment: EPICS_PVA_AUTH_ORGANIZATION
@@ -1767,8 +1767,8 @@ configuration can be controlled.
 
     #### SETUP operator KEYCHAIN FILE
     # Environment: EPICS_PVA_TLS_KEYCHAIN
-    # Default    : ${XDG_CONFIG_HOME}/pva/1.4/client.p12
-    # export EPICS_PVA_TLS_KEYCHAIN=${XDG_CONFIG_HOME}/pva/1.4/client.p12
+    # Default    : ${XDG_CONFIG_HOME}/pva/1.5/client.p12
+    # export EPICS_PVA_TLS_KEYCHAIN=${XDG_CONFIG_HOME}/pva/1.5/client.p12
 
     #### SETUP operator Organisation
     # Environment: EPICS_PVA_AUTH_ORGANIZATION
@@ -1895,13 +1895,13 @@ configuration can be controlled.
 
     #### SETUP GATEWAY KEYCHAIN FILE
     # Environment: EPICS_PVA_TLS_KEYCHAIN
-    # Default    : ${XDG_CONFIG_HOME}/pva/1.4/client.p12
-    export EPICS_PVA_TLS_KEYCHAIN=\${XDG_CONFIG_HOME}/pva/1.4/gateway.p12
+    # Default    : ${XDG_CONFIG_HOME}/pva/1.5/client.p12
+    export EPICS_PVA_TLS_KEYCHAIN=\${XDG_CONFIG_HOME}/pva/1.5/gateway.p12
     # Environment: EPICS_PVAS_TLS_KEYCHAIN
-    # Default    : ${XDG_CONFIG_HOME}/pva/1.4/server.p12
+    # Default    : ${XDG_CONFIG_HOME}/pva/1.5/server.p12
     # We will take the keychain from the conf file
     SVR_KEYCHAIN=\$(grep gatewayS gateway.conf > /dev/null && echo "gatewayS" || echo "gateway")
-    export EPICS_PVAS_TLS_KEYCHAIN=\${XDG_CONFIG_HOME}/pva/1.4/\${SVR_KEYCHAIN}.p12
+    export EPICS_PVAS_TLS_KEYCHAIN=\${XDG_CONFIG_HOME}/pva/1.5/\${SVR_KEYCHAIN}.p12
 
     #### SETUP Gateway Organisation
     # Environment: EPICS_PVA_AUTH_ORGANIZATION
@@ -1936,7 +1936,7 @@ configuration can be controlled.
           "name": "upstream",
           "autoaddrlist": false,
           "addrlist": "pvxs-lab-pvacms pvxs-lab-testioc pvxs-lab-tstioc",
-          "tls_keychain": "/home/gateway/.config/pva/1.4/gateway.p12"
+          "tls_keychain": "/home/gateway/.config/pva/1.5/gateway.p12"
         }
       ],
       "servers": [
@@ -1946,7 +1946,7 @@ configuration can be controlled.
           "statusprefix": "GW:STS:",
           "autoaddrlist": false,
           "addrlist": "pvxs-lab-gateway pvxs-lab-pvacms",
-          "tls_keychain": "/home/gateway/.config/pva/1.4/gateway.p12",
+          "tls_keychain": "/home/gateway/.config/pva/1.5/gateway.p12",
           "serverport": "31075",
           "EPICS_PVAS_TLS_PORT": "31076",
           "access": "gateway.acf",

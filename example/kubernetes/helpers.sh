@@ -35,7 +35,7 @@ function gw_internet_config {
  export EPICS_PVA_AUTO_ADDR_LIST=NO
  export EPICS_PVA_ADDR_LIST=""
  export EPICS_PVA_NAME_SERVERS="127.0.0.1:31075"
- echo "INTERNET mode: PVA client->${EPICS_PVA_NAME_SERVERS} ; ~/.config/pva/1.4/client.p12"
+ echo "INTERNET mode: PVA client->${EPICS_PVA_NAME_SERVERS} ; ~/.config/pva/1.5/client.p12"
 }
 
 function go_in_to {

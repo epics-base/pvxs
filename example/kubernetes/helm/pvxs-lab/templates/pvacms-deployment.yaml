@@ -51,8 +51,8 @@ spec:
                   - |
                     set -euo pipefail
           
-                    src=/home/pvacms/.config/pva/1.4/admin.p12
-                    dst=/home/admin/.config/pva/1.4/client.p12
+                    src=/home/pvacms/.config/pva/1.5/admin.p12
+                    dst=/home/admin/.config/pva/1.5/client.p12
           
                     mkdir -p "$(dirname "$dst")"
                     chown -R admin:admin /home/admin/.config/pva || true

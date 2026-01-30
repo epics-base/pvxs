@@ -5,13 +5,13 @@ export PROJECT_HOME=/opt/epics
 
 #### SETUP GATEWAY KEYCHAIN FILE
 # Environment: EPICS_PVA_TLS_KEYCHAIN
-# Default    : ${XDG_CONFIG_HOME}/pva/1.4/client.p12
-export EPICS_PVA_TLS_KEYCHAIN=${XDG_CONFIG_HOME}/pva/1.4/gateway.p12
+# Default    : ${XDG_CONFIG_HOME}/pva/1.5/client.p12
+export EPICS_PVA_TLS_KEYCHAIN=${XDG_CONFIG_HOME}/pva/1.5/gateway.p12
 # Environment: EPICS_PVAS_TLS_KEYCHAIN
-# Default    : ${XDG_CONFIG_HOME}/pva/1.4/server.p12
+# Default    : ${XDG_CONFIG_HOME}/pva/1.5/server.p12
 # We will take the keychain from the conf file
 SVR_KEYCHAIN=$(grep gatewayS gateway.conf > /dev/null && echo "gatewayS" || echo "gateway")
-export EPICS_PVAS_TLS_KEYCHAIN=${XDG_CONFIG_HOME}/pva/1.4/${SVR_KEYCHAIN}.p12
+export EPICS_PVAS_TLS_KEYCHAIN=${XDG_CONFIG_HOME}/pva/1.5/${SVR_KEYCHAIN}.p12
 
 #### SETUP Gateway Organisation
 # Environment: EPICS_PVA_AUTH_ORGANIZATION

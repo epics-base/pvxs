@@ -285,8 +285,8 @@ There are three types of possible connections
 If an EPICS agent finds a certificate, trust anchor, and private key at the location specified by ``EPICS_PVA_TLS_KEYCHAIN`` then it will use that certificate for the handshake.
 This includes the default location that the variable points to even if its is not set.
 
-- ``~/.config/pva/1.4/client.p12`` - for clients
-- ``~/.config/pva/1.4/server.p12`` - for servers
+- ``~/.config/pva/1.5/client.p12`` - for clients
+- ``~/.config/pva/1.5/server.p12`` - for servers
 
 For a server-only authenticated TLS connection two things are required:
 
@@ -607,7 +607,7 @@ Standard Nodes:
 - `XDG_CONFIG_HOME <https://specifications.freedesktop.org/basedir-spec/latest/>`_ standard is used by default to locate keychain files for clients and servers
 
   - default, if not set, is ``~/.config``
-  - we append ``/pva/1.4/`` to make the full path default to ``~/.config/pva/1.4/``
+  - we append ``/pva/1.5/`` to make the full path default to ``~/.config/pva/1.5/``
   - client keychain files are, by default, ``client.p12``
   - server keychain files are, by default, ``server.p12``
 

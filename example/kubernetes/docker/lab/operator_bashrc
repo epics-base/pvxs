@@ -5,8 +5,8 @@ export PROJECT_HOME=/opt/epics
 
 #### SETUP operator KEYCHAIN FILE
 # Environment: EPICS_PVA_TLS_KEYCHAIN
-# Default    : ${XDG_CONFIG_HOME}/pva/1.4/client.p12
-# export EPICS_PVA_TLS_KEYCHAIN=${XDG_CONFIG_HOME}/pva/1.4/client.p12
+# Default    : ${XDG_CONFIG_HOME}/pva/1.5/client.p12
+# export EPICS_PVA_TLS_KEYCHAIN=${XDG_CONFIG_HOME}/pva/1.5/client.p12
 
 #### SETUP operator Organisation
 # Environment: EPICS_PVA_AUTH_ORGANIZATION

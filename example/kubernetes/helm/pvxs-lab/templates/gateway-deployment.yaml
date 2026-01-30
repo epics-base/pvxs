@@ -54,9 +54,9 @@ spec:
             {{- end }}
           env:
             - name: EPICS_PVA_TLS_KEYCHAIN
-              value: "/home/gateway/.config/pva/1.4/gateway.p12"
+              value: "/home/gateway/.config/pva/1.5/gateway.p12"
             - name: EPICS_PVAS_TLS_KEYCHAIN
-              value: {{ if .Values.gateway.separate_server_keychain }}{{ "/home/gateway/.config/pva/1.4/gatewayS.p12" }}{{ else }}{{ "/home/gateway/.config/pva/1.4/gateway.p12" }}{{ end }}
+              value: {{ if .Values.gateway.separate_server_keychain }}{{ "/home/gateway/.config/pva/1.5/gatewayS.p12" }}{{ else }}{{ "/home/gateway/.config/pva/1.5/gateway.p12" }}{{ end }}
             {{- if .Values.gateway.debug.enabled }}
             - name: PVXS_LOG
               value: {{ .Values.gateway.debug.logLevel | quote }}
@@ -66,7 +66,7 @@ spec:
               mountPath: /home/gateway/gateway.conf
               subPath: gateway.conf
             - name: pva-config
-              mountPath: /home/gateway/.config/pva/1.4
+              mountPath: /home/gateway/.config/pva/1.5
       volumes:
         - name: gw-conf-src
           configMap:

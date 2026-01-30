@@ -322,7 +322,7 @@ bool AuthNKrb::verify(Value &ccr, time_t &authenticated_expiration_date) const {
     if (krb_keytab_file.empty()) {
         log_debug_printf(auth, "Keytab is NOT configured - ***exiting***: %s\n", krb_keytab_file.c_str());
         throw std::runtime_error(
-            "KRB5_KTNAME environment variable needs to be set to point to the location of the keytab.  e.g. ~/.config/pva/1.4/pvacms.keytab");
+            "KRB5_KTNAME environment variable needs to be set to point to the location of the keytab.  e.g. ~/.config/pva/1.5/pvacms.keytab");
     }
 
     // Acquire the correct server credentials.

@@ -279,14 +279,14 @@ PVACMS Usage
 
     options:
       (-c | --cert-auth-keychain) <cert_auth_keychain>
-                                                  Specify Certificate Authority keychain file location. Default ${XDG_CONFIG_HOME}/pva/1.4/cert_auth.p12
+                                                  Specify Certificate Authority keychain file location. Default ${XDG_CONFIG_HOME}/pva/1.5/cert_auth.p12
             --cert-auth-keychain-pwd <file>       Specify location of file containing Certificate Authority keychain file's password
             --cert-auth-name <name>              Specify name (CN) to be used for certificate authority certificate. Default ``EPICS Root Certificate Authority``
             --cert-auth-org <name>               Specify organisation (O) to be used for certificate authority certificate. Default ``certs.epics.org``
             --cert-auth-org-unit <name>          Specify organisational unit (OU) to be used for certificate authority certificate. Default ``EPICS Certificate Authority``
             --cert-auth-country <name>           Specify country (C) to be used for certificate authority certificate. Default `US`
-      (-d | --cert-db) <db_name>                 Specify cert db file location. Default ${XDG_DATA_HOME}/pva/1.4/certs.db
-      (-p | --pvacms-keychain) <pvacms_keychain> Specify PVACMS keychain file location. Default ${XDG_CONFIG_HOME}/pva/1.4/pvacms.p12
+      (-d | --cert-db) <db_name>                 Specify cert db file location. Default ${XDG_DATA_HOME}/pva/1.5/certs.db
+      (-p | --pvacms-keychain) <pvacms_keychain> Specify PVACMS keychain file location. Default ${XDG_CONFIG_HOME}/pva/1.5/pvacms.p12
             --pvacms-keychain-pwd <file>         Specify location of file containing PVACMS keychain file's password
             --pvacms-name <name>                  Specify name (CN) to be used for PVACMS certificate. Default `PVACMS Service`
             --pvacms-org <name>                   Specify organisation (O) to be used for PVACMS certificate. Default ``certs.epics.org``
@@ -310,8 +310,8 @@ PVACMS Usage
       (-v | --verbose)                            Verbose mode
 
     admin options:
-            --acf <acf_file>                      Specify Admin Security Configuration File. Default ${XDG_CONFIG_HOME}/pva/1.4/pvacms.acf
-      (-a | --admin-keychain) <admin_keychain>    Specify Admin User's keychain file location. Default ${XDG_CONFIG_HOME}/pva/1.4/admin.p12
+            --acf <acf_file>                      Specify Admin Security Configuration File. Default ${XDG_CONFIG_HOME}/pva/1.5/pvacms.acf
+      (-a | --admin-keychain) <admin_keychain>    Specify Admin User's keychain file location. Default ${XDG_CONFIG_HOME}/pva/1.5/admin.p12
             --admin-keychain-pwd <file>          Specify location of file containing Admin User's keychain file password
 
 
@@ -334,10 +334,10 @@ The environment variables in the following table configure the :ref:`pvacms` at 
 | Name                                          | Keys and Values                            | Description                                                              |
 +===============================================+============================================+==========================================================================+
 || EPICS_ADMIN_TLS_KEYCHAIN                     || <path to ADMIN user keychain file>        || The location of the :ref:`pvacms` ADMIN user keychain file.             |
-||                                              || e.g. ``~/.config/pva/1.4/admin.p12``      ||                                                                         |
+||                                              || e.g. ``~/.config/pva/1.5/admin.p12``      ||                                                                         |
 +-----------------------------------------------+--------------------------------------------+--------------------------------------------------------------------------+
 || EPICS_ADMIN_TLS_KEYCHAIN_PWD_FILE            || <path to ADMIN user password text file>   || Location of a password file for :ref:`pvacms` ADMIN user keychain file. |
-||                                              || e.g. ``~/.config/pva/1.4/admin.pass``     ||                                                                         |
+||                                              || e.g. ``~/.config/pva/1.5/admin.pass``     ||                                                                         |
 +-----------------------------------------------+--------------------------------------------+--------------------------------------------------------------------------+
 || EPICS_CERT_AUTH_NAME                         || <name of the certificate authority>       || To provide the name (CN) to be used in the subject of the               |
 ||                                              || e.g. ``Epics Root Certificate Authority`` || certificate authority's Certificate if :ref:`pvacms` creates it.        |
@@ -353,13 +353,13 @@ The environment variables in the following table configure the :ref:`pvacms` at 
 +-----------------------------------------------+--------------------------------------------+--------------------------------------------------------------------------+
 || EPICS_CERT_AUTH_TLS_KEYCHAIN                 || <certificate authority keychain file>     || fully qualified path to a file that will be used as the                 |
 ||                                              || e.g.                                      || certificate authority keychain file.                                    |
-||                                              || ``~/.config/pva/1.4/cert_auth.p12``       ||                                                                         |
+||                                              || ``~/.config/pva/1.5/cert_auth.p12``       ||                                                                         |
 +-----------------------------------------------+--------------------------------------------+--------------------------------------------------------------------------+
 || EPICS_CERT_AUTH_TLS_KEYCHAIN_PWD_FILE        || <certificate authority password file>     || fully qualified path to a file that will be used as the                 |
-||                                              || e.g. ``~/.config/pva/1.4/cert_auth.pass`` || certificate authority keychain password file.                           |
+||                                              || e.g. ``~/.config/pva/1.5/cert_auth.pass`` || certificate authority keychain password file.                           |
 +-----------------------------------------------+--------------------------------------------+--------------------------------------------------------------------------+
 || EPICS_PVACMS_ACF                             || <path to ACF file>                        || fully qualified path to a file that will be used as the                 |
-||                                              || e.g. ``~/.config/pva/1.4/pvacms.acf``     || ACF file that configures the permissions of :ref:`pvacms` peers.        |
+||                                              || e.g. ``~/.config/pva/1.5/pvacms.acf``     || ACF file that configures the permissions of :ref:`pvacms` peers.        |
 +-----------------------------------------------+--------------------------------------------+--------------------------------------------------------------------------+
 || EPICS_PVACMS_CERT_STATUS_VALIDITY_MINS       || <number of minutes>                       || Minutes that the ocsp status response will                              |
 ||                                              || e.g. ``30`` or ``1d``                     || be valid before a client must re-request an update                      |
@@ -369,7 +369,7 @@ The environment variables in the following table configure the :ref:`pvacms` at 
 ||                                              ||                                           || be deemed VALID. Adds extension to new certificates                     |
 +-----------------------------------------------+--------------------------------------------+--------------------------------------------------------------------------+
 || EPICS_PVACMS_DB                              || <path to DB file>                         || fully qualified path to a file that will be used as the                 |
-||                                              || e.g. ``~/.local/share/pva/1.4/certs.db``  || Certificate database file.                                              |
+||                                              || e.g. ``~/.local/share/pva/1.5/certs.db``  || Certificate database file.                                              |
 +-----------------------------------------------+--------------------------------------------+--------------------------------------------------------------------------+
 || EPICS_PVACMS_REQUIRE_APPROVAL                || {``true`` (default) or ``false`` }        || ``true`` if server should generate all new certificates in the          |
 ||                                              ||                                           || ``PENDING_APPROVAL`` state ``false`` to generate in the ``VALID`` state |
@@ -408,10 +408,10 @@ The environment variables in the following table configure the :ref:`pvacms` at 
 ||                                              || e.g. ``30`` or ``1d``  or ``1y6M``        || generated with this amount of time unless overridden                    |
 +-----------------------------------------------+--------------------------------------------+--------------------------------------------------------------------------+
 || EPICS_PVACMS_TLS_KEYCHAIN                    || <path to keychain file>                   || The location of the :ref:`pvacms` keychain file.                        |
-||                                              || e.g. ``~/.config/pva/1.4/pvacms.p12``     ||                                                                         |
+||                                              || e.g. ``~/.config/pva/1.5/pvacms.p12``     ||                                                                         |
 +-----------------------------------------------+--------------------------------------------+--------------------------------------------------------------------------+
 || EPICS_PVACMS_TLS_KEYCHAIN_PWD_FILE           || <path to password text file>              || Location of a password file for :ref:`pvacms` keychain file.            |
-||                                              || e.g. ``~/.config/pva/1.4/pvacms.pass``    ||                                                                         |
+||                                              || e.g. ``~/.config/pva/1.5/pvacms.pass``    ||                                                                         |
 +-----------------------------------------------+--------------------------------------------+--------------------------------------------------------------------------+
 
 Extensions to Config for PVACMS

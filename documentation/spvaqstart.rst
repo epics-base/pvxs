@@ -61,25 +61,25 @@ If you want a prepackaged environment, try the following.  You will need two ter
 
 .. code-block:: console
 
-    Certificate DB created  : /root/.local/share/pva/1.4/certs.db
+    Certificate DB created  : /root/.local/share/pva/1.5/certs.db
     2025-03-08T09:45:46.357411047 INFO pvxs.certs.cms 06e4748c:1314642908097862106 *=> VALID
-    Keychain file created   : /root/.config/pva/1.4/cert_auth.p12
-    Created Default ACF file: /root/.config/pva/1.4/pvacms.acf
+    Keychain file created   : /root/.config/pva/1.5/cert_auth.p12
+    Created Default ACF file: /root/.config/pva/1.5/pvacms.acf
     2025-03-08T09:45:46.416659464 INFO pvxs.certs.cms 06e4748c:9522902379233552024 *=> VALID
-    Keychain file created   : /root/.config/pva/1.4/admin.p12
+    Keychain file created   : /root/.config/pva/1.5/admin.p12
     2025-03-08T09:45:46.483891839 INFO pvxs.certs.cms 06e4748c:12098279511235536670 *=> VALID
-    Keychain file created   : /root/.config/pva/1.4/pvacms.p12
+    Keychain file created   : /root/.config/pva/1.5/pvacms.p12
     Effective config
     EPICS_CERT_AUTH_COUNTRY=US
     EPICS_CERT_AUTH_NAME=EPICS Root Certificate Authority
     EPICS_CERT_AUTH_ORGANIZATION=certs.epics.org
     EPICS_CERT_AUTH_ORGANIZATIONAL_UNIT=EPICS Certificate Authority
-    EPICS_CERT_AUTH_TLS_KEYCHAIN=/home/pvacms/.config/pva/1.4/cert_auth.p12
-    EPICS_PVACMS_ACF=/home/pvacms/.config/pva/1.4/pvacms.acf
+    EPICS_CERT_AUTH_TLS_KEYCHAIN=/home/pvacms/.config/pva/1.5/cert_auth.p12
+    EPICS_PVACMS_ACF=/home/pvacms/.config/pva/1.5/pvacms.acf
     EPICS_PVACMS_CERTS_REQUIRE_SUBSCRIPTION=YES
     EPICS_PVACMS_CERT_STATUS_VALIDITY_MINS=30m
     EPICS_PVACMS_CERT_VALIDITY=6M
-    EPICS_PVACMS_DB=/home/pvacms/.local/share/pva/1.4/certs.db
+    EPICS_PVACMS_DB=/home/pvacms/.local/share/pva/1.5/certs.db
     EPICS_PVACMS_DISALLOW_CUSTOM_DURATION=NO
     EPICS_PVACMS_REQUIRE_APPROVAL=YES
     EPICS_PVAS_AUTH_COUNTRY=US
@@ -89,18 +89,18 @@ If you want a prepackaged environment, try the following.  You will need two ter
     EPICS_PVAS_BROADCAST_PORT=5076
     EPICS_PVAS_CERT_PV_PREFIX=CERT
     EPICS_PVAS_SERVER_PORT=5075
-    EPICS_PVAS_TLS_KEYCHAIN=/home/pvacms/.config/pva/1.4/pvacms.p12
+    EPICS_PVAS_TLS_KEYCHAIN=/home/pvacms/.config/pva/1.5/pvacms.p12
     EPICS_PVAS_TLS_OPTIONS=client_cert=optional on_expiration=fallback-to-tcp no_revocation_check
     EPICS_PVAS_TLS_PORT=5076
 
     +=======================================+=======================================
     | EPICS Secure PVAccess Certificate Management Service
     +---------------------------------------+---------------------------------------
-    | Certificate Database                  : /home/pvacms/.local/share/pva/1.4/certs.db
+    | Certificate Database                  : /home/pvacms/.local/share/pva/1.5/certs.db
     | Certificate Authority                 : CN = EPICS Root Certificate Authority, C = US, O = certs.epics.org, OU = EPICS Certificate Authority
-    | Certificate Authority Keychain File   : /home/pvacms/.config/pva/1.4/cert_auth.p12
-    | PVACMS Keychain File                  : /home/pvacms/.config/pva/1.4/pvacms.p12
-    | PVACMS Access Control File            : /home/pvacms/.config/pva/1.4/pvacms.acf
+    | Certificate Authority Keychain File   : /home/pvacms/.config/pva/1.5/cert_auth.p12
+    | PVACMS Keychain File                  : /home/pvacms/.config/pva/1.5/pvacms.p12
+    | PVACMS Access Control File            : /home/pvacms/.config/pva/1.5/pvacms.acf
     +---------------------------------------+---------------------------------------
     | PVACMS [2535f0b8] Service Running     |
     +=======================================+=======================================
@@ -123,7 +123,7 @@ If you want a prepackaged environment, try the following.  You will need two ter
     export XDG_CONFIG_HOME=${XDG_CONFIG_HOME-~/.config}
     export EPICS_HOST_ARCH=$(${PROJECT_HOME}/epics-base/startup/EpicsHostArch)
     export PATH="${PROJECT_HOME}/pvxs/bin/${EPICS_HOST_ARCH}:$PATH"
-    export EPICS_PVA_TLS_KEYCHAIN=${XDG_CONFIG_HOME}/pva/1.4/admin.p12
+    export EPICS_PVA_TLS_KEYCHAIN=${XDG_CONFIG_HOME}/pva/1.5/admin.p12
 
 - run some *pvxcert* commands
 
@@ -143,7 +143,7 @@ If you want a prepackaged environment, try the following.  You will need two ter
 
 .. code-block:: shell
 
-    pvxcert -f /root/.config/pva/1.4/admin.p12
+    pvxcert -f /root/.config/pva/1.5/admin.p12
 
 .. code-block:: console
 
@@ -477,7 +477,7 @@ For MacOS
 
 .. code-block:: shell
 
-    export EPICS_PVACMS_DB=${XDG_DATA_HOME}/pva/1.4/certs.db
+    export EPICS_PVACMS_DB=${XDG_DATA_HOME}/pva/1.5/certs.db
 
 
 - *optionally*
@@ -488,7 +488,7 @@ otherwise the certificate authority certificate will be created here
 
 .. code-block:: shell
 
-    export EPICS_CERT_AUTH_TLS_KEYCHAIN=${XDG_CONFIG_HOME}/pva/1.4/cert_auth.p12
+    export EPICS_CERT_AUTH_TLS_KEYCHAIN=${XDG_CONFIG_HOME}/pva/1.5/cert_auth.p12
 
 
 - *optionally*
@@ -510,7 +510,7 @@ otherwise the certificate authority certificate will be created here
 
 .. code-block:: shell
 
-    export EPICS_PVACMS_TLS_KEYCHAIN=${XDG_CONFIG_HOME}/pva/1.4/pvacms.p12
+    export EPICS_PVACMS_TLS_KEYCHAIN=${XDG_CONFIG_HOME}/pva/1.5/pvacms.p12
 
 
 - *optionally*
@@ -520,7 +520,7 @@ otherwise the certificate authority certificate will be created here
 
 .. code-block:: shell
 
-    export EPICS_ADMIN_TLS_KEYCHAIN=${XDG_CONFIG_HOME}/pva/1.4/admin.p12
+    export EPICS_ADMIN_TLS_KEYCHAIN=${XDG_CONFIG_HOME}/pva/1.5/admin.p12
 
 
 - *optionally*
@@ -532,7 +532,7 @@ otherwise the certificate authority certificate will be created here
 
 .. code-block:: shell
 
-    export EPICS_PVACMS_ACF=${XDG_CONFIG_HOME}/pva/1.4/pvacms.acf
+    export EPICS_PVACMS_ACF=${XDG_CONFIG_HOME}/pva/1.5/pvacms.acf
 
 |2| Run
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -543,25 +543,25 @@ otherwise the certificate authority certificate will be created here
 
 .. code-block:: console
 
-    Certificate DB created  : /root/.local/share/pva/1.4/certs.db
+    Certificate DB created  : /root/.local/share/pva/1.5/certs.db
     2025-03-04T14:53:32.401223876 INFO pvxs.certs.cms 2535f0b8:7554235394877908901 *=> VALID
-    Keychain file created   : /root/.config/pva/1.4/cert_auth.p12
-    Created Default ACF file: /root/.config/pva/1.4/pvacms.acf
+    Keychain file created   : /root/.config/pva/1.5/cert_auth.p12
+    Created Default ACF file: /root/.config/pva/1.5/pvacms.acf
     2025-03-04T14:53:32.538922876 INFO pvxs.certs.cms 2535f0b8:7810503273530005364 *=> VALID
-    Keychain file created   : /root/.config/pva/1.4/admin.p12
+    Keychain file created   : /root/.config/pva/1.5/admin.p12
     2025-03-04T14:53:32.589539542 INFO pvxs.certs.cms 2535f0b8:15782598755272381308 *=> VALID
-    Keychain file created   : /root/.config/pva/1.4/pvacms.p12
+    Keychain file created   : /root/.config/pva/1.5/pvacms.p12
     Effective config
     EPICS_CERT_AUTH_COUNTRY=US
     EPICS_CERT_AUTH_NAME=EPICS Root Certificate Authority
     EPICS_CERT_AUTH_ORGANIZATION=certs.epics.org
     EPICS_CERT_AUTH_ORGANIZATIONAL_UNIT=EPICS Certificate Authority
-    EPICS_CERT_AUTH_TLS_KEYCHAIN=/home/pvacms/.config/pva/1.4/cert_auth.p12
-    EPICS_PVACMS_ACF=/home/pvacms/.config/pva/1.4/pvacms.acf
+    EPICS_CERT_AUTH_TLS_KEYCHAIN=/home/pvacms/.config/pva/1.5/cert_auth.p12
+    EPICS_PVACMS_ACF=/home/pvacms/.config/pva/1.5/pvacms.acf
     EPICS_PVACMS_CERTS_REQUIRE_SUBSCRIPTION=DEFAULT
     EPICS_PVACMS_CERT_STATUS_VALIDITY_MINS=30m
     EPICS_PVACMS_CERT_VALIDITY=6M
-    EPICS_PVACMS_DB=/home/pvacms/.local/share/pva/1.4/certs.db
+    EPICS_PVACMS_DB=/home/pvacms/.local/share/pva/1.5/certs.db
     EPICS_PVACMS_DISALLOW_CUSTOM_DURATION=NO
     EPICS_PVACMS_REQUIRE_APPROVAL=YES
     EPICS_PVAS_AUTH_COUNTRY=US
@@ -571,18 +571,18 @@ otherwise the certificate authority certificate will be created here
     EPICS_PVAS_BROADCAST_PORT=5076
     EPICS_PVAS_CERT_PV_PREFIX=CERT
     EPICS_PVAS_SERVER_PORT=5075
-    EPICS_PVAS_TLS_KEYCHAIN=/home/pvacms/.config/pva/1.4/pvacms.p12
+    EPICS_PVAS_TLS_KEYCHAIN=/home/pvacms/.config/pva/1.5/pvacms.p12
     EPICS_PVAS_TLS_OPTIONS=client_cert=optional on_expiration=fallback-to-tcp no_revocation_check
     EPICS_PVAS_TLS_PORT=5076
 
     +=======================================+=======================================
     | EPICS Secure PVAccess Certificate Management Service
     +---------------------------------------+---------------------------------------
-    | Certificate Database                  : /home/pvacms/.local/share/pva/1.4/certs.db
+    | Certificate Database                  : /home/pvacms/.local/share/pva/1.5/certs.db
     | Certificate Authority                 : CN = EPICS Root Certificate Authority, C = US, O = certs.epics.org, OU = EPICS Certificate Authority
-    | Certificate Authority Keychain File   : /home/pvacms/.config/pva/1.4/cert_auth.p12
-    | PVACMS Keychain File                  : /home/pvacms/.config/pva/1.4/pvacms.p12
-    | PVACMS Access Control File            : /home/pvacms/.config/pva/1.4/pvacms.acf
+    | Certificate Authority Keychain File   : /home/pvacms/.config/pva/1.5/cert_auth.p12
+    | PVACMS Keychain File                  : /home/pvacms/.config/pva/1.5/pvacms.p12
+    | PVACMS Access Control File            : /home/pvacms/.config/pva/1.5/pvacms.acf
     +---------------------------------------+---------------------------------------
     | PVACMS [2535f0b8] Service Running     |
     +=======================================+=======================================
@@ -631,7 +631,7 @@ to the Admin User's keychain file
 
 .. code-block:: shell
 
-    export EPICS_PVA_TLS_KEYCHAIN=${XDG_CONFIG_HOME}/pva/1.4/admin.p12
+    export EPICS_PVA_TLS_KEYCHAIN=${XDG_CONFIG_HOME}/pva/1.5/admin.p12
 
 
 |2|\Get Status
@@ -657,7 +657,7 @@ to the Admin User's keychain file
 
 .. code-block:: shell
 
-    pvxcert -f /root/.config/pva/1.4/admin.p12
+    pvxcert -f /root/.config/pva/1.5/admin.p12
 
 .. code-block:: console
 
@@ -733,8 +733,8 @@ regenerate admin certificate
 .. code-block:: console
 
     2025-03-04T15:40:38.519777878 WARN pvxs.certs.file
-        Cert file backed up: /root/.config/pva/1.4/admin.p12 ==> /root/.config/pva/1.4/admin.2503041540.p12
-    Keychain file created   : /root/.config/pva/1.4/admin.p12
+        Cert file backed up: /root/.config/pva/1.5/admin.p12 ==> /root/.config/pva/1.5/admin.2503041540.p12
+    Keychain file created   : /root/.config/pva/1.5/admin.p12
     Admin user "admin" has been added to list of administrators of this PVACMS
     Restart the PVACMS for it to take effect
 

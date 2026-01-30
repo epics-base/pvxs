@@ -103,13 +103,13 @@ create a server certificate using the LDAP Authenticator, enter ``secret`` when 
 .. code-block:: console
 
     Enter password for softioc@ca130cc9b352:
-    Keychain file created   : /home/softioc/.config/pva/1.4/server.p12
+    Keychain file created   : /home/softioc/.config/pva/1.5/server.p12
     Certificate identifier  : 47530d89:12147807175996825338
 
 
 .. code-block:: shell
 
-    pvxcert -f ~/.config/pva/1.4/server.p12
+    pvxcert -f ~/.config/pva/1.5/server.p12
 
 .. code-block:: console
 
@@ -149,12 +149,12 @@ create a server certificate using the LDAP Authenticator, enter ``secret`` when 
 .. code-block:: console
 
     Enter password for client@epics.org:
-    Keychain file created   : /home/client/.config/pva/1.4/client.p12
+    Keychain file created   : /home/client/.config/pva/1.5/client.p12
     Certificate identifier  : 47530d89:11547935522995899879
 
 .. code-block:: shell
 
-    pvxcert -f ~/.config/pva/1.4/client.p12
+    pvxcert -f ~/.config/pva/1.5/client.p12
 
 .. code-block:: console
 
@@ -223,11 +223,11 @@ create a server certificate using the LDAP Authenticator, enter ``secret`` when 
     EPICS_PVA_BROADCAST_PORT=5076
     EPICS_PVA_CONN_TMO=30
     EPICS_PVA_SERVER_PORT=5075
-    EPICS_PVA_TLS_KEYCHAIN=/home/client/.config/pva/1.4/client.p12
+    EPICS_PVA_TLS_KEYCHAIN=/home/client/.config/pva/1.5/client.p12
     EPICS_PVA_TLS_OPTIONS=on_expiration=fallback-to-tcp
     EPICS_PVA_TLS_PORT=5076
-    XDG_CONFIG_HOME=/home/client/.config/pva/1.4
-    XDG_DATA_HOME=/home/client/.local/share/pva/1.4
+    XDG_CONFIG_HOME=/home/client/.config/pva/1.5
+    XDG_DATA_HOME=/home/client/.local/share/pva/1.5
     # TLS x509:47530d89:12147807175996825338:EPICS Root Certificate Authority/softioc@172.17.0.2:35255
     test:enumExample from 172.17.0.2:35255
     struct "epics:nt/NTEnum:1.0" {
@@ -830,7 +830,7 @@ then generate X.509 certificates.
 - create a softioc server certificate.  Enter "secret" when prompted for password
 
   - creates softioc server certificate
-  - at location specified by ``EPICS_PVAS_TLS_KEYCHAIN`` or ``${XDG_CONFIG_HOME}/pva/1.4/server.p12`` by default
+  - at location specified by ``EPICS_PVAS_TLS_KEYCHAIN`` or ``${XDG_CONFIG_HOME}/pva/1.5/server.p12`` by default
 
 .. code-block:: shell
 
@@ -839,7 +839,7 @@ then generate X.509 certificates.
 .. code-block:: console
 
     Enter password for softioc@c6e116778b71:
-    Keychain file created   : /home/softioc/.config/pva/1.4/server.p12
+    Keychain file created   : /home/softioc/.config/pva/1.5/server.p12
     Certificate identifier  : b271f07a:13935791733272200197
 
 |4| Check the certificate status is VALID
@@ -853,7 +853,7 @@ then generate X.509 certificates.
 
 .. code-block:: shell
 
-    pvxcert -f ~/.config/pva/1.4/server.p12
+    pvxcert -f ~/.config/pva/1.5/server.p12
 
 .. code-block:: console
 
@@ -959,7 +959,7 @@ then generate X.509 certificates.
 - create a client certificate.  Enter "secret" when prompted for a password
 
   - creates a client certificate
-  - at location specified by ``EPICS_PVA_TLS_KEYCHAIN`` or ``${XDG_CONFIG_HOME}/pva/1.4/client.p12`` by default
+  - at location specified by ``EPICS_PVA_TLS_KEYCHAIN`` or ``${XDG_CONFIG_HOME}/pva/1.5/client.p12`` by default
 
 .. code-block:: shell
 
@@ -968,7 +968,7 @@ then generate X.509 certificates.
 .. code-block:: console
 
     Enter password for client@epics.org:
-    Keychain file created   : /home/client/.config/pva/1.4/client.p12
+    Keychain file created   : /home/client/.config/pva/1.5/client.p12
     Certificate identifier  : b271f07a:4841285184560088877
 
 |4| Check the certificate status is VALID
@@ -982,7 +982,7 @@ then generate X.509 certificates.
 
 .. code-block:: shell
 
-    pvxcert -f ~/.config/pva/1.4/client.p12
+    pvxcert -f ~/.config/pva/1.5/client.p12
 
 .. code-block:: console
 
@@ -1028,11 +1028,11 @@ then generate X.509 certificates.
     EPICS_PVA_BROADCAST_PORT=5076
     EPICS_PVA_CONN_TMO=30
     EPICS_PVA_SERVER_PORT=5075
-    EPICS_PVA_TLS_KEYCHAIN=/home/client/.config/pva/1.4/client.p12
+    EPICS_PVA_TLS_KEYCHAIN=/home/client/.config/pva/1.5/client.p12
     EPICS_PVA_TLS_OPTIONS=on_expiration=fallback-to-tcp
     EPICS_PVA_TLS_PORT=5076
-    XDG_CONFIG_HOME=/home/client/.config/pva/1.4
-    XDG_DATA_HOME=/home/client/.local/share/pva/1.4
+    XDG_CONFIG_HOME=/home/client/.config/pva/1.5
+    XDG_DATA_HOME=/home/client/.local/share/pva/1.5
     # TLS x509:b271f07a:13935791733272200197:EPICS Root Certificate Authority/softioc@172.17.0.2:37623
     test:enumExample from 172.17.0.2:37623
     struct "epics:nt/NTEnum:1.0" {

@@ -75,7 +75,7 @@ gateway:
           "name": "upstream",
           "autoaddrlist": false,
           "addrlist": "{{ include "pvxs-lab.pvacmsService" . }} {{ include "pvxs-lab.testiocService" . }} {{ include "pvxs-lab.tstiocService" . }}",
-          "tls_keychain": "/home/gateway/.config/pva/1.4/gateway.p12"
+          "tls_keychain": "/home/gateway/.config/pva/1.5/gateway.p12"
         }
       ],
       "servers": [
@@ -85,7 +85,7 @@ gateway:
           "statusprefix": "GW:STS:",
           "autoaddrlist": false,
           "addrlist": "{{ include "pvxs-lab.gatewayService" . }} {{ include "pvxs-lab.pvacmsService" . }}",
-          "tls_keychain": "/home/gateway/.config/pva/1.4/gateway{{ if .Values.gateway.separate_server_keychain }}{{ "S" }}{{ end }}.p12",
+          "tls_keychain": "/home/gateway/.config/pva/1.5/gateway{{ if .Values.gateway.separate_server_keychain }}{{ "S" }}{{ end }}.p12",
           {{- if eq .Values.gateway.expose.mode "NodePort" }}
           "serverport": "{{ toJson .Values.gateway.expose.tcpPort }}",
           "EPICS_PVAS_TLS_PORT": "{{ toJson .Values.gateway.expose.tlsPort }}",
