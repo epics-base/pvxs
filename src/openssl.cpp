@@ -582,7 +582,7 @@ int serverOCSPCallback(SSL *ssl, void *raw) {
 
     if (const auto &tls_context = server->tls_context) {
         auto &current_status = tls_context->get_cert_status();
-        if (current_status.isValid()) {
+        if (current_status.isStatusCurrent()) {
             uint8_t *ocsp_data_ptr_copy = nullptr;
             const auto ocsp_data_ptr = (void *)current_status.ocsp_bytes.data();
             const auto ocsp_data_len = current_status.ocsp_bytes.size();
@@ -613,7 +613,7 @@ int serverOCSPCallback(SSL *ssl, void *raw) {
                 }
             }
         } else {
-            log_info_printf(stapling, "Server OCSP Stapling: %s\n", "Server status not valid.  Not stapling");
+            log_info_printf(stapling, "Server OCSP Stapling: %s\n", "Server status not current.  Not stapling");
             ret_val = SSL_TLSEXT_ERR_NOACK;
         }
     } else {
@@ -794,7 +794,7 @@ SSLPeerStatusAndMonitor::SSLPeerStatusAndMonitor(const serial_number_t serial_nu
  * @param new_status the new status to set
  */
 void SSLPeerStatusAndMonitor::updateStatus(const certs::CertificateStatus &new_status) {
-    if (!new_status.isValid()) // Ignore invalid statuses
+    if (!new_status.isStatusCurrent()) // Ignore expired status results
         return;
 
     // Status updates (and the associated timer operations) must happen in the SSL context's event loop.

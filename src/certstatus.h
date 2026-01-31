@@ -807,10 +807,14 @@ struct OCSPStatus {
     virtual bool operator!=(certstatus_t& rhs) const { return !(*this == rhs); }
 
     /**
-     * @brief Verify that the status validity dates are currently valid and the status is known
-     * @return true if the status is still valid
+     * @brief Check whether this OCSP *status result* is still current
+     *
+     * This checks the status validity period (status_valid_until_date), not whether
+     * the associated certificate is in the VALID vs EXPIRED/REVOKED/etc. state.
+     *
+     * @return true if the OCSP status validity period has not expired
      */
-    bool isValid() const noexcept { // NOLINT(*-convert-member-functions-to-static)
+    bool isStatusCurrent() const noexcept { // NOLINT(*-convert-member-functions-to-static)
         const auto now(std::time(nullptr));
         return status_valid_until_date.t > now;
     }
@@ -827,7 +831,7 @@ struct OCSPStatus {
      *
      * @return true if the status is GOOD, false otherwise
      */
-    bool isGood() const noexcept { return isValid() && ocsp_status == OCSP_CERTSTATUS_GOOD; }
+    bool isGood() const noexcept { return isStatusCurrent() && ocsp_status == OCSP_CERTSTATUS_GOOD; }
 
     virtual explicit operator CertificateStatus() const noexcept;
 
@@ -987,7 +991,7 @@ struct CertificateStatus {
      cert_status_class_t getStatusClass() const noexcept {
          return status == VALID ? cert_status_class_t::GOOD : isRevokedOrExpired() ? cert_status_class_t::BAD : cert_status_class_t::UNKNOWN;
      }
-     cert_status_class_t getEffectiveStatusClass() const noexcept { return isValid() ? getStatusClass() : cert_status_class_t::UNKNOWN; }
+     cert_status_class_t getEffectiveStatusClass() const noexcept { return isStatusCurrent() ? getStatusClass() : cert_status_class_t::UNKNOWN; }
 
     /**
      * @brief Check if the certificate is Expired of Revoked
@@ -996,14 +1000,18 @@ struct CertificateStatus {
      */
     bool isRevokedOrExpired() const noexcept { return status == REVOKED || status == EXPIRED; }
 
-    /**
-     * @brief Verify that the status is currently valid
-     * @return true if the status is still valid
-     */
-    bool isValid() const noexcept { // NOLINT(*-convert-member-functions-to-static)
-        const auto now(std::time(nullptr));
-        return status_valid_until_date.t > now;
-    }
+     /**
+      * @brief Check whether this *status result* is still current
+      *
+      * This checks the status validity period (status_valid_until_date), not whether
+      * the certificate's status enumerator is VALID vs EXPIRED/REVOKED/etc.
+      *
+      * @return true if the status validity period has not expired
+      */
+     bool isStatusCurrent() const noexcept { // NOLINT(*-convert-member-functions-to-static)
+         const auto now(std::time(nullptr));
+         return status_valid_until_date.t > now;
+     }
 
     bool isCertified() const noexcept { return certified; }
 
