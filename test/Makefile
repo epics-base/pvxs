@@ -113,7 +113,11 @@ testudpfwd_SRCS += testudpfwd.cpp
 TESTS += testudpfwd
 
 ifdef BASE_3_15
-ifeq (YES,$(EVENT2_HAS_OPENSSL))
+ifeq ($(EVENT2_HAS_OPENSSL),YES)
+ ifeq (WIN32,$(OS_CLASS))
+ USR_CPPFLAGS += -DPVXS_API_BUILDING
+ endif
+USR_CPPFLAGS += -DPVXS_ENABLE_OPENSSL
 TESTPROD_HOST += gen_test_certs
 gen_test_certs += gen_test_certs.cpp
 

@@ -39,4 +39,3 @@ pvxmshim_SRCS += mshim.cpp
 include $(TOP)/configure/RULES
 #----------------------------------------
 #  ADD RULES AFTER THIS LINE
-
