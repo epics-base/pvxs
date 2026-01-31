@@ -122,8 +122,41 @@ size_t ConnBase::enqueueTxBody(pva_app_msg_t cmd)
     CASE(MESSAGE);
 #undef CASE
 
-void ConnBase::bevEvent(short events)
-{
+void ConnBase::bevEvent(const short events) {
+    const int err = EVUTIL_SOCKET_ERROR(); // Read errors early before potential clobbering
+#ifdef PVXS_ENABLE_OPENSSL
+    if (isTLS && bev) {
+        if (events & (BEV_EVENT_ERROR | BEV_EVENT_EOF)) {
+            while (const auto err = ERR_get_error()) {
+                const auto error_reason = ERR_reason_error_string(err);
+                if (error_reason) log_debug_printf(connio, "%s: TLS Error (0x%lx) %s\n", peerLabel(), err, error_reason);
+            }
+        }
+
+        if (events & BEV_EVENT_CONNECTED) {
+            log_debug_printf(connsetup, "ConnBase::bevEvent(): A %s CONNECTED event \n", peerLabel());
+            const auto ctx = bufferevent_openssl_get_ssl(bev.get());
+            if (ctx) {
+                if (!peer_status) {
+                    try {
+                        log_debug_printf(connsetup, "ConnBase::bevEvent().  Subscribe to %s peer certificate status \n", peerLabel());
+                        const auto weakself = std::weak_ptr<ConnBase>(self_from_this());
+                        peer_status = ossl::SSLContext::subscribeToPeerCertStatus(ctx, [weakself](certs::cert_status_category_t status_category) {
+                            if (const auto self = weakself.lock()) {
+                                self->peerStatusCallback(status_category);
+                            }
+                        });
+                    } catch (certs::CertStatusNoExtensionException &e) {
+                        log_debug_printf(connio, "no status to monitor for peer %s %s: %s\n", peerLabel(), peerName.c_str(), e.what());
+                    } catch (std::exception &e) {
+                        log_err_printf(connio, "unexpected error subscribing to peer %s %s certificate status: %s\n", peerLabel(), peerName.c_str(), e.what());
+                    }
+                }
+            }
+        }
+    }
+#endif
+
     if(events&(BEV_EVENT_EOF|BEV_EVENT_ERROR|BEV_EVENT_TIMEOUT)) {
         if(events&BEV_EVENT_ERROR) {
             int err = EVUTIL_SOCKET_ERROR();
