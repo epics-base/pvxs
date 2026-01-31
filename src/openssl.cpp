@@ -69,9 +69,9 @@ void SSLContext::monitorStatusAndSetState(const ossl_ptr<X509> &cert, X509_STORE
             const auto status_pv = certs::CertStatusManager::getStatusPvFromCert(cert.get());
             log_debug_printf(watcher, "Installing Certificate Status Monitor: %s\n", status_pv.c_str());
             cert_monitor = certs::CertStatusManager::subscribe(getCertStatusExData()->client, trusted_store_ptr, status_pv, [=](const certs::PVACertificateStatus &pva_status) {
-                const auto cert_status_category = static_cast<certs::CertificateStatus>(pva_status).getStatusCategory();
+                const auto cert_status_class = static_cast<certs::CertificateStatus>(pva_status).getStatusClass();
                 log_debug_printf(watcher, "Received: %s certificate status\n", pva_status.status.s.c_str());
-                if (cert_status_category != certs::GOOD_STATUS) {
+                if (cert_status_class != certs::cert_status_class_t::GOOD) {
                     log_warn_printf(watcher, "Certificate not valid: %s\n", pva_status.status.s.c_str());
                 }
 
@@ -87,8 +87,8 @@ void SSLContext::monitorStatusAndSetState(const ossl_ptr<X509> &cert, X509_STORE
                     }
 
                     // If it's a BAD status, then set state and exit
-                    if (cert_status_category == certs::BAD_STATUS) {
-                        setTlsOrTcpMode(cert_status_category);
+                    if (cert_status_class == certs::cert_status_class_t::BAD) {
+                        setTlsOrTcpMode(cert_status_class);
                         return;
                     }
 
@@ -104,7 +104,7 @@ void SSLContext::monitorStatusAndSetState(const ossl_ptr<X509> &cert, X509_STORE
                         event_add(status_validity_timer.get(), &delay);
                     } else {
                         log_debug_printf(watcher, "Certificate status is no longer valid: %s\n", pva_status.status.s.c_str());
-                        setTlsOrTcpMode(certs::UNKNOWN_STATUS);
+                        setTlsOrTcpMode(certs::cert_status_class_t::UNKNOWN);
                         return;
                     }
                 }
@@ -122,8 +122,8 @@ void SSLContext::monitorStatusAndSetState(const ossl_ptr<X509> &cert, X509_STORE
     }
 
     // Set the state
-    const auto cert_status_category = static_cast<certs::CertificateStatus>(cert_status).getEffectiveStatusCategory();
-    if ( cert_status_category == certs::BAD_STATUS ) {
+    const auto cert_status_class = static_cast<certs::CertificateStatus>(cert_status).getEffectiveStatusClass();
+    if ( cert_status_class == certs::cert_status_class_t::BAD ) {
         // Should never happen
         setDegradedMode(true);
         log_debug_printf(watcher, "Setting initial TLS connection state to: %s\n", "DegradedMode");
@@ -169,17 +169,17 @@ void SSLContext::setDegradedMode(const bool clear) {
  *
  * Will never be called if cert is EXPIRED of REVOKED so we can set to TcpReady if NOT GOOD because it may become GOOD again later
  *
- * @param cert_status_category the given certificate status category
+ * @param cert_status_class the given cert status class
  */
-void SSLContext::setTlsOrTcpMode(const certs::cert_status_category_t cert_status_category) {
+void SSLContext::setTlsOrTcpMode(const certs::cert_status_class_t cert_status_class) {
     log_debug_printf(watcher, "Received a %s certificate status from the status monitor\n", cert_status.status.s.c_str());
     if (state == DegradedMode) {
         log_warn_printf(watcher, "Logic Error. Should not be monitoring certificate status: Because the context state is %s\n", "DegradedMode");
         return;
     }
 
-    switch (cert_status_category) {
-        case certs::GOOD_STATUS:
+    switch (cert_status_class) {
+        case certs::cert_status_class_t::GOOD:
             switch (state) {
                 case Init:
                 case TcpReady:
@@ -196,10 +196,10 @@ void SSLContext::setTlsOrTcpMode(const certs::cert_status_category_t cert_status
                     break;
             }
             break;
-        case certs::BAD_STATUS:
+        case certs::cert_status_class_t::BAD:
             setDegradedMode();
             break;
-        case certs::UNKNOWN_STATUS:
+        case certs::cert_status_class_t::UNKNOWN:
         default:
             switch (state) {
                 case Init:
@@ -226,7 +226,7 @@ void SSLContext::setTlsOrTcpMode(const certs::cert_status_category_t cert_status
  */
 void SSLContext::setTlsOrTcpMode() {
     const auto status = static_cast<certs::CertificateStatus>(cert_status);
-    setTlsOrTcpMode(status.getEffectiveStatusCategory());
+    setTlsOrTcpMode(status.getEffectiveStatusClass());
 }
 
 SSLContext::SSLContext(const impl::evbase loop, const bool is_client) : loop(loop), is_client(is_client)
@@ -674,7 +674,7 @@ void SSLPeerStatusAndMonitor::statusValidityTimerCallback(evutil_socket_t fd, sh
     log_debug_printf(watcher, "Certificate status validity expired - notifying listeners%s\n", "");
 
     // Set notify listeners that status has changed
-    if (peer_status_and_monitor->fn) peer_status_and_monitor->fn(certs::UNKNOWN_STATUS);
+    if (peer_status_and_monitor->fn) peer_status_and_monitor->fn(certs::cert_status_class_t::UNKNOWN);
 }
 
 /**
@@ -717,7 +717,7 @@ void SSLPeerStatusAndMonitor::restartStatusValidityTimerFromCertStatus() {
  * @return The peer status that was set
  */
 std::shared_ptr<SSLPeerStatusAndMonitor> CertStatusExData::setPeerStatus(X509 *peer_cert_ptr,
-    const certs::CertificateStatus &new_status, const std::function<void(certs::cert_status_category_t)> &fn) {
+    const certs::CertificateStatus &new_status, const std::function<void(certs::cert_status_class_t)> &fn) {
     const auto serial_number = getSerialNumber(peer_cert_ptr);
     std::shared_ptr<SSLPeerStatusAndMonitor> peer_status_and_monitor;
     if (status_check_enabled && fn) {
@@ -731,7 +731,7 @@ std::shared_ptr<SSLPeerStatusAndMonitor> CertStatusExData::setPeerStatus(X509 *p
     return peer_status_and_monitor;
 }
 
-std::shared_ptr<SSLPeerStatusAndMonitor> CertStatusExData::getOrCreatePeerStatus(const serial_number_t serial_number, const std::string &status_pv, const std::function<void(certs::cert_status_category_t)> &fn) {
+std::shared_ptr<SSLPeerStatusAndMonitor> CertStatusExData::getOrCreatePeerStatus(const serial_number_t serial_number, const std::string &status_pv, const std::function<void(certs::cert_status_class_t)> &fn) {
     // Create a holder for peer status or return current holder if already exists
     auto peer_status = createPeerStatus(serial_number, fn);
 
@@ -762,7 +762,7 @@ std::shared_ptr<SSLPeerStatusAndMonitor> CertStatusExData::getOrCreatePeerStatus
  * @param fn optional function that will be called as status changes if provided
  * @return the existing or new peer status
  */
-std::shared_ptr<SSLPeerStatusAndMonitor> CertStatusExData::createPeerStatus(serial_number_t serial_number, const std::function<void(certs::cert_status_category_t)> &fn) {
+std::shared_ptr<SSLPeerStatusAndMonitor> CertStatusExData::createPeerStatus(serial_number_t serial_number, const std::function<void(certs::cert_status_class_t)> &fn) {
     const auto existing_peer_status_entry = peer_statuses.find(serial_number);
     if (existing_peer_status_entry != peer_statuses.end()) {
         auto peer_status (existing_peer_status_entry->second.lock());
@@ -779,7 +779,7 @@ std::shared_ptr<SSLPeerStatusAndMonitor> CertStatusExData::createPeerStatus(seri
     return new_peer_status;
 };
 
-SSLPeerStatusAndMonitor::SSLPeerStatusAndMonitor(const serial_number_t serial_number, CertStatusExData* ex_data_ptr, const std::function<void(certs::cert_status_category_t)>& fn)
+SSLPeerStatusAndMonitor::SSLPeerStatusAndMonitor(const serial_number_t serial_number, CertStatusExData* ex_data_ptr, const std::function<void(certs::cert_status_class_t)>& fn)
     : fn(fn), serial_number{serial_number}, ex_data_ptr{ex_data_ptr}
     , status_validity_timer(event_new(ex_data_ptr->loop.base, -1, EV_TIMEOUT, &statusValidityTimerCallback, this))  // Create a new timer for this instance
     {}
@@ -803,18 +803,18 @@ void SSLPeerStatusAndMonitor::updateStatus(const certs::CertificateStatus &new_s
     // This matters for first-time status fetch in CI where tests have tight timeouts.
     auto self = shared_from_this();
     if(!ex_data_ptr->loop.tryCall([self, new_status]() {
-        certs::cert_status_category_t prior_cert_status;
-        certs::cert_status_category_t cert_status;
+        certs::cert_status_class_t prior_status_class;
+        certs::cert_status_class_t status_class;
         {
             Guard G(self->lock);
-            prior_cert_status = self->status.getStatusCategory();
+            prior_status_class = self->status.getStatusClass();
             self->status = new_status;
-            cert_status = self->status.getStatusCategory();
+            status_class = self->status.getStatusClass();
         }
 
-        // Call the callback if there has been any change in the status category
-        if (self->fn && cert_status != prior_cert_status)
-            self->fn(cert_status);
+        // Call the callback if there has been any change in the cert status class
+        if (self->fn && status_class != prior_status_class)
+            self->fn(status_class);
 
         // Restart status validity countdown timer for this new status
         self->restartStatusValidityTimerFromCertStatus();
@@ -824,7 +824,7 @@ void SSLPeerStatusAndMonitor::updateStatus(const certs::CertificateStatus &new_s
     }
 }
 
-std::shared_ptr<SSLPeerStatusAndMonitor> CertStatusExData::subscribeToPeerCertStatus(X509 *cert_ptr, const std::function<void(certs::cert_status_category_t)> &fn) {
+std::shared_ptr<SSLPeerStatusAndMonitor> CertStatusExData::subscribeToPeerCertStatus(X509 *cert_ptr, const std::function<void(certs::cert_status_class_t)> &fn) {
     Guard G(lock);
     assert(cert_ptr && "Peer Cert NULL");
     return setPeerStatus(cert_ptr, fn);
@@ -987,14 +987,14 @@ bool SSLContext::getPeerCredentials(PeerCredentials &C, const SSL *ctx) {
  * @param fn the function to call when the certificate status changes
  * @return true if the peer certificate status was successfully subscribed, false otherwise
  */
-std::shared_ptr<SSLPeerStatusAndMonitor> SSLContext::subscribeToPeerCertStatus(const SSL *ssl, const std::function<void(certs::cert_status_category_t)> &fn) {
+std::shared_ptr<SSLPeerStatusAndMonitor> SSLContext::subscribeToPeerCertStatus(const SSL *ssl, const std::function<void(certs::cert_status_class_t)> &fn) {
     if (!ssl) throw std::invalid_argument("NULL");
 
     if (const auto cert = SSL_get0_peer_certificate(ssl)) {
         // Subscribe to peer certificate status if necessary
         const auto ex_data = CertStatusExData::fromSSL(const_cast<SSL *>(ssl));
         if (ex_data) {
-            return ex_data->subscribeToPeerCertStatus(cert, [=](const certs::cert_status_category_t status) { fn(status); });
+            return ex_data->subscribeToPeerCertStatus(cert, [=](const certs::cert_status_class_t status) { fn(status); });
         }
     }
     throw certs::CertStatusNoExtensionException("No Certificate");
