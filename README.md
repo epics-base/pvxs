@@ -1,6 +1,35 @@
-PVXS - PVAccess protocol library
-================================
+PVXS - Secure PVAccess protocol library
+=======================================
 
-VCS - https://github.com/epics-base/pvxs
+[![PVXS EPICS](https://github.com/slac-epics/pvxs-tls/actions/workflows/ci-scripts-build.yml/badge.svg)](https://github.com/slac-epics/pvxs-tls/actions/workflows/ci-scripts-build.yml) [![Python](https://github.com/slac-epics/pvxs-tls/actions/workflows/python.yml/badge.svg)](https://github.com/slac-epics/pvxs-tls/actions/workflows/python.yml) [![Spell Check](https://github.com/slac-epics/pvxs-tls/actions/workflows/codespell.yml/badge.svg)](https://github.com/slac-epics/pvxs-tls/actions/workflows/codespell.yml) [![GH pages](https://github.com/slac-epics/pvxs-tls/actions/workflows/gh-pages.yml/badge.svg)](https://github.com/slac-epics/pvxs-tls/actions/workflows/gh-pages.yml) [![pages-build-deployment](https://github.com/slac-epics/pvxs-tls/actions/workflows/pages/pages-build-deployment/badge.svg)](https://github.com/slac-epics/pvxs-tls/actions/workflows/pages/pages-build-deployment) [![Release artifacts](https://github.com/slac-epics/pvxs-tls/actions/workflows/release.yml/badge.svg)](https://github.com/slac-epics/pvxs-tls/actions/workflows/release.yml) [![Docker Multi-Platform Build Pipeline](https://github.com/slac-epics/pvxs-tls/actions/workflows/docker-pub-pvxs.yml/badge.svg)](https://github.com/slac-epics/pvxs-tls/actions/workflows/docker-pub-pvxs.yml)
 
-Documentation - https://epics-base.github.io/pvxs/
+
+This module provides a library (libpvxs.so or pvxs.dll) and a set of
+CLI utilities acting as PVAccess protocol client and/or server.
+
+PVXS is functionally equivalent to the
+`pvDataCPP <https://github.com/epics-base/pvDataCPP>`_ and
+`pvAccessCPP <https://github.com/epics-base/pvAccessCPP>`_ modules
+
+- VCS: https://github.com/slac-epics/pvxs-tls
+- Docs: https://slac-epics.github.io/pvxs-tls/
+- Issues: https://github.com/slac-epics/pvxs-tls/issues
+
+Dependencies
+
+* A C++11 compliant compiler
+
+* GCC >= 4.8
+* Visual Studio >= 2015 / 12.0'
+* clang
+
+* EPICS Base https://epics-controls.org/resources-and-support/base/ >=3.15.1
+* libevent http://libevent.org/ >=2.0.1  (Optionally bundled)
+* CLI11 https://github.com/CLIUtils/CLI11 >=2.4.2 (optionally bundled)
+
+**Optional**
+* CMake <https://cmake.org/ >=3.1, only needed when building bundled libevent
+
+**Optional, only when building Secure PV Access**
+* openssl http://www.openssl.org/ >=3.2.1
+* sqlite https://www.sqlite.org/ >=3.48.0
