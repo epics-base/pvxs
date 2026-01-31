@@ -226,8 +226,8 @@ void Connection::bevEvent(short events)
 void Connection::peerStatusCallback(certs::cert_status_category_t status_category) {
     if (status_category == certs::GOOD_STATUS) {
         log_debug_printf(certs, "Ready to proceed with creating channels: %s %s\n", "Connecting", peerName.c_str());
-        ready = true;
-        log_debug_printf(status_cli, "%24.24s = %-12s : %-41s\n", "Connection::ready", ready ? "true" : "false", "Connection::peerStatusCallback()");
+        // Only the CONNECTION_VALIDATED handler should flip Connection::ready.
+        // Here we only resume any deferred channel creation.
         proceedWithCreatingChannels();
     } else if (status_category == certs::BAD_STATUS) {
         log_debug_printf(certs, "Cancel Wait to Creating Channels: BAD CERT STATUS%s\n", "");
