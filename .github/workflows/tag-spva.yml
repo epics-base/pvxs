@@ -95,12 +95,46 @@ jobs:
             exit 1
           fi
 
-      - name: Create and push annotated tag
+      - name: Configure git identity (actor)
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name  "${{ github.actor }}"
+          git config user.email "${{ github.actor }}@users.noreply.github.com"
+
+      - name: Create and push annotated tag (with changelog)
         shell: bash
         run: |
           set -euo pipefail
           TAG="${{ steps.vars.outputs.tag }}"
           VER="${{ steps.vars.outputs.pvxs_ver }}"
           DATE="${{ steps.vars.outputs.date }}"
-          git tag -a "$TAG" -m "SPVA snapshot based on pvxs $VER ($DATE)"
+          SHA="$(git rev-parse --short=12 HEAD)"
+
+          PREV_TAG="$(git describe --tags --abbrev=0 --match 'pvxs-*-spva.*' 2>/dev/null || true)"
+          if [[ -z "$PREV_TAG" ]]; then
+            LEGACY_TAG="spva-2026-01-12"
+            if git rev-parse -q --verify "refs/tags/$LEGACY_TAG" >/dev/null; then
+              PREV_TAG="$LEGACY_TAG"
+            else
+              PREV_TAG=""
+            fi
+          fi
+
+          if [[ -n "$PREV_TAG" ]]; then
+            CHANGES="$(git log --no-merges --pretty=format:'- %s' "${PREV_TAG}..HEAD")"
+            BASELINE_LINE="Changes since ${PREV_TAG}:"
+          else
+            CHANGES="$(git log --no-merges --pretty=format:'- %s' HEAD)"
+            BASELINE_LINE="Changes (no previous tag found):"
+          fi
+
+          MSG="$(cat <<EOF
+SPVA snapshot based on pvxs ${VER} (${DATE}) [${SHA}]
+${BASELINE_LINE}
+${CHANGES}
+EOF
+)"
+          git tag -a "$TAG" -m "$MSG"
           git push origin "refs/tags/$TAG"
+
