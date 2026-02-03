@@ -112,6 +112,7 @@ jobs:
           SHA="$(git rev-parse --short=12 HEAD)"
 
           PREV_TAG="$(git describe --tags --abbrev=0 --match 'pvxs-*-spva.*' 2>/dev/null || true)"
+
           if [[ -z "$PREV_TAG" ]]; then
             LEGACY_TAG="spva-2026-01-12"
             if git rev-parse -q --verify "refs/tags/$LEGACY_TAG" >/dev/null; then
@@ -122,19 +123,22 @@ jobs:
           fi
 
           if [[ -n "$PREV_TAG" ]]; then
-            CHANGES="$(git log --no-merges --pretty=format:'- %s' "${PREV_TAG}..HEAD")"
             BASELINE_LINE="Changes since ${PREV_TAG}:"
+            CHANGES="$(git log --no-merges --pretty=format:'- %s' "${PREV_TAG}..HEAD")"
           else
-            CHANGES="$(git log --no-merges --pretty=format:'- %s' HEAD)"
             BASELINE_LINE="Changes (no previous tag found):"
+            CHANGES="$(git log --no-merges --pretty=format:'- %s' HEAD)"
           fi
 
-          MSG="$(cat <<EOF
-SPVA snapshot based on pvxs ${VER} (${DATE}) [${SHA}]
-${BASELINE_LINE}
-${CHANGES}
-EOF
-)"
+          MSG="$(printf "SPVA snapshot based on pvxs %s (%s) [%s]\n%s\n%s\n" \
+            "$VER" "$DATE" "$SHA" \
+            "$BASELINE_LINE" \
+            "$CHANGES")"
+
+          echo "Tag message:"
+          echo "----------------"
+          echo "$MSG"
+          echo "----------------"
+
           git tag -a "$TAG" -m "$MSG"
           git push origin "refs/tags/$TAG"
-
