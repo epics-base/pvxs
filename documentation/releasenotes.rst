@@ -3,6 +3,13 @@
 Release Notes
 =============
 
+1.5.1 (UNRELEASED)
+------------------
+
+* Call ``epicsSignalInstallSigPipeIgnore()``.
+* When available, set ``SO_NOSIGPIPE`` on TCP sockets.
+* python: Handle setuptools v80 pkg_resources removal.
+
 1.5.0 (Jan 2026)
 ----------------
 
