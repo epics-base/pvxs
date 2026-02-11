@@ -17,7 +17,7 @@ Release Notes
 * server: disable one-sided attempt to handle saturated connection.
 * ioc: add `pvxs_log_config()` and `pvxs_log_reset()` IOCsh functions.
 * ioc: renamed semi-internal C symbol names to avoid conflicts with QSRV1:
-       `dbpvar()` -> ``dbpvxr()`, ``pvaLinkNWorkers`` -> ``pvxLinkNWorkers``.
+       ``dbpvar()`` -> ``dbpvxr()``, ``pvaLinkNWorkers`` -> ``pvxLinkNWorkers``.
        Names in IOC shell remain unchanged.
 * ioc: fix PUT to scalar mapping
 * tools: pvxvct can use endpoint syntax to listen for multicast on a specific interface.
