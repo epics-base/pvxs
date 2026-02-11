@@ -3,8 +3,8 @@
 Release Notes
 =============
 
-1.5.1 (UNRELEASED)
-------------------
+1.5.1 (Feb 2026)
+----------------
 
 * Call ``epicsSignalInstallSigPipeIgnore()``.
 * When available, set ``SO_NOSIGPIPE`` on TCP sockets.
