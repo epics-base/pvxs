@@ -86,6 +86,26 @@ void testNTEnum()
     auto top = nt::NTEnum{}.create();
 
     testTrue(top.idStartsWith("epics:nt/NTEnum:"))<<"\n"<<top;
+
+    top.lookup("value.index") = 2;
+    top.lookup("value.choices") = shared_array<const std::string>({"A", "B", "C"});
+
+    auto value(top["value"]);
+    testEq(value.as<std::string>(), "C");
+    testEq(value.as<int64_t>(), 2);
+    testEq(value.as<uint64_t>(), 2u);
+
+    value = "1";
+    testEq(value.as<std::string>(), "B");
+
+    value = "A";
+    testEq(value.as<std::string>(), "A");
+
+    value.from<uint64_t>(1u);
+    testEq(value.as<std::string>(), "B");
+
+    value.from<uint64_t>(2u);
+    testEq(value.as<std::string>(), "C");
 }
 
 void testNTTable()
@@ -114,7 +134,7 @@ void testNTTable()
 } // namespace
 
 MAIN(testnt) {
-    testPlan(24);
+    testPlan(31);
     testNTScalar();
     testNTNDArray();
     testNTURI();
