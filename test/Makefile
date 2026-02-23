@@ -119,6 +119,7 @@ benchdata_SRCS += benchdata.cpp
 
 TESTPROD_HOST += testpvalink
 testpvalink_SRCS += testpvalink.cpp
+testpvalink_SRCS += capturestd.cpp
 testpvalink_SRCS += testioc_registerRecordDeviceDriver.cpp
 testpvalink_LIBS += pvxsIoc pvxs $(EPICS_BASE_IOC_LIBS)
 TESTS += testpvalink
@@ -134,6 +135,7 @@ TESTFILES += $(COMMON_DIR)/testioc.dbd
 
 TESTPROD_HOST += testqsingle
 testqsingle_SRCS += testqsingle
+testqsingle_SRCS += capturestd.cpp
 testqsingle_SRCS += testioc_registerRecordDeviceDriver.cpp
 testqsingle_LIBS = pvxsIoc pvxs $(EPICS_BASE_IOC_LIBS)
 TESTFILES += ../testqsingle.db
@@ -148,6 +150,7 @@ ifdef BASE_7_0
 
 TESTPROD_HOST += testqgroup
 testqgroup_SRCS += testqgroup
+testqgroup_SRCS += capturestd.cpp
 testqgroup_SRCS += testioc_registerRecordDeviceDriver.cpp
 testqgroup_LIBS = pvxsIoc pvxs $(EPICS_BASE_IOC_LIBS)
 TESTFILES += ../table.db
