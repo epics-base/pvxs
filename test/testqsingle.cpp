@@ -10,6 +10,7 @@
 #include <string.h>
 
 #include <testMain.h>
+#include <alarm.h>
 #include <asDbLib.h>
 #include <dbAccess.h>
 #include <dbLock.h>
@@ -878,6 +879,46 @@ void testMonitorAIFilt(TestClient& ctxt)
     sub2.testEmpty();
 }
 
+void testMonitorDBEAlarm(TestClient& ctxt)
+{
+    testDiag("%s", __func__);
+
+    auto prec(testdbRecordPtr("test:ai"));
+    {
+        ioc::DBLocker L(prec);
+
+        prec->tpro = 50; // initial
+        prec->sevr = 0;
+        prec->stat = 0;
+    }
+
+    TestSubscription sub(ctxt.monitor("test:ai.TPRO")
+                             .record("DBE", DBE_ALARM)
+                             .maskConnected(true)
+                             .maskDisconnected(true));
+
+    auto val(sub.waitForUpdate());
+    testShow()<<"Initial\n"<<val.format().delta();
+    testEq(val["value"].as<int32_t>(), 50);
+    testEq(val["alarm.severity"].as<int32_t>(), 0);
+
+    {
+        ioc::DBLocker L(prec);
+
+        prec->tpro = 52; // event discarded
+        db_post_events(prec, &prec->tpro, DBE_VALUE);
+        prec->tpro = 53;
+        prec->sevr = MAJOR_ALARM;
+        prec->stat = READ_ALARM;
+        db_post_events(prec, &prec->tpro, DBE_VALUE|DBE_ALARM);
+    }
+
+    val = sub.waitForUpdate();
+    testShow()<<"Delta\n"<<val.format().delta();
+    testEq(val["value"].as<int32_t>(), 53);
+    testEq(val["alarm.severity"].as<int32_t>(), 2);
+}
+
 void testMonitorDBE(TestClient& ctxt)
 {
     testDiag("%s", __func__);
@@ -910,7 +951,7 @@ void testMonitorDBE(TestClient& ctxt)
 
 MAIN(testqsingle)
 {
-    testPlan(95);
+    testPlan(99);
     testSetup();
     pvxs::logger_config_env();
     generalTimeRegisterCurrentProvider("test", 1, &testTimeCurrent);
@@ -953,6 +994,7 @@ MAIN(testqsingle)
             testMonitorAI(mctxt);
             testMonitorBO(mctxt);
             testMonitorAIFilt(mctxt);
+            testMonitorDBEAlarm(mctxt);
             testMonitorDBE(mctxt);
         }
         timeSim = false;
