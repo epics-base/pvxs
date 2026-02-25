@@ -295,11 +295,15 @@ struct CertStatusExData {
      * This will initialise the peer status as Unknown and set up a time capable of being used as a status validity timer.  It also
      * sets up the function to call when the peer status changes. If the peer status already exists then it is returned.
      *
+     * @param serial_number the serial number of the peer certificate to monitor
      * @param status_pv - status pv
+     * @param cert_id the ID of the peer certificate to monitor
      * @param fn - Function to call when the peer status changes
      * @return The peer status that was created or found
      */
-    std::shared_ptr<SSLPeerStatusAndMonitor> getOrCreatePeerStatus(serial_number_t serial_number, const std::string& status_pv = {}, const std::function<void(certs::cert_status_class_t)> &fn = nullptr);
+    std::shared_ptr<SSLPeerStatusAndMonitor> getOrCreatePeerStatus(serial_number_t serial_number, const std::string& status_pv = {},
+                                                                   const std::string& cert_id = {},
+                                                                   const std::function<void(certs::cert_status_class_t)> &fn = nullptr);
 };
 
 /**
@@ -436,7 +440,7 @@ struct SSLContext {
     void restartStatusValidityTimerFromCertStatus() const;
 };
 
-PVXS_API void configureServerOCSPCallback(void* server, SSL* ssl);
+PVXS_API void configureServerOCSPCallback(void* server_ptr, SSL* ssl);
 
 struct OCSPStapleData {
     size_t size;

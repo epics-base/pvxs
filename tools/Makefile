@@ -1,12 +1,20 @@
 TOP=..
 
 include $(TOP)/configure/CONFIG
+# cfg/ sometimes isn't correctly included due to a Base bug
+# so we do here (maybe again) as workaround
+-include $(wildcard $(TOP)/cfg/CONFIG*)
 #----------------------------------------
 #  ADD MACRO DEFINITIONS AFTER THIS LINE
 #=============================
 
 # access to private headers
 USR_CPPFLAGS += -I$(TOP)/src
+
+ifeq ($(EVENT2_HAS_OPENSSL),YES)
+USR_CPPFLAGS += -DPVXS_ENABLE_OPENSSL
+endif # EVENT2_HAS_OPENSSL
+USR_CPPFLAGS += -DPVXS_ENABLE_EXPERT_API
 
 PROD_LIBS += pvxs Com
 
@@ -37,5 +45,6 @@ pvxmshim_SRCS += mshim.cpp
 #===========================
 
 include $(TOP)/configure/RULES
+-include $(wildcard $(TOP)/cfg/RULES*)
 #----------------------------------------
 #  ADD RULES AFTER THIS LINE

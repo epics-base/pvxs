@@ -20,11 +20,6 @@ jobs:
         fetch-depth: "0"
         submodules: true
 
-    - name: Setup Node.js (for mermaid-cli and sass)
-      uses: actions/setup-node@v4
-      with:
-        node-version: "20"
-
     - name: "apt-get install"
       run: |
         sudo apt-get update
@@ -41,59 +36,6 @@ jobs:
 
     - name: headers
       run: python .ci/cue.py build inc
-
-    - name: Generate Mermaid diagrams
-      run: |
-        set -euo pipefail
-        PUPPETEER_CONFIG="${RUNNER_TEMP}/mmdc-puppeteer-config.json"
-        printf '%s\n' \
-          '{' \
-          '  "args": ["--no-sandbox", "--disable-setuid-sandbox"]' \
-          '}' \
-          >"${PUPPETEER_CONFIG}"
-        DIAGRAM_SPECS_DIR="documentation/diagram_specs"
-        if [ -d "${DIAGRAM_SPECS_DIR}" ]; then
-          for mmd_file in "${DIAGRAM_SPECS_DIR}"/*.mmd; do
-            if [ -f "${mmd_file}" ]; then
-              base_name=$(basename "${mmd_file}" .mmd)
-              output_file="documentation/${base_name}.png"
-              echo "Processing ${mmd_file} -> ${output_file}"
-              npx --yes @mermaid-js/mermaid-cli -i "${mmd_file}" -o "${output_file}" -s 2 -p "${PUPPETEER_CONFIG}"
-            fi
-          done
-        fi
-
-    - name: Prepare SPVA theme assets (pages-themes/merlot)
-      run: |
-        set -euo pipefail
-        THEME=merlot
-        THEME_DIR="${RUNNER_TEMP}/github_theme"
-        STATIC_DIR="documentation/_static"
-
-        rm -rf "${THEME_DIR}"
-        git clone --depth 1 "https://github.com/pages-themes/${THEME}.git" "${THEME_DIR}"
-
-        mkdir -p "${STATIC_DIR}"
-        grep -v "^-" "${THEME_DIR}/assets/css/style.scss" > "${THEME_DIR}/assets/css/no-frontmatter-style.scss"
-
-        rm -rf "${STATIC_DIR}/images"
-        cp -pr "${THEME_DIR}/assets" "${STATIC_DIR}"
-        if [ -d "${THEME_DIR}/assets/images" ]; then
-          cp -pr "${THEME_DIR}/assets/images" "${STATIC_DIR}"
-        fi
-        if [ -d "${THEME_DIR}/assets/css" ]; then
-          cp -pr "${THEME_DIR}/assets/css" "${STATIC_DIR}"
-        fi
-        if [ -d "${THEME_DIR}/assets/fonts" ]; then
-          cp -pr "${THEME_DIR}/assets/fonts" "${STATIC_DIR}"
-        fi
-
-        npx --yes sass --no-source-map --style=compressed \
-          --load-path="${THEME_DIR}/_sass" \
-          "${THEME_DIR}/assets/css/no-frontmatter-style.scss" \
-          "${STATIC_DIR}/style.css"
-        sed -i.bak 's/#main-content/div.body section/g' "${STATIC_DIR}/style.css" && rm -f "${STATIC_DIR}/style.css.bak"
-        printf '\n  ul, ol {\n      margin: 10px 0 10px 20px;\n      padding: 0;\n  }\n' >> "${STATIC_DIR}/style.css"
 
     - name: sphinx
       run: |

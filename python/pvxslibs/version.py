@@ -6,22 +6,21 @@ Version numbers are encoded as: MAJOR.MINOR.MAINT
 import re
 from collections import namedtuple
 
+try:
+    from importlib.metadata import version as get_version
+except ImportError:
+    # Fallback for Python < 3.8
+    from pkg_resources import get_distribution
+    def get_version(name):
+        return get_distribution(name).version
+
 __all__ = (
     'version',
     'version_info',
     'abi_requires',
 )
 
-def version():
-    try:
-        from importlib.metadata import version # >= py 3.8
-    except ImportError: # removed from setuptools v82
-        from pkg_resources import get_distribution
-        return get_distribution('pvxslibs').version
-    else:
-        return version('pvxslibs')
-
-version = version() # as a string
+version = get_version('pvxslibs') # as a string
 
 version_info  = re.match(r'([\d]+)\.([\d]+)\.([\d]+)([ab]\d+)?', version).groups()
 

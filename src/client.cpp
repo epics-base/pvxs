@@ -305,13 +305,13 @@ Value ResultWaiter::wait(double timeout)
         throw Interrupted();
 }
 
-void ResultWaiter::complete(Result&& result, bool interrupt)
+void ResultWaiter::complete(Result&& res, bool interrupt)
 {
     {
         Guard G(lock);
         if(outcome!=Busy)
             return;
-        this->result = std::move(result);
+        this->result = std::move(res);
         outcome = interrupt ? Abort : Done;
     }
     notify.signal();

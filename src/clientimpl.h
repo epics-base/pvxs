@@ -22,7 +22,6 @@
 
 #ifdef PVXS_ENABLE_OPENSSL
 #include "certstatus.h"
-#include "certstatusmanager.h"
 #include "openssl.h"
 #include "opensslgbl.h"
 #define PVXS_OCSP_STAPLING_OK 1

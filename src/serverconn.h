@@ -25,7 +25,6 @@
 
 #ifdef PVXS_ENABLE_OPENSSL
 #include "certstatus.h"
-#include "certstatusmanager.h"
 #include "openssl.h"
 #endif
 

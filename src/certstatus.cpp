@@ -4,33 +4,187 @@
  * in file LICENSE that is included with this distribution.
  */
 /**
- * The OCSP helper functions.
+ * The certificate status functions
+ *
+ *   certstatus.cpp
  *
  */
 
-#include "certstatusmanager.h"
-
-#include <thread>
-
-#include <openssl/evp.h>
-#include <openssl/ocsp.h>
-#include <openssl/pem.h>
-#include <openssl/x509.h>
-
-#include <pvxs/client.h>
-#include <pvxs/log.h>
-
 #include "certstatus.h"
-#include "certstatusfactory.h"
-#include "configcms.h"
-#include "evhelper.h"
+
 #include "opensslgbl.h"
-#include "ownedptr.h"
 
 namespace pvxs {
 namespace certs {
 
-DEFINE_LOGGER(status, "pvxs.certs.status");
+/**
+ * @brief Constructor for the OCSPStatus class
+ *
+ * @param ocsp_status the OCSP status
+ * @param ocsp_bytes the OCSP response bytes
+ * @param status_date the date of the OCSP certificate status
+ * @param status_valid_until_time the valid-until date of the OCSP certificate status
+ * @param revocation_time the revocation date of the certificate if it is revoked
+ */
+OCSPStatus::OCSPStatus(ocspcertstatus_t ocsp_status, const shared_array<const uint8_t> &ocsp_bytes, CertDate status_date, CertDate status_valid_until_time,
+                       CertDate revocation_time)
+    : ocsp_bytes(ocsp_bytes),
+      ocsp_status(ocsp_status),
+      status_date(status_date),
+      status_valid_until_date(status_valid_until_time),
+      revocation_date(revocation_time) {};
+
+/**
+ * @brief Initialise the OCSPStatus object
+ *
+ * @param trusted_store_ptr the trusted store to use for parsing the OCSP response
+ * @param cert_id the certificate ID to that the status refers to
+ */
+void OCSPStatus::init(X509_STORE *trusted_store_ptr, const std::string& cert_id) {
+    if (ocsp_bytes.empty()) {
+        ocsp_status = OCSPCertStatus(OCSP_CERTSTATUS_UNKNOWN);
+        status_date = time(nullptr);
+    } else {
+        const auto parsed_status = CertStatusManager::parse(ocsp_bytes, trusted_store_ptr, cert_id);
+        ocsp_status = std::move(parsed_status.ocsp_status);
+        status_date = std::move(parsed_status.status_date);
+        status_valid_until_date = std::move(parsed_status.status_valid_until_date);
+        revocation_date = std::move(parsed_status.revocation_date);
+    }
+}
+
+void OCSPStatus::init(X509_STORE* trusted_store_ptr, const std::string& issuer_id, const uint64_t serial)
+{
+    const std::string expected((SB() << issuer_id << ":" << std::setw(20) << std::setfill('0') << serial).str());
+    init(trusted_store_ptr, expected);
+}
+
+/**
+ * @brief Convert a PVACertificateStatus to a CertificateStatus
+ *
+ * @param rhs The PVACertificateStatus to convert
+ * @return CertificateStatus The converted CertificateStatus
+ */
+PVACertificateStatus::operator CertificateStatus() const noexcept {
+    return (status == UNKNOWN) ? static_cast<CertificateStatus>(UnknownCertificateStatus{}) : static_cast<CertificateStatus>(CertifiedCertificateStatus{*this});
+}
+
+/**
+ * @brief Convert an OCSPStatus to a CertificateStatus
+ *
+ * @param rhs The OCSPStatus to convert
+ * @return CertificateStatus The converted CertificateStatus
+ */
+OCSPStatus::operator CertificateStatus() const noexcept {
+    return (ocsp_status == OCSP_CERTSTATUS_UNKNOWN) ? static_cast<CertificateStatus>(UnknownCertificateStatus{})
+                                                    : static_cast<CertificateStatus>(CertifiedCertificateStatus{*this});
+}
+
+/**
+ * @brief Compare an OCSPStatus with a CertificateStatus
+ *
+ * @param rhs The CertificateStatus to compare with
+ * @return bool True if the OCSPStatus is equal to the CertificateStatus, false otherwise
+ */
+bool OCSPStatus::operator==(const CertificateStatus &rhs) const {
+    return this->ocsp_status == rhs.ocsp_status && this->status_date == rhs.status_date && this->status_valid_until_date == rhs.status_valid_until_date &&
+           this->revocation_date == rhs.revocation_date;
+}
+
+/**
+ * @brief Compare an OCSPStatus with a PVACertificateStatus
+ *
+ * @param rhs The PVACertificateStatus to compare with
+ * @return bool True if the OCSPStatus is equal to the PVACertificateStatus, false otherwise
+ */
+bool OCSPStatus::operator==(const PVACertificateStatus &rhs) const { return (CertificateStatus) * this == rhs; }
+
+/**
+ * @brief Compare a PVACertificateStatus with a CertificateStatus
+ *
+ * @param rhs The CertificateStatus to compare with
+ * @return bool True if the PVACertificateStatus is equal to the CertificateStatus, false otherwise
+ */
+bool PVACertificateStatus::operator==(const CertificateStatus &rhs) const {
+    return this->status == rhs.status && this->ocsp_status == rhs.ocsp_status && this->status_date == rhs.status_date &&
+           this->status_valid_until_date == rhs.status_valid_until_date && this->revocation_date == rhs.revocation_date;
+}
+
+/**
+ * @brief Compare an OCSPStatus with a PVACertificateStatus
+ *
+ * @param lhs The OCSPStatus to compare with
+ * @param rhs The PVACertificateStatus to compare with
+ * @return bool True if the OCSPStatus is equal to the PVACertificateStatus, false otherwise
+ */
+bool operator==(ocspcertstatus_t &lhs, PVACertificateStatus &rhs) { return rhs == lhs; };
+
+/**
+ * @brief Compare an OCSPStatus with a PVACertificateStatus
+ *
+ * @param lhs The OCSPStatus to compare with
+ * @param rhs The PVACertificateStatus to compare with
+ * @return bool True if the OCSPStatus is not equal to the PVACertificateStatus, false otherwise
+ */
+bool operator!=(ocspcertstatus_t &lhs, PVACertificateStatus &rhs) { return rhs != lhs; };
+
+/**
+ * @brief Compare a CertificateStatus with a PVACertificateStatus
+ *
+ * @param lhs The CertificateStatus to compare with
+ * @param rhs The PVACertificateStatus to compare with
+ * @return bool True if the CertificateStatus is equal to the PVACertificateStatus, false otherwise
+ */
+bool operator==(certstatus_t &lhs, PVACertificateStatus &rhs) { return rhs == lhs; };
+
+/**
+ * @brief Compare a CertificateStatus with a PVACertificateStatus
+ *
+ * @param lhs The CertificateStatus to compare with
+ * @param rhs The PVACertificateStatus to compare with
+ * @return bool True if the CertificateStatus is not equal to the PVACertificateStatus, false otherwise
+ */
+bool operator!=(certstatus_t &lhs, PVACertificateStatus &rhs) { return rhs != lhs; };
+
+/**
+ * @brief Compare an OCSPStatus with a CertificateStatus
+ *
+ * @param lhs The OCSPStatus to compare with
+ * @param rhs The CertificateStatus to compare with
+ * @return bool True if the OCSPStatus is equal to the CertificateStatus, false otherwise
+ */
+bool operator==(ocspcertstatus_t &lhs, OCSPStatus &rhs) { return rhs == lhs; };
+
+/**
+ * @brief Compare an OCSPStatus with a CertificateStatus
+ *
+ * @param lhs The OCSPStatus to compare with
+ * @param rhs The CertificateStatus to compare with
+ * @return bool True if the OCSPStatus is not equal to the CertificateStatus, false otherwise
+ */
+bool operator!=(ocspcertstatus_t &lhs, OCSPStatus &rhs) { return rhs != lhs; };
+
+/**
+ * @brief Compare a CertificateStatus with an OCSPStatus
+ *
+ * @param lhs The CertificateStatus to compare with
+ * @param rhs The OCSPStatus to compare with
+ * @return bool True if the CertificateStatus is equal to the OCSPStatus, false otherwise
+ */
+bool operator==(certstatus_t &lhs, OCSPStatus &rhs) { return rhs == lhs; };
+
+/**
+ * @brief Compare a CertificateStatus with an OCSPStatus
+ *
+ * @param lhs The CertificateStatus to compare with
+ * @param rhs The OCSPStatus to compare with
+ * @return bool True if the CertificateStatus is not equal to the OCSPStatus, false otherwise
+ */
+bool operator!=(certstatus_t &lhs, OCSPStatus &rhs) { return rhs != lhs; };
+
+CertificateStatus ParsedOCSPStatus::status() {
+    return {true, (PVACertStatus)(ocsp_status == OCSP_CERTSTATUS_GOOD ? VALID : UNKNOWN), ocsp_status, status_date, status_valid_until_date, revocation_date};
+}
 
 /**
  * @brief Retrieves the Online Certificate Status Protocol (OCSP) response from the given byte array.
@@ -84,10 +238,11 @@ ossl_ptr<OCSP_RESPONSE> CertStatusManager::getOCSPResponse(const uint8_t *ocsp_b
  * @param ocsp_bytes The input byte buffer pointer containing the OCSP responses data.
  * @param ocsp_bytes_len the length of the byte buffer
  * @param trusted_store_ptr The trusted store to be used to validate the OCSP response
+ * @param cert_id the certificate ID that the status is referring to
  */
-PVXS_API ParsedOCSPStatus CertStatusManager::parse(const uint8_t *ocsp_bytes, const size_t ocsp_bytes_len, X509_STORE *trusted_store_ptr) {
-    auto ocsp_response = getOCSPResponse(ocsp_bytes, ocsp_bytes_len);
-    return parse(ocsp_response, trusted_store_ptr);
+ParsedOCSPStatus CertStatusManager::parse(const uint8_t *ocsp_bytes, const size_t ocsp_bytes_len, X509_STORE *trusted_store_ptr, const std::string& cert_id) {
+    const auto ocsp_response = getOCSPResponse(ocsp_bytes, ocsp_bytes_len);
+    return parse(ocsp_response, trusted_store_ptr, cert_id);
 }
 
 /**
@@ -100,10 +255,69 @@ PVXS_API ParsedOCSPStatus CertStatusManager::parse(const uint8_t *ocsp_bytes, co
  *
  * @param ocsp_bytes The input byte array containing the OCSP responses data.
  * @param trusted_store_ptr The trusted store to be used to validate the OCSP response
+ * @param cert_id the certificate ID that the status is referring to
  */
-PVXS_API ParsedOCSPStatus CertStatusManager::parse(const shared_array<const uint8_t> &ocsp_bytes, X509_STORE *trusted_store_ptr) {
+ParsedOCSPStatus CertStatusManager::parse(const shared_array<const uint8_t> &ocsp_bytes, X509_STORE *trusted_store_ptr, const std::string& cert_id) {
     const auto ocsp_response = getOCSPResponse(ocsp_bytes);
-    return parse(ocsp_response, trusted_store_ptr);
+    return parse(ocsp_response, trusted_store_ptr, cert_id);
+}
+
+/**
+ * @brief Convert ASN1_INTEGER to a 64-bit unsigned integer
+ * @param asn1_number
+ * @return
+ */
+uint64_t ASN1ToUint64(const ASN1_INTEGER* asn1_number) {
+    if (!asn1_number)                           throw OCSPParseException("ASN1 integer is null");
+
+    const ossl_ptr<BIGNUM> bn(ASN1_INTEGER_to_BN(asn1_number, nullptr), false);
+    if (!bn)                                    throw OCSPParseException("Failed to convert ASN1 integer to BIGNUM");
+    if (BN_is_negative(bn.get()))            throw OCSPParseException("ASN1 integer is negative");
+    if (BN_num_bits(bn.get()) > 64)           throw OCSPParseException("ASN1 integer overflow: value exceeds uint64_t");
+
+    unsigned char out[8]{};
+    const int ret = BN_bn2binpad(bn.get(), out, (int)sizeof(out));
+    if (ret != static_cast<int>(sizeof(out)))   throw OCSPParseException("Failed to convert BIGNUM to 8-byte array");
+
+    uint64_t uint64_number = 0;
+    for (const auto c : out) {
+        uint64_number = (uint64_number << 8) | static_cast<uint64_t>(c);
+    }
+    return uint64_number;
+}
+
+namespace {
+
+std::string certIdFromOCSPCertId(const OCSP_CERTID* cert_id_ptr)
+{
+    if (!cert_id_ptr)                 throw OCSPParseException("No OCSP_CERTID found in OCSP response");
+
+    ASN1_OCTET_STRING *issuer_key_hash = nullptr;
+    ASN1_INTEGER *serial = nullptr;
+    if (OCSP_id_get0_info(nullptr, nullptr, &issuer_key_hash, &serial, const_cast<OCSP_CERTID*>(cert_id_ptr)) != 1
+            || !issuer_key_hash || !serial) {
+        throw OCSPParseException("Failed to extract issuer key hash and serial from OCSP_CERTID");
+    }
+
+    std::stringstream issuer;
+    for (int i = 0; i < issuer_key_hash->length && issuer.tellp() < 8; i++) {
+        issuer << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(issuer_key_hash->data[i]);
+    }
+    if (issuer.tellp() != 8)       throw OCSPParseException("Issuer key hash too short to construct cert_id");
+
+    const ossl_ptr<BIGNUM> bn(ASN1_INTEGER_to_BN(serial, nullptr), false);
+    if (!bn)                          throw OCSPParseException("Failed to convert OCSP serial number to BIGNUM");
+    if (BN_is_negative(bn.get()))  throw OCSPParseException("OCSP serial number is negative");
+    if (BN_num_bits(bn.get()) > 64) throw OCSPParseException("OCSP serial number overflow: value exceeds uint64_t");
+
+    char* decimal_str = BN_bn2dec(bn.get());
+    if (!decimal_str)                 throw OCSPParseException("Failed to convert OCSP serial number to string");
+    const std::string serial_s(decimal_str);
+    OPENSSL_free(decimal_str);
+
+    return CertStatusManager::getCertIdFromSerialAndIssuer(issuer.str(), serial_s);
+}
+
 }
 
 /**
@@ -117,44 +331,56 @@ PVXS_API ParsedOCSPStatus CertStatusManager::parse(const shared_array<const uint
  * @param ocsp_response An OCSP response object.
  * @param trusted_store_ptr The trusted store to be used to validate the OCSP response
  */
-PVXS_API ParsedOCSPStatus CertStatusManager::parse(const ossl_ptr<OCSP_RESPONSE> &ocsp_response, X509_STORE *trusted_store_ptr) {
+ParsedOCSPStatus CertStatusManager::parse(const ossl_ptr<OCSP_RESPONSE> &ocsp_response, X509_STORE *trusted_store_ptr, const std::string& cert_id) {
+    if (cert_id.empty())                                    throw OCSPParseException("Expected cert_id is empty");
+
     // Get the response status
     const int response_status = OCSP_response_status(ocsp_response.get());
-    if (response_status != OCSP_RESPONSE_STATUS_SUCCESSFUL) {
-        throw OCSPParseException("OCSP response status not successful");
-    }
+    if (response_status != OCSP_RESPONSE_STATUS_SUCCESSFUL) throw OCSPParseException("OCSP response status not successful");
 
     // Extract the basic OCSP response
     const ossl_ptr<OCSP_BASICRESP> basic_response(OCSP_response_get1_basic(ocsp_response.get()), false);
-    if (!basic_response) {
-        throw OCSPParseException("Failed to get basic OCSP response");
-    }
+    if (!basic_response)                                    throw OCSPParseException("Failed to get basic OCSP response");
 
     // Verify OCSP response is signed by provided trusted root certificate authority
     verifyOCSPResponse(basic_response, trusted_store_ptr);
 
     OCSP_SINGLERESP *single_response = OCSP_resp_get0(basic_response.get(), 0);
-    if (!single_response) {
-        throw OCSPParseException("No entries found in OCSP response");
-    }
+    if (!single_response)                                   throw OCSPParseException("No entries found in OCSP response");
 
     ASN1_GENERALIZEDTIME *this_update = nullptr, *next_update = nullptr, *revocation_time = nullptr;
     int reason = 0;
 
-    // Get the OCSP_CERTID from the single response and extract the serial number
-    const OCSP_CERTID *cert_id = OCSP_SINGLERESP_get0_id(single_response);
+    const OCSP_CERTID *ocsp_cert_id = OCSP_SINGLERESP_get0_id(single_response);
+    const auto observed_cert_id = certIdFromOCSPCertId(ocsp_cert_id);
+    if (observed_cert_id != cert_id)                        throw OCSPParseException(SB() << "OCSP response cert_id mismatch. Expected: " << cert_id << ", Got: " << observed_cert_id);
     ASN1_INTEGER *serial = nullptr;
-    OCSP_id_get0_info(nullptr, nullptr, nullptr, &serial, const_cast<OCSP_CERTID *>(cert_id));
+    if (OCSP_id_get0_info(nullptr, nullptr, nullptr, &serial, const_cast<OCSP_CERTID *>(ocsp_cert_id)) != 1 || !serial) {
+        throw OCSPParseException("Failed to extract serial from OCSP_CERTID");
+    }
 
     const auto ocsp_status = static_cast<ocspcertstatus_t>(OCSP_single_get0_status(single_response, &reason, &revocation_time, &this_update, &next_update));
-    // Check status validity: less than 5 seconds old
-    OCSP_check_validity(this_update, next_update, 0, 5);
+    constexpr int allowed_skew = 300;                      // Allow a 5-minute clock skew
+    const int fallback_max_age = next_update ? -1 : 1800;  // Only enforce a status validity age cap of 30 minutes if `next_update` is missing
+
+    // Check status validity: tolerate skew of 5 minutes and a maximum age provided in next_update or fall back to a max of 30 minutes
+    if (OCSP_check_validity(this_update, next_update, allowed_skew, fallback_max_age) != 1) {
+        const unsigned long err = ERR_get_error();
+        if(err) {
+            char err_buf[256];
+            ERR_error_string_n(err, err_buf, sizeof(err_buf));
+            throw OCSPParseException(SB() << "OCSP_check_validity failed: " << err_buf);
+        }
+        const auto this_s = this_update ? CertDate(this_update).s : std::string("<null>");
+        const auto next_s = next_update ? CertDate(next_update).s : std::string("<null>");
+        throw OCSPParseException(SB() << "OCSP_check_validity failed. thisUpdate=" << this_s << " nextUpdate=" << next_s);
+    }
 
     if (ocsp_status == OCSP_CERTSTATUS_REVOKED && !revocation_time) {
         throw OCSPParseException("Revocation time not set when status is REVOKED");
     }
 
-    return {CertStatusFactory::ASN1ToUint64(serial), OCSPCertStatus(ocsp_status), this_update, next_update, revocation_time};
+    return {ASN1ToUint64(serial), OCSPCertStatus(ocsp_status), this_update, next_update, revocation_time};
 }
 
 /**
@@ -171,13 +397,15 @@ PVXS_API ParsedOCSPStatus CertStatusManager::parse(const ossl_ptr<OCSP_RESPONSE>
  * subscriptions in the same context too.  The reference needs to remain valid until the subscription
  * is cancelled.
  *
- * @param client_config the client config to use to make the client connection for the subscription
+ * @param client the client to use for the client connection for the subscription
  * @param trusted_store_ptr the trusted store to verify the status response against
  * @param status_pv the status PV to subscribe to
  * @param callback the callback to call
+ * @param cert_id the certificate ID that the we are subscribing to
  * @return a manager of this subscription that you can use to `unsubscribe()`, `waitForValue()` and `getValue()`
  */
-cert_status_ptr<CertStatusManager> CertStatusManager::subscribe(const client::Context &client, X509_STORE *trusted_store_ptr, const std::string &status_pv, StatusCallback &&callback) {
+cert_status_ptr<CertStatusManager> CertStatusManager::subscribe(const client::Context &client, X509_STORE *trusted_store_ptr, const std::string &status_pv,
+                                                                const std::string& cert_id, StatusCallback &&callback) {
     // Construct the URI
     log_debug_printf(status, "Starting Status Subscription: %s\n", status_pv.c_str());
 
@@ -193,19 +421,19 @@ cert_status_ptr<CertStatusManager> CertStatusManager::subscribe(const client::Co
         auto sub = cert_status_manager->client_.monitor(status_pv)
                        .maskConnected(true)
                        .maskDisconnected(true)
-                       .event([trusted_store_ptr, weak_cert_status_manager](client::Subscription &s) {
+                       .event([trusted_store_ptr, weak_cert_status_manager, cert_id](client::Subscription &s) {
                            try {
                                const auto csm = weak_cert_status_manager.lock();
                                if (!csm) return;
                                const auto update = s.pop();
                                if (update) {
                                    try {
-                                       auto status_update{PVACertificateStatus(update, trusted_store_ptr)};
-                                       log_debug_printf(status, "Status subscription %s received: %s\n", s.name().c_str(), status_update.status.s.c_str());
-                                       csm->status_ = std::make_shared<CertificateStatus>(status_update);
-                                       log_debug_printf(status, "Calling (*csm->callback_ref)(status_update)%s\n", "");
-                                       (*csm->callback_ref)(status_update);
-                                       log_debug_printf(status, "Called (*csm->callback_ref)(status_update)%s\n", "");
+                                        auto status_update{PVACertificateStatus(update, trusted_store_ptr, cert_id)};
+                                        log_debug_printf(status, "Status subscription %s received: %s\n", s.name().c_str(), status_update.status.s.c_str());
+                                        csm->status_ = std::make_shared<CertificateStatus>(status_update);
+                                        log_debug_printf(status, "Calling (*csm->callback_ref)(status_update)%s\n", "");
+                                        (*csm->callback_ref)(status_update);
+                                        log_debug_printf(status, "Called (*csm->callback_ref)(status_update)%s\n", "");
                                    } catch (OCSPParseException &e) {
                                        log_debug_printf(status, "Ignoring invalid %s status update: %s\n", s.name().c_str(), e.what());
                                    } catch (std::invalid_argument &e) {
@@ -368,11 +596,21 @@ std::string CertStatusManager::getSerialFromCert(const X509* cert_ptr) {
     return result;
 }
 
-std::string CertStatusManager::getCertIdFromCert(const X509 *cert) {
-    const std::string issuer_id = getIssuerIdFromCert(cert);
-    const std::string serial = getSerialFromCert(cert);
+std::string CertStatusManager::getCertIdFromCert(const X509 *cert_ptr) {
+    const std::string issuer_id = getIssuerIdFromCert(cert_ptr);
+    const std::string serial = getSerialFromCert(cert_ptr);
+    return getCertIdFromSerialAndIssuer(issuer_id, serial);
+}
 
+std::string CertStatusManager::getCertIdFromSerialAndIssuer(const std::string &issuer_id, const std::string &serial) {
     return SB() << issuer_id << ":" << std::setw(20) << std::setfill('0') << serial;
+}
+
+std::string CertStatusManager::getCertIdFromStatusPv(const std::string &status_pv) {
+    if (status_pv.empty()) throw CertStatusNoExtensionException("status_pv cannot be empty.");
+    const size_t len = status_pv.length();
+    if (len < 30) throw CertStatusNoExtensionException("status_pv must be at least 30 characters long.");
+    return status_pv.substr(len - 29); // {prefix}{issuer_8}:{serial_20}
 }
 
 
@@ -480,5 +718,6 @@ time_t CertStatusManager::getExpirationDateFromCert(const X509 *cert) {
     // Convert ASN1_TIME to time_t using the CertDate utility
     return CertDate::asn1TimeToTimeT(expiration);
 }
+
 }  // namespace certs
 }  // namespace pvxs

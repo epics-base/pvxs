@@ -25,11 +25,9 @@ Dependencies
 
 * EPICS Base https://epics-controls.org/resources-and-support/base/ >=3.15.1
 * libevent http://libevent.org/ >=2.0.1  (Optionally bundled)
-* CLI11 https://github.com/CLIUtils/CLI11 >=2.4.2 (optionally bundled)
 
 **Optional**
 * CMake <https://cmake.org/ >=3.1, only needed when building bundled libevent
 
 **Optional, only when building Secure PV Access**
 * openssl http://www.openssl.org/ >=3.2.1
-* sqlite https://www.sqlite.org/ >=3.48.0

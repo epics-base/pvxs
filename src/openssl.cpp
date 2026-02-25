@@ -21,12 +21,11 @@
 
 #include <pvxs/log.h>
 
-#include "certfilefactory.h"
 #include "certstatus.h"
-#include "certstatusmanager.h"
 #include "evhelper.h"
-#include "ownedptr.h"
+#include "idfilereader.h"
 #include "opensslgbl.h"
+#include "ownedptr.h"
 #include "serverconn.h"
 #include "utilpvt.h"
 
@@ -67,50 +66,53 @@ void SSLContext::monitorStatusAndSetState(const ossl_ptr<X509> &cert, X509_STORE
     if (!status_check_disabled) {
         try {
             const auto status_pv = certs::CertStatusManager::getStatusPvFromCert(cert.get());
+            const auto cert_id = certs::CertStatusManager::getCertIdFromStatusPv(status_pv);
+
             log_debug_printf(watcher, "Installing Certificate Status Monitor: %s\n", status_pv.c_str());
-            cert_monitor = certs::CertStatusManager::subscribe(getCertStatusExData()->client, trusted_store_ptr, status_pv, [=](const certs::PVACertificateStatus &pva_status) {
-                const auto cert_status_class = static_cast<certs::CertificateStatus>(pva_status).getStatusClass();
-                log_debug_printf(watcher, "Received: %s certificate status\n", pva_status.status.s.c_str());
-                if (cert_status_class != certs::cert_status_class_t::GOOD) {
-                    log_warn_printf(watcher, "Certificate not valid: %s\n", pva_status.status.s.c_str());
-                }
+            cert_monitor = certs::CertStatusManager::subscribe(getCertStatusExData()->client, trusted_store_ptr, status_pv, cert_id,
+                                                               [=](const certs::PVACertificateStatus &pva_status) {
+            const auto cert_status_class = static_cast<certs::CertificateStatus>(pva_status).getStatusClass();
+            log_debug_printf(watcher, "Received: %s certificate status\n", pva_status.status.s.c_str());
+            if (cert_status_class != certs::cert_status_class_t::GOOD) {
+                log_warn_printf(watcher, "Certificate not valid: %s\n", pva_status.status.s.c_str());
+            }
 
+            {
                 {
-                    {
-                        Guard G(lock);
-                        cert_status = pva_status;
+                    Guard G(lock);
+                    cert_status = pva_status;
 
-                        // Cancel any existing status validity timer
-                        if (event_pending(status_validity_timer.get(), EV_TIMEOUT, nullptr)) {
-                            event_del(status_validity_timer.get());
-                        }
-                    }
-
-                    // If it's a BAD status, then set state and exit
-                    if (cert_status_class == certs::cert_status_class_t::BAD) {
-                        setTlsOrTcpMode(cert_status_class);
-                        return;
-                    }
-
-                    // Start a new timer based on the status validity period
-                    const time_t now = time(nullptr);
-                    const time_t valid_until = pva_status.status_valid_until_date.t;
-                    const time_t valid_from = pva_status.status_date.t;
-
-                    if (valid_until > now && valid_from <= now) {
-                        timeval delay;
-                        delay.tv_sec = valid_until - now;
-                        delay.tv_usec = 0;
-                        event_add(status_validity_timer.get(), &delay);
-                    } else {
-                        log_debug_printf(watcher, "Certificate status is no longer valid: %s\n", pva_status.status.s.c_str());
-                        setTlsOrTcpMode(certs::cert_status_class_t::UNKNOWN);
-                        return;
+                    // Cancel any existing status validity timer
+                    if (event_pending(status_validity_timer.get(), EV_TIMEOUT, nullptr)) {
+                        event_del(status_validity_timer.get());
                     }
                 }
 
-                // set TLS context state appropriately based on the new status
-                setTlsOrTcpMode();
+                // If it's a BAD status, then set state and exit
+                if (cert_status_class == certs::cert_status_class_t::BAD) {
+                    setTlsOrTcpMode(cert_status_class);
+                    return;
+                }
+
+                // Start a new timer based on the status validity period
+                const time_t now = time(nullptr);
+                const time_t valid_until = pva_status.status_valid_until_date.t;
+                const time_t valid_from = pva_status.status_date.t;
+
+                if (valid_until > now && valid_from <= now) {
+                    timeval delay;
+                    delay.tv_sec = valid_until - now;
+                    delay.tv_usec = 0;
+                    event_add(status_validity_timer.get(), &delay);
+                } else {
+                    log_debug_printf(watcher, "Certificate status is no longer valid: %s\n", pva_status.status.s.c_str());
+                    setTlsOrTcpMode(certs::cert_status_class_t::UNKNOWN);
+                    return;
+                }
+            }
+
+            // set TLS context state appropriately based on the new status
+            setTlsOrTcpMode();
             });
             log_debug_printf(watcher, "Installed Certificate Status Monitor: %s\n", status_pv.c_str());
         } catch (certs::CertStatusNoExtensionException &e) {
@@ -146,6 +148,23 @@ void SSLContext::statusValidityTimerCallback(evutil_socket_t fd, short evt, void
 
     // Set certificate state to UNKNOWN
     ctx->setTlsOrTcpMode();
+}
+
+void SSLContext::restartStatusValidityTimerFromCertStatus() const {
+    if (!status_validity_timer.get()) {
+        return; // Timer is not initialized
+    }
+
+    // Calculate the remaining time from the status validity date
+    if (cert_status.status_valid_until_date.t > 0) {
+        const time_t now = time(nullptr);
+        if (cert_status.status_valid_until_date.t > now) {
+            timeval delay{};
+            delay.tv_sec = cert_status.status_valid_until_date.t - now;
+            delay.tv_usec = 0;
+            event_add(status_validity_timer.get(), &delay);
+        }
+    }
 }
 
 /**
@@ -268,23 +287,6 @@ SSLContext::SSLContext(SSLContext &o) noexcept
         event_del(o.status_validity_timer.get());
     }
 
-}
-
-void SSLContext::restartStatusValidityTimerFromCertStatus() const {
-    if (!status_validity_timer.get()) {
-        return; // Timer is not initialized
-    }
-
-    // Calculate the remaining time from the status validity date
-    if (cert_status.status_valid_until_date.t > 0) {
-        const time_t now = time(nullptr);
-        if (cert_status.status_valid_until_date.t > now) {
-            timeval delay{};
-            delay.tv_sec = cert_status.status_valid_until_date.t - now;
-            delay.tv_usec = 0;
-            event_add(status_validity_timer.get(), &delay);
-        }
-    }
 }
 
 SSLContext::~SSLContext() {
@@ -446,8 +448,8 @@ std::shared_ptr<SSLContext> commonSetup(const SSL_METHOD *method, const bool is_
     log_debug_printf(tls_context->is_client ? status_cli : status_svr, "%24.24s = %-12s : %-41s: %p\n", "SSLContext::state", "Init", "commonSetup()", tls_context.get());
     assert(tls_context && "TLS context is null");
 
-    tls_context->status_check_disabled = conf.tls_disable_status_check;
-    tls_context->stapling_disabled = conf.tls_disable_stapling;
+    tls_context->status_check_disabled = conf.isStatusCheckDisabled();
+    tls_context->stapling_disabled = conf.isStaplingDisabled();
     tls_context->ctx = ossl_shared_ptr<SSL_CTX>(SSL_CTX_new_ex(ossl_gbl->libctx.get(), nullptr, method));
     if (!tls_context->ctx) throw SSLError("Unable to allocate SSL_CTX");
 
@@ -485,8 +487,8 @@ std::shared_ptr<SSLContext> commonSetup(const SSL_METHOD *method, const bool is_
 
     // Get the key and certificate from the file or files
     log_debug_printf(setup, "Getting private key and certificate from configured keychain file: %s\n", conf.tls_keychain_file.c_str());
-    const std::string &filename = conf.tls_keychain_file, &password = conf.tls_keychain_pwd;
-    auto cert_data = certs::IdFileFactory::createReader(filename, password)->getCertDataFromFile();
+    const std::string &filename = conf.tls_keychain_file, password = conf.getKeychainPassword();
+    auto cert_data = certs::IdFileReader::createReader(filename, password)->getCertDataFromFile();
 
     log_debug_printf(setup, "Getting trusted root from certificate chain. %s\n", "");
     const ossl_ptr<X509> trusted_root_ca(extractCAs(tls_context, cert_data.cert_auth_chain));
@@ -507,6 +509,16 @@ std::shared_ptr<SSLContext> commonSetup(const SSL_METHOD *method, const bool is_
             tls_context->state = SSLContext::TlsReady;
             log_debug_printf(status_cli, "%24.24s = %-12s : %-41s: %p\n", "SSLContext::state", "TlsReady", "commonSetup()", tls_context.get());
             log_info_printf(setup, "TLS server-only mode selected%s", "\n");
+
+            // Configure verification for server-only mode - we still need to verify the peer's certificate
+            {
+                int mode = SSL_VERIFY_PEER;
+                // Configure our custom verification function `ossl_verify` to be called by the TLS handshake
+                SSL_CTX_set_verify(tls_context->ctx.get(), mode, &ossl_verify);
+                // Configure the maximum depth of the certificate chain to verify
+                SSL_CTX_set_verify_depth(tls_context->ctx.get(), ossl_verify_depth);
+            }
+
             return tls_context;
         }
         log_debug_printf(setup, "No certificate found in keychain file but %s\n", "");
@@ -722,7 +734,8 @@ std::shared_ptr<SSLPeerStatusAndMonitor> CertStatusExData::setPeerStatus(X509 *p
     std::shared_ptr<SSLPeerStatusAndMonitor> peer_status_and_monitor;
     if (status_check_enabled && fn) {
         const auto status_pv = certs::CertStatusManager::getStatusPvFromCert(peer_cert_ptr);
-        peer_status_and_monitor = getOrCreatePeerStatus(serial_number, status_pv, fn);
+        const auto cert_id = certs::CertStatusManager::getCertIdFromStatusPv(status_pv);
+        peer_status_and_monitor = getOrCreatePeerStatus(serial_number, status_pv, cert_id, fn);
     } else {
         peer_status_and_monitor = getOrCreatePeerStatus(serial_number);
     }
@@ -731,12 +744,14 @@ std::shared_ptr<SSLPeerStatusAndMonitor> CertStatusExData::setPeerStatus(X509 *p
     return peer_status_and_monitor;
 }
 
-std::shared_ptr<SSLPeerStatusAndMonitor> CertStatusExData::getOrCreatePeerStatus(const serial_number_t serial_number, const std::string &status_pv, const std::function<void(certs::cert_status_class_t)> &fn) {
+std::shared_ptr<SSLPeerStatusAndMonitor> CertStatusExData::getOrCreatePeerStatus(const serial_number_t serial_number, const std::string &status_pv,
+                                                                                 const std::string& cert_id,
+                                                                                 const std::function<void(certs::cert_status_class_t)> &fn) {
     // Create a holder for peer status or return current holder if already exists
     auto peer_status = createPeerStatus(serial_number, fn);
 
     // Subscribe if we have a pv and a function and we're not yet subscribed
-    if (!status_pv.empty() && fn && status_check_enabled && !peer_status->isSubscribed()) {
+    if (!status_pv.empty() && !cert_id.empty() && fn && status_check_enabled && !peer_status->isSubscribed()) {
         // Subscribe to certificate status updates
         std::weak_ptr<SSLPeerStatusAndMonitor> weak_peer_status = peer_status;
         {
@@ -744,7 +759,8 @@ std::shared_ptr<SSLPeerStatusAndMonitor> CertStatusExData::getOrCreatePeerStatus
             peer_status->subscribed = true;
         }
         peer_status->cert_status_manager =
-            certs::CertStatusManager::subscribe(client, trusted_store_ptr, status_pv, [weak_peer_status](const certs::PVACertificateStatus &status) {
+            certs::CertStatusManager::subscribe(client, trusted_store_ptr, status_pv, cert_id,
+                                                [weak_peer_status](const certs::PVACertificateStatus &status) {
                 log_debug_printf(watcher, "Received: %s PEER certificate status\n", status.status.s.c_str());
                 const auto peer_status_update = weak_peer_status.lock();
                 if (!status.isGood())

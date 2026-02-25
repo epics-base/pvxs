@@ -20,6 +20,8 @@
 #include <pvxs/log.h>
 #include <pvxs/nt.h>
 #include <pvxs/source.h>
+#include <pvxs/credentials.h>
+
 #include <dbNotify.h>
 
 #include "dbentry.h"
@@ -28,7 +30,6 @@
 #include "iocsource.h"
 #include "singlesource.h"
 #include "singlesrcsubscriptionctx.h"
-#include "credentials.h"
 #include "securitylogger.h"
 #include "securityclient.h"
 #include "typeutils.h"

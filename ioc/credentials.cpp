@@ -7,9 +7,9 @@
  *
  */
 
-#include <utilpvt.h>
+#include <pvxs/credentials.h>
 
-#include "credentials.h"
+#include <utilpvt.h>
 
 namespace pvxs {
 namespace ioc {

@@ -13,10 +13,10 @@
 #include <dbChannel.h>
 #include <special.h>
 
+#include <pvxs/credentials.h>
 #include <pvxs/source.h>
 #include <pvxs/log.h>
 
-#include "credentials.h"
 #include "dberrormessage.h"
 #include "dblocker.h"
 #include "dbmanylocker.h"

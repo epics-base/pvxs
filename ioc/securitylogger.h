@@ -14,7 +14,8 @@
 #include <asLib.h>
 #include <dbChannel.h>
 
-#include "credentials.h"
+#include <pvxs/credentials.h>
+
 #include "securityclient.h"
 
 namespace pvxs {

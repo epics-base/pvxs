@@ -9,7 +9,7 @@
 #include <pvxs/log.h>
 
 #ifdef PVXS_ENABLE_OPENSSL
-#include "certstatusmanager.h"
+#include "certstatus.h"
 #endif
 
 #include "clientimpl.h"
@@ -62,7 +62,8 @@ int clientOCSPCallback(SSL* ctx, ossl::SSLContext*) {
 
         // Replace cached peer cert with received OCSP response.  Throws if parsing error and catch sets invalid status
         try {
-            auto parsed_status = certs::CertStatusManager::parse(ocsp_response_ptr, (size_t)len, ex_data->trusted_store_ptr);
+            const auto cert_id = certs::CertStatusManager::getCertIdFromCert(peer_cert);
+            auto parsed_status = certs::CertStatusManager::parse(ocsp_response_ptr, static_cast<size_t>(len), ex_data->trusted_store_ptr, cert_id);
             const auto status = parsed_status.status();
 
             ex_data->setPeerStatus(peer_cert, status);
