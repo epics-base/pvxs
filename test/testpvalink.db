@@ -52,7 +52,12 @@ record(stringout, "src:str") {
 
 record(longout, "testToFromString:src") {
     field(VAL , "42")
-    field(OUT , {pva:"testToFromString:str1"})
+    field(OUT , {pva:{
+        "pv":"testToFromString:str1",
+        "proc":null,
+        "sevr":null,
+        "local":null,
+    }})
 }
 record(stringin, "testToFromString:str1") {
 }
