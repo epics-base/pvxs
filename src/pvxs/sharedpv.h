@@ -74,8 +74,8 @@ struct PVXS_API SharedPV
     /** Update the internal data value, and dispatch subscription updates to any clients.
      *
      * The value given as the argument must be created from the same `TypeDef`
-     * instance as the value given to `SharedPV::open()`. It is recommended that
-     * the same value (or its clone) is reused.
+     * instance as the value given to open(). It is recommended that
+     * the same type is reused using by calling Value::cloneEmpty().
      */
     void post(const Value& val);
 
