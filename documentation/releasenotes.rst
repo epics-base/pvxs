@@ -3,6 +3,11 @@
 Release Notes
 =============
 
+1.5.2 (UNRELEASED)
+------------------
+
+* ioc: promote DBE_ALARM only to also fetch value.
+
 1.5.1 (Feb 2026)
 ----------------
 

@@ -105,7 +105,7 @@ int main(int argc, char* argv[])
         // words, doing
         //     auto val = nt::NTScalar{TypeCode::UInt32}.create();
         // won't work because it creates a different NTScalar instance. Either
-        // keep reusing the same Value, clone the existing Value, or keep aroud
+        // keep reusing the same Value, clone the existing Value, or keep around
         // the type instance and create values from there.
         auto val = initial.cloneEmpty();
 
