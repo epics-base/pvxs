@@ -208,6 +208,10 @@ void SSLContext::setTlsOrTcpMode(const certs::cert_status_class_t cert_status_cl
                         state = TlsReady;
                         log_debug_printf(is_client ? status_cli : status_svr, "%24.24s = %-12s : %-41s: %p\n", "SSLContext::state", "TlsReady", "SSLContext::setTlsOrTcpMode()", this);
                     }
+                    // Notify connections that TLS is now ready
+                    if (tls_ready_event.get()) {
+                        event_active(tls_ready_event.get(), EV_TIMEOUT, 0);
+                    }
                     break;
                 case TlsReady:
                 default:
@@ -250,6 +254,7 @@ void SSLContext::setTlsOrTcpMode() {
 
 SSLContext::SSLContext(const impl::evbase loop, const bool is_client) : loop(loop), is_client(is_client)
     , status_validity_timer(event_new(loop.base, -1, EV_TIMEOUT, &statusValidityTimerCallback, this))
+    , tls_ready_event(event_new(loop.base, -1, EV_TIMEOUT, &tlsReadyEventCallback, this))
 {}
 
 SSLContext::SSLContext(const SSLContext &o)
@@ -262,6 +267,8 @@ SSLContext::SSLContext(const SSLContext &o)
     , cert_monitor(o.cert_monitor)  // Copy the monitor
     , cert_status(o.cert_status)    // Copy the status
     , status_validity_timer(event_new(loop.base, -1, EV_TIMEOUT, &statusValidityTimerCallback, this))  // Create a new timer for this instance
+    , on_tls_ready_(o.on_tls_ready_)  // Copy the callback
+    , tls_ready_event(event_new(loop.base, -1, EV_TIMEOUT, &tlsReadyEventCallback, this))
 {
     // If the original timer was pending, restart ours with the remaining time
     if (o.status_validity_timer.get() && event_pending(o.status_validity_timer.get(), EV_TIMEOUT, nullptr)) {
@@ -279,6 +286,8 @@ SSLContext::SSLContext(SSLContext &o) noexcept
     , cert_monitor(std::move(o.cert_monitor))  // Move the monitor
     , cert_status(std::move(o.cert_status))    // Move the status
     , status_validity_timer(event_new(loop.base, -1, EV_TIMEOUT, &statusValidityTimerCallback, this))  // Create new timer
+    , on_tls_ready_(std::move(o.on_tls_ready_))  // Move the callback
+    , tls_ready_event(event_new(loop.base, -1, EV_TIMEOUT, &tlsReadyEventCallback, this))
 {
     // If the original timer was pending, restart ours and cancel the original
     if (o.status_validity_timer.get() && event_pending(o.status_validity_timer.get(), EV_TIMEOUT, nullptr)) {
@@ -290,8 +299,32 @@ SSLContext::SSLContext(SSLContext &o) noexcept
 }
 
 SSLContext::~SSLContext() {
+    if (tls_ready_event.get()) {
+        event_del(tls_ready_event.get());
+    }
     if (status_validity_timer.get()) {
         event_del(status_validity_timer.get());
+    }
+}
+
+void SSLContext::setOnTlsReady(std::function<void()> fn) {
+    Guard G(lock);
+    on_tls_ready_ = std::move(fn);
+}
+
+void SSLContext::tlsReadyEventCallback(evutil_socket_t, short, void* raw) {
+    auto* ctx = static_cast<SSLContext*>(raw);
+    std::function<void()> fn;
+    {
+        Guard G(ctx->lock);
+        fn = ctx->on_tls_ready_;
+    }
+    if (fn) {
+        try {
+            fn();
+        } catch (std::exception& e) {
+            log_err_printf(watcher, "Unhandled error in TLS ready callback: %s\n", e.what());
+        }
     }
 }
 

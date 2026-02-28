@@ -482,6 +482,7 @@ struct ContextImpl : public std::enable_shared_from_this<ContextImpl>
     void reloadTls();
     void reloadTlsFromConfig(const Config& new_config);
     void certExpirationHandler();
+    void onTlsReady();
 #endif
 };
 

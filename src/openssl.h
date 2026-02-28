@@ -428,6 +428,15 @@ struct SSLContext {
     static std::shared_ptr<SSLPeerStatusAndMonitor>  subscribeToPeerCertStatus(const SSL* ssl, const std::function<void(certs::cert_status_class_t)> &fn);
     const certs::PVACertificateStatus& get_cert_status() { return cert_status; }
 
+    /**
+     * @brief Set a callback to be invoked (on the event loop thread) when
+     *        the context transitions to TlsReady.
+     *
+     * The callback is dispatched via an event on the SSLContext's event loop,
+     * so it is safe to call from any thread.
+     */
+    void setOnTlsReady(std::function<void()> fn);
+
    private:
     // The entity certificate status monitor
     certs::cert_status_ptr<certs::CertStatusManager> cert_monitor;
@@ -438,6 +447,11 @@ struct SSLContext {
 
     static void statusValidityTimerCallback(evutil_socket_t fd, short evt, void* raw);
     void restartStatusValidityTimerFromCertStatus() const;
+
+    // Callback invoked on the event loop thread when state transitions to TlsReady
+    std::function<void()> on_tls_ready_;
+    evevent tls_ready_event;
+    static void tlsReadyEventCallback(evutil_socket_t fd, short evt, void* raw);
 };
 
 PVXS_API void configureServerOCSPCallback(void* server_ptr, SSL* ssl);

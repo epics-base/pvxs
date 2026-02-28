@@ -251,8 +251,17 @@ void Connection::createChannels()
  */
 void Connection::proceedWithCreatingChannels()
 {
-    if(!ready)
+    if(!ready) {
+#ifdef PVXS_ENABLE_OPENSSL
+        // Re-evaluate readiness: the context's TLS state may have
+        // changed since handle_CONNECTION_VALIDATED() first set ready.
+        if(isTLS && state >= ConnBase::Validated && context->isTlsReady()) {
+            ready = true;
+            log_debug_printf(status_cli, "%24.24s = %-12s : %-41s: %s\n", "Connection::ready", "true", "proceedWithCreatingChannels() re-eval", peerName.c_str());
+        } else
+#endif
         return; // defer until CONNECTION_VALIDATED
+    }
 
     (void)evbuffer_drain(txBody.get(), evbuffer_get_length(txBody.get()));
 
