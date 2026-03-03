@@ -246,7 +246,8 @@ struct Server::Pvt
     evbase acceptor_loop;
 
     std::list<std::unique_ptr<UDPListener> > listeners;
-    std::vector<SockEndpoint> beaconDest;
+    // destination address, and whether last sendto() succeeded
+    std::vector<std::pair<SockEndpoint, bool>> beaconDest;
     std::vector<SockAddr> ignoreList;
 
     std::list<ServIface> interfaces;

@@ -100,6 +100,13 @@ int main(int argc, char* argv[])
     uint32_t count = 0u;
 
     while(!done.wait(delay)) {
+        // The value that will be given to post() must come from the same type
+        // _instance_ as the initial value used when calling open(). In other
+        // words, doing
+        //     auto val = nt::NTScalar{TypeCode::UInt32}.create();
+        // won't work because it creates a different NTScalar instance. Either
+        // keep reusing the same Value, clone the existing Value, or keep around
+        // the type instance and create values from there.
         auto val = initial.cloneEmpty();
 
         val["value"] = count++;

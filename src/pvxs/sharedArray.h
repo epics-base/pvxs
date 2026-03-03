@@ -143,13 +143,13 @@ public:
     {}
 
     // build around existing shared_ptr
-    sa_base(const std::shared_ptr<E>& a, size_t len)
+    sa_base(const std::shared_ptr<E>& a, size_t len) noexcept
         :_data(a),_count(len)
     {}
 
     // alias existing shared_ptr
     template<typename A>
-    sa_base(const std::shared_ptr<A>& a, E* b, size_t len)
+    sa_base(const std::shared_ptr<A>& a, E* b, size_t len) noexcept
         :_data(a, b),_count(len)
     {}
 
@@ -164,14 +164,14 @@ public:
     }
 
     //! Number of elements
-    inline size_t size() const { return _count; }
+    inline size_t size() const noexcept { return _count; }
     inline bool empty() const noexcept { return _count==0; }
 
     inline bool unique() const noexcept { return !_data || _data.use_count()<=1; }
 
     E* data() const noexcept { return _data.get(); }
 
-    const std::shared_ptr<E>& dataPtr() const { return _data; }
+    const std::shared_ptr<E>& dataPtr() const noexcept { return _data; }
 };
 
 //! Provide options when rendering with std::ostream.
@@ -333,7 +333,7 @@ public:
      *
      * Argument shared_ptr will likely be creating using that class's aliasing constructor.
      */
-    shared_array(const std::shared_ptr<E>& a, size_t len)
+    shared_array(const std::shared_ptr<E>& a, size_t len) noexcept
         :base_t(a, len)
     {}
 
@@ -358,7 +358,7 @@ public:
      * @endcode
      */
     template<typename A>
-    shared_array(const std::shared_ptr<A>& a, E* b, size_t len)
+    shared_array(const std::shared_ptr<A>& a, E* b, size_t len) noexcept
         :base_t(a, b, len)
     {}
 
@@ -407,7 +407,7 @@ private:
      * Unfortunately, many of the MSVC (<= VS 2010) STL methods assert() that iterators are never NULL.
      * So we fudge here by abusing 'this' so that our iterators are always !NULL.
      */
-    inline E* base_ptr() const {
+    inline E* base_ptr() const noexcept {
 #if defined(_MSC_VER) && _MSC_VER<=1600
         return this->_count ? this->_data.get() : (E*)(this-1);
 #else
@@ -656,14 +656,14 @@ public:
     {}
 
     //! build around existing shared_ptr and length
-    shared_array(const std::shared_ptr<E>& a, size_t len, ArrayType type)
+    shared_array(const std::shared_ptr<E>& a, size_t len, ArrayType type) noexcept
         :base_t(a, len)
         ,_type(type)
     {}
 
     //! alias existing shared_ptr and length
     template<typename A>
-    shared_array(const std::shared_ptr<A>& a, E* b, size_t len)
+    shared_array(const std::shared_ptr<A>& a, E* b, size_t len) noexcept
         :base_t(a, b, len)
         ,_type(detail::CaptureBase<A>::code)
     {}
@@ -690,7 +690,7 @@ public:
 
     size_t max_size() const noexcept{return (size_t)-1;}
 
-    inline ArrayType original_type() const { return _type; }
+    inline ArrayType original_type() const noexcept { return _type; }
 
     shared_array<typename std::add_const<E>::type>
     freeze() {

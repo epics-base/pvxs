@@ -502,9 +502,11 @@ Server::Pvt::Pvt(const Config &conf)
         }
 
         for(const auto& addr : effective.beaconDestinations) {
-            beaconDest.emplace_back(addr.c_str(), effective.udp_port);
+            beaconDest.emplace_back(std::piecewise_construct,
+                                    std::forward_as_tuple(addr.c_str(), effective.udp_port),
+                                    std::forward_as_tuple(true));
             log_debug_printf(serversetup, "Will send beacons to %s\n",
-                             std::string(SB()<<beaconDest.back()).c_str());
+                             std::string(SB()<<beaconDest.back().first).c_str());
         }
     });
 
@@ -787,7 +789,8 @@ void Server::Pvt::doBeacons(short evt)
 
     assert(M.good() && H.good());
 
-    for(const auto& dest : beaconDest) {
+    for(auto& dpair : beaconDest) {
+        const auto& dest = dpair.first;
         auto& sender = dest.addr.family()==AF_INET ? beaconSender4 : beaconSender6;
         sender.mcast_prep_sendto(dest);
 
@@ -796,18 +799,27 @@ void Server::Pvt::doBeacons(short evt)
         if(ntx<0) {
             int err = evutil_socket_geterror(sender.sock);
             auto lvl = Level::Warn;
-            if(err==EINTR || err==EPERM)
+            if(err==EINTR || !dpair.second) // downgrade repeated message
                 lvl = Level::Debug;
+            dpair.second = false;
             log_printf(serverio, lvl, "Beacon tx %s error (%d) %s\n",
                        (SB()<<dest).str().c_str(),
                        err, evutil_socket_error_to_string(err));
 
         } else if(unsigned(ntx)<pktlen) {
-            log_warn_printf(serverio, "Beacon truncated %u < %u",
+            auto lvl = Level::Warn;
+            if(!dpair.second) // downgrade repeated message
+                lvl = Level::Debug;
+            dpair.second = false;
+            log_printf(serverio, lvl, "Beacon truncated %u < %u",
                        unsigned(ntx), unsigned(pktlen));
 
         } else {
-            log_debug_printf(serverio, "Beacon tx to %s\n", std::string(SB()<<dest).c_str());
+            auto lvl = Level::Debug;
+            if(!dpair.second) // upgrade message after previous failure
+                lvl = Level::Info;
+            dpair.second = true;
+            log_printf(serverio, lvl, "Beacon tx to %s\n", std::string(SB()<<dest).c_str());
         }
     }
 

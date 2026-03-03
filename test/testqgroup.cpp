@@ -19,6 +19,7 @@
 
 #include "testioc.h"
 #include "utilpvt.h"
+#include "capturestd.h"
 
 extern "C" {
 extern int testioc_registerRecordDeviceDriver(struct dbBase*);
@@ -731,6 +732,19 @@ void testBatch()
     testEq(ret["SUM.value"].as<int32_t>(), 3);
 }
 
+void testiocsh()
+{
+    testDiag("%s", __func__);
+
+    {
+        CaptureStd cap([](){
+            iocshCmd("pvxgl 5 \"\"");
+        });
+        testStrEq(cap.err(), "");
+        testStrMatch(".*enm:ENUM.*enm:ENUM:INDEX.VAL has triggers.*", cap.out());
+    }
+}
+
 void testDbLoadGroup()
 {
     testDiag("%s", __func__);
@@ -753,7 +767,7 @@ void testDbLoadGroup()
 
 MAIN(testqgroup)
 {
-    testPlan(39);
+    testPlan(41);
     testSetup();
     {
         generalTimeRegisterCurrentProvider("test", 1, &testTimeCurrent);
@@ -778,6 +792,7 @@ MAIN(testqgroup)
         testConst();
         testBatch();
         testDbLoadGroup();
+        testiocsh();
     }
     // call epics atexits explicitly to handle older base w/o de-init hooks
     epicsExitCallAtExits();

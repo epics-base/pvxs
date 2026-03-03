@@ -6,6 +6,7 @@
 
 #include <testMain.h>
 #include <epicsExit.h>
+#include <iocsh.h>
 #include <dbLock.h>
 #include <dbLink.h>
 #include <recGbl.h>
@@ -33,6 +34,7 @@
 #include "dblocker.h"
 #include "qsrvpvt.h"
 #include "pvalink.h"
+#include "capturestd.h"
 
 using namespace pvxs::ioc;
 using namespace pvxs;
@@ -604,6 +606,26 @@ namespace {
         ntndarray.close();
     }
 
+    void testiocsh()
+    {
+        testDiag("==== %s ====", __func__);
+
+        {
+            CaptureStd cap([](){
+                iocshCmd("dbpvar \"\" 5");
+            });
+            testStrEq(cap.err(), "");
+            testStrMatch(".*PVA links in all records.*async:target conn=T.*", cap.out());
+        }
+        {
+            CaptureStd cap([](){
+                iocshCmd("dbjlr \"\" 5");
+            });
+            testStrEq(cap.err(), "");
+            testStrMatch(".*\'pva\': testToFromString:str1.*", cap.out());
+        }
+    }
+
 
 } // namespace
 
@@ -611,7 +633,7 @@ extern "C" void testioc_registerRecordDeviceDriver(struct dbBase *);
 
 MAIN(testpvalink)
 {
-    testPlan(102);
+    testPlan(106);
     testSetup();
     pvxs::logger_config_env();
 
@@ -643,6 +665,7 @@ MAIN(testpvalink)
         testAtomic();
         testEnum();
         testNTNDArray();
+        testiocsh();
     }
     catch (std::exception &e)
     {
