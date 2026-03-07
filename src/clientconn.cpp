@@ -185,7 +185,7 @@ void Connection::startConnecting() {
         // non-blocking connect() failed immediately.
         // try to defer notification.
         state = Disconnected;
-        log_debug_printf(status_cli, "%24.24s = %-12s : %-41s: %p\n", "ConnBase::state", "Disconnected", "Connection::startConnecting()", context.get());
+        log_debug_printf(status_cli, "%24.24s = %-12s : %-41s: %s\n", "ConnBase::state", "Disconnected", "Connection::startConnecting()", peerName.c_str());
         constexpr timeval immediate{0, 0};
         if(event_add(echoTimer.get(), &immediate))
             throw std::runtime_error(SB()<<"Unable to begin connecting or schedule deferred notification "<<peerName);
@@ -351,7 +351,7 @@ void Connection::bevEvent(short events) {
             log_err_printf(io, "Server %s error starting echoTimer\n", peerName.c_str());
 
         state = Connected;
-        log_debug_printf(status_cli, "%24.24s = %-12s : %-41s: %p\n", "ConnBase::state", "Connected", "Connection::bevEvent()", context.get());
+        log_debug_printf(status_cli, "%24.24s = %-12s : %-41s: %s\n", "ConnBase::state", "Connected", "Connection::bevEvent()", peerName.c_str());
     }
 }
 
