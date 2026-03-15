@@ -41,27 +41,6 @@ jobs:
       run: |
         make -C documentation gen
         touch documentation/html/.nojekyll
-        mkdir -p documentation/html/fonts documentation/html/images
-        if [ -d documentation/html/_static/images ]; then
-          cp -r documentation/html/_static/images/* documentation/html/images/ || true
-        fi
-        if [ -d documentation/html/_static/fonts ]; then
-          cp -r documentation/html/_static/fonts/* documentation/html/fonts/ || true
-        fi
-        fonts_dir="documentation/html/fonts"
-        for file in "${fonts_dir}"/*; do
-          if [ -f "${file}" ]; then
-            base=$(basename "${file}")
-            lower_base=$(echo "${base}" | tr '[:upper:]' '[:lower:]')
-            if [ "${base}" != "${lower_base}" ]; then
-              if [ -e "${fonts_dir}/${lower_base}" ]; then
-                rm -f "${file}"
-              else
-                mv "${file}" "${fonts_dir}/${lower_base}"
-              fi
-            fi
-          fi
-        done
 
     - name: Upload gh-pages preview
       id: ghpages
@@ -84,7 +63,7 @@ jobs:
 
     environment:
       name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+      url: ${{ steps.ghpages.outputs.page_url }}
 
     steps:
       - name: Setup Pages
