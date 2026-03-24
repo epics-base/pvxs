@@ -781,8 +781,9 @@ bool Value::tryCopyIn(const void *ptr, StoreType type)
     }
 }
 
-void Value::traverse(const std::string &expr, bool modify, bool dothrow)
+void Value::traverse(const char* e, size_t l, bool modify, bool dothrow)
 {
+    std::string_view expr(e, l);
     size_t pos=0;
     bool maybedot = false;
 
@@ -966,28 +967,56 @@ void Value::traverse(const std::string &expr, bool modify, bool dothrow)
 Value Value::operator[](const std::string& name)
 {
     Value ret(*this);
-    ret.traverse(name, true, false);
+    ret.traverse(name.c_str(), name.size(), true, false);
     return ret;
 }
 
 const Value Value::operator[](const std::string& name) const
 {
     Value ret(*this);
-    ret.traverse(name, false, false);
+    ret.traverse(name.c_str(), name.size(), false, false);
+    return ret;
+}
+
+Value Value::operator[](const char* name)
+{
+    Value ret(*this);
+    ret.traverse(name, strlen(name), true, false);
+    return ret;
+}
+
+const Value Value::operator[](const char* name) const
+{
+    Value ret(*this);
+    ret.traverse(name, strlen(name), false, false);
     return ret;
 }
 
 Value Value::lookup(const std::string& name)
 {
     Value ret(*this);
-    ret.traverse(name, true, true);
+    ret.traverse(name.c_str(), name.size(), true, true);
     return ret;
 }
 
 const Value Value::lookup(const std::string& name) const
 {
     Value ret(*this);
-    ret.traverse(name, false, true);
+    ret.traverse(name.c_str(), name.size(), false, true);
+    return ret;
+}
+
+Value Value::lookup(const char* name)
+{
+    Value ret(*this);
+    ret.traverse(name, strlen(name), true, true);
+    return ret;
+}
+
+const Value Value::lookup(const char* name) const
+{
+    Value ret(*this);
+    ret.traverse(name, strlen(name), false, true);
     return ret;
 }
 
