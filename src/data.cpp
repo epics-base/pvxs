@@ -4,6 +4,7 @@
  * in file LICENSE that is included with this distribution.
  */
 
+#include <string_view>
 #include <cstring>
 #include <epicsAssert.h>
 
@@ -828,7 +829,7 @@ void Value::traverse(const std::string &expr, bool modify, bool dothrow)
 
             decltype (desc->mlookup)::const_iterator it;
 
-            const auto& name = expr.substr(pos, sep-pos);
+            const auto& name = std::string_view(expr).substr(pos, sep-pos);
 
             if(sep>0 && (it=desc->mlookup.find(name))!=desc->mlookup.end()) {
                 // found it
@@ -871,7 +872,7 @@ void Value::traverse(const std::string &expr, bool modify, bool dothrow)
                     decltype (desc->mlookup)::const_iterator it;
                     auto& fld = store->as<Value>();
 
-                    if(sep>0 && (it=desc->mlookup.find(expr.substr(pos, sep-pos)))!=desc->mlookup.end()) {
+                    if(sep>0 && (it=desc->mlookup.find(std::string_view(expr).substr(pos, sep-pos)))!=desc->mlookup.end()) {
                         // found it.
 
                         if(modify || fld.desc==&desc->members[it->second]) {
@@ -923,7 +924,7 @@ void Value::traverse(const std::string &expr, bool modify, bool dothrow)
             if(expr[pos]=='['
                     && sep!=std::string::npos && sep-pos>=2)
             {
-                auto index = parseTo<uint64_t>(expr.substr(pos+1, sep-1-pos));
+                auto index = parseTo<uint64_t>(std::string_view(expr).substr(pos+1, sep-1-pos));
                 auto& varr = store->as<shared_array<const void>>();
                 shared_array<const Value> arr;
                 if((varr.original_type()==ArrayType::Value)
