@@ -42,9 +42,8 @@ BitMask::BitMask(std::initializer_list<size_t> bits, size_t nbits)
 }
 
 void BitMask::resize(size_t bits) {
-    // round up to multiple of 64
-    size_t storebits = ((bits-1u)|0x3f)+1u;
-    _words.resize(storebits/64u, 0u);
+    if(bits>=64*_words.size())
+        throw std::logic_error("BitMask too large");
     _size = uint16_t(bits);
 }
 
