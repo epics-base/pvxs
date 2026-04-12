@@ -86,9 +86,13 @@ include $(TOP)/configure/RULES
 #  ADD RULES AFTER THIS LINE
 
 ifdef BASE_7_0
-../O.Common/pvxsIoc.dbd: ../pvxs7x.dbd
+$(COMMON_DIR)/pvxsIoc.dbd: ../pvxs7x.dbd
 	$(CP) $< $@
 else
-../O.Common/pvxsIoc.dbd: ../pvxs3x.dbd
+$(COMMON_DIR)/pvxsIoc.dbd: ../pvxs3x.dbd
 	$(CP) $< $@
 endif
+
+# Satisfy the build system's dependency-tracking for our custom .dbd
+pvxsIoc.dbd$(DEP):
+	@echo "$(COMMONDEP_TARGET): ../Makefile" > $@
