@@ -20,6 +20,21 @@
 
 namespace pvxs {
 
+/** A single Subject Alternative Name (SAN) entry from an X.509 certificate.
+ *
+ * Each entry has a type ("ip" or "dns") and a string value.
+ * IP values are in canonical form as produced by inet_ntop().
+ * DNS values are lowercased for case-insensitive matching.
+ *
+ * @since UNRELEASED
+ */
+struct PVXS_API SanEntry {
+    //! SAN type: "ip" for IP addresses, "dns" for DNS names
+    std::string type;
+    //! SAN value in canonical form
+    std::string value;
+};
+
 /** Credentials presented by a client or server.
  *
  * Primarily a way of presenting peer address and a remote account name.
@@ -28,8 +43,6 @@ namespace pvxs {
  * - "x509" - Peer certificate.  Common Names of root CA and peer used as authority and account.
  * - "ca" - Client provided account name.
  * - "anonymous" - Client provided no credentials.  account will also be "anonymous".
- *
- * @since UNRELEASED
  */
 struct PVXS_API PeerCredentials {
     //! Peer address (eg. numeric IPv4)
@@ -55,6 +68,13 @@ struct PVXS_API PeerCredentials {
      * On other targets, an empty list is returned.
      */
     std::set<std::string> roles() const;
+
+    /** Subject Alternative Name (SAN) entries from the peer's X.509 certificate.
+     *  Empty for non-TLS connections or certificates without SAN extensions.
+     *  @since UNRELEASED
+     */
+    std::vector<SanEntry> san;
+
     /** Operation over secure transport
      * @since UNRELEASED
      */

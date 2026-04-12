@@ -32,10 +32,16 @@ Credentials::Credentials(const server::ClientCredentials& clientCredentials) {
     issuer_id = clientCredentials.issuer_id;
     serial = clientCredentials.serial;
     isTLS = clientCredentials.isTLS;
+    san = clientCredentials.san;
     cred.emplace_back(clientCredentials.account);
 
     for (const auto& role: clientCredentials.roles()) {
         cred.emplace_back(SB() << "role/" << role);
+    }
+
+    for (const auto& entry: san) {
+        if      (entry.type == "ip")  cred.emplace_back(SB() << "san_ip/"  << entry.value);
+        else if (entry.type == "dns") cred.emplace_back(SB() << "san_dns/" << entry.value);
     }
 }
 } // pvxs
