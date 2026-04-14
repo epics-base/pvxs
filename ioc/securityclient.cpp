@@ -36,28 +36,12 @@ void SecurityClient::update(ASMEMBERPVT mem, int asl, Credentials& cred) {
                 // TODO switch to vector of char to accommodate inplace modifications to string
                 const_cast<char*>(cred.host.data()));
 #else
-        ASIDENTITY identity = {
+        (void)asAddClientIdentity(&temp.cli[i], mem, asl, {
                .user = cred.cred[i].c_str(),
                .host = const_cast<char*>(cred.host.data()),
                .method = cred.method.c_str(),
                .authority = cred.authority.c_str(),
-               .protocol = cred.isTLS ? AS_PROTOCOL_TLS : AS_PROTOCOL_TCP };
-
-#ifdef EPICS_ASLIB_HAS_SAN
-        std::vector<ASSAN> sanvec;
-        sanvec.reserve(cred.san.size());
-        for(const auto& entry : cred.san) {
-            if(entry.type == "ip") {
-                sanvec.push_back(ASSAN{asSanIP, entry.value.c_str()});
-            } else if(entry.type == "dns") {
-                sanvec.push_back(ASSAN{asSanDNS, entry.value.c_str()});
-            }
-        }
-        identity.sans = sanvec.data();
-        identity.nsans = static_cast<int>(sanvec.size());
-#endif
-
-        (void)asAddClientIdentity(&temp.cli[i], mem, asl, identity);
+               .protocol = cred.isTLS ? AS_PROTOCOL_TLS : AS_PROTOCOL_TCP });
 #endif
     }
 

@@ -115,7 +115,6 @@ LIB_SRCS += idfilereader.cpp
 LIB_SRCS += certstatus.cpp
 LIB_SRCS += openssl.cpp
 LIB_SRCS += opensslgbl.cpp
-LIB_SRCS += statuscache.cpp
 endif # EVENT2_HAS_OPENSSL
 
 LIB_LIBS += Com

@@ -1019,48 +1019,6 @@ bool SSLContext::getPeerCredentials(PeerCredentials &C, const SSL *ctx) {
                     }
                 }
             }
-
-            // Extract Subject Alternative Names (SAN) from peer certificate
-            try {
-                auto* names = static_cast<GENERAL_NAMES*>(
-                    X509_get_ext_d2i(cert, NID_subject_alt_name, nullptr, nullptr));
-                if(names) {
-                    const int count = sk_GENERAL_NAME_num(names);
-                    for(int i = 0; i < count; i++) {
-                        const GENERAL_NAME* entry = sk_GENERAL_NAME_value(names, i);
-                        if(!entry) continue;
-
-                        if(entry->type == GEN_IPADD) {
-                            const auto* data = entry->d.ip;
-                            if(!data) continue;
-                            char buf[INET6_ADDRSTRLEN];
-                            const char* result = nullptr;
-                            if(data->length == 4) {
-                                result = evutil_inet_ntop(AF_INET, data->data, buf, sizeof(buf));
-                            } else if(data->length == 16) {
-                                result = evutil_inet_ntop(AF_INET6, data->data, buf, sizeof(buf));
-                            }
-                            if(result) {
-                                temp.san.push_back(SanEntry{"ip", result});
-                            }
-
-                        } else if(entry->type == GEN_DNS) {
-                            const auto* data = entry->d.dNSName;
-                            if(!data || !data->data || data->length <= 0) continue;
-                            std::string dns(reinterpret_cast<const char*>(data->data),
-                                            static_cast<size_t>(data->length));
-                            std::transform(dns.begin(), dns.end(), dns.begin(),
-                                           [](unsigned char c){ return std::tolower(c); });
-                            temp.san.push_back(SanEntry{"dns", std::move(dns)});
-                        }
-                        // skip GEN_EMAIL, GEN_URI, and other types silently
-                    }
-                    GENERAL_NAMES_free(names);
-                }
-            } catch(std::exception& e) {
-                log_debug_printf(io, "SAN extraction failed: %s\n", e.what());
-                temp.san.clear();
-            }
         }
 
         C = std::move(temp);

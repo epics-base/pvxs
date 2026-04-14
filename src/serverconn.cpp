@@ -62,14 +62,6 @@ std::ostream& operator<<(std::ostream& strm, const PeerCredentials& cred)
         strm<<authority;
     }
     strm<<"/"<<cred.account<<"@"<<cred.peer;
-    if(!cred.san.empty()) {
-        strm<<" SAN:";
-        for(size_t i=0; i<cred.san.size(); i++) {
-            if(i)
-                strm<<",";
-            strm<<" "<<cred.san[i].type<<"="<<cred.san[i].value;
-        }
-    }
     return strm;
 }
 

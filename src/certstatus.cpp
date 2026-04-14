@@ -12,10 +12,7 @@
 
 #include "certstatus.h"
 
-#include <cstring>
-
 #include "opensslgbl.h"
-#include "statuscache.h"
 
 namespace pvxs {
 namespace certs {
@@ -420,35 +417,6 @@ cert_status_ptr<CertStatusManager> CertStatusManager::subscribe(const client::Co
         cert_status_manager->callback_ref = std::move(fn);
         std::weak_ptr<CertStatusManager> weak_cert_status_manager(cert_status_manager);
 
-        // Attempt to serve from the disk cache before subscribing to the PV
-        if (isStatusCacheEnabled()) {
-            try {
-                auto cached_bytes = readCacheFile(cert_id);
-                if (!cached_bytes.empty()) {
-                    log_debug_printf(status, "Cache hit for %s (%zu bytes)\n", cert_id.c_str(), cached_bytes.size());
-                    shared_array<uint8_t> buf(cached_bytes.size());
-                    std::copy(cached_bytes.begin(), cached_bytes.end(), buf.begin());
-                    PVACertificateStatus cached_status(
-                        VALID, buf.freeze(),
-                        trusted_store_ptr, cert_id);
-
-                    if (cached_status.isStatusCurrent()) {
-                        log_debug_printf(status, "Cached status for %s is current, invoking callback\n",
-                                         cert_id.c_str());
-                        cert_status_manager->cached_ocsp_bytes_ = std::move(cached_bytes);
-                        cert_status_manager->status_ = std::make_shared<CertificateStatus>(cached_status);
-                        (*cert_status_manager->callback_ref)(cached_status);
-                    } else {
-                        log_debug_printf(status, "Cached status for %s is expired, discarding\n", cert_id.c_str());
-                        deleteCacheFile(cert_id);
-                    }
-                }
-            } catch (std::exception &e) {
-                log_debug_printf(status, "Cache read failed for %s: %s, deleting cache file\n", cert_id.c_str(), e.what());
-                deleteCacheFile(cert_id);
-            }
-        }
-
         log_debug_printf(status, "Subscribing to status: %s\n", status_pv.c_str());
         auto sub = cert_status_manager->client_.monitor(status_pv)
                        .maskConnected(true)
@@ -464,22 +432,8 @@ cert_status_ptr<CertStatusManager> CertStatusManager::subscribe(const client::Co
                                         log_debug_printf(status, "Status subscription %s received: %s\n", s.name().c_str(), status_update.status.s.c_str());
                                         csm->status_ = std::make_shared<CertificateStatus>(status_update);
                                         log_debug_printf(status, "Calling (*csm->callback_ref)(status_update)%s\n", "");
-                                         (*csm->callback_ref)(status_update);
-                                         log_debug_printf(status, "Called (*csm->callback_ref)(status_update)%s\n", "");
-                                         if (isStatusCacheEnabled() && status_update.isStatusCurrent()) {
-                                             const auto *new_data = status_update.ocsp_bytes.data();
-                                             const auto new_size = status_update.ocsp_bytes.size();
-                                             if (new_size != csm->cached_ocsp_bytes_.size() ||
-                                                 std::memcmp(new_data, csm->cached_ocsp_bytes_.data(), new_size) != 0) {
-                                                 // Re-read from disk in case another process already wrote it
-                                                 auto on_disk = readCacheFile(cert_id);
-                                                 if (on_disk.size() != new_size ||
-                                                     std::memcmp(on_disk.data(), new_data, new_size) != 0) {
-                                                     writeCacheFile(cert_id, new_data, new_size);
-                                                 }
-                                                 csm->cached_ocsp_bytes_.assign(new_data, new_data + new_size);
-                                             }
-                                         }
+                                        (*csm->callback_ref)(status_update);
+                                        log_debug_printf(status, "Called (*csm->callback_ref)(status_update)%s\n", "");
                                    } catch (OCSPParseException &e) {
                                        log_debug_printf(status, "Ignoring invalid %s status update: %s\n", s.name().c_str(), e.what());
                                    } catch (std::invalid_argument &e) {

@@ -28,7 +28,6 @@ namespace ioc {
 class PVXS_IOC_API Credentials {
  public:
   std::vector<std::string> cred;
-  std::vector<SanEntry> san;
   std::string method;
   std::string authority;
   std::string host;

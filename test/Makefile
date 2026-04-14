@@ -134,7 +134,6 @@ gen_test_certs_SRCS += gen_test_certs.cpp
 TESTPROD_HOST += testtls
 testtls_SRCS += testtls.cpp
 testtls_SRCS += certstatus.cpp
-testtls_SRCS += statuscache.cpp
 TESTS += testtls
 TESTFILES += cert_auth.p12 cert_authcert.p12 client1.p12 client2.p12 intermediateCA.p12 ioc1.p12 server1.p12 server2.p12 superserver1.p12 alt_server1.p12 alt_client1.p12 alt_client1_with_main_root.p12 alt_cert_auth.p12
 
@@ -145,18 +144,7 @@ TESTS += testtlstime
 TESTPROD_HOST += testasn1uint64
 testasn1uint64_SRCS += testasn1uint64.cpp
 testasn1uint64_SRCS += certstatus.cpp
-testasn1uint64_SRCS += statuscache.cpp
 TESTS += testasn1uint64
-
-TESTPROD_HOST += teststatuscache
-teststatuscache_SRCS += teststatuscache.cpp
-teststatuscache_SRCS += statuscache.cpp
-TESTS += teststatuscache
-
-TESTPROD_HOST += testsan
-testsan_SRCS += testsan.cpp
-TESTS += testsan
-
 endif # EVENT2_HAS_OPENSSL
 endif
 

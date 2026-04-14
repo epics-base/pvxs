@@ -14,7 +14,6 @@
 
 #include <iomanip>
 #include <utility>
-#include <vector>
 
 #include <openssl/evp.h>
 #include <openssl/ocsp.h>
@@ -915,7 +914,6 @@ class CertStatusManager {
     client::Context client_;
     std::shared_ptr<client::Subscription> sub_;
     std::shared_ptr<CertificateStatus> status_;
-    std::vector<uint8_t> cached_ocsp_bytes_;  // last-written OCSP bytes, used to skip redundant cache writes
 
     /**
      * @brief Get the custom status extension from the given certificate
