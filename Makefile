@@ -5,6 +5,11 @@ include $(TOP)/configure/CONFIG
 # Directories to build, any order
 DIRS += configure
 
+ifeq ($(USE_BUNDLE),YES)
+DIRS += bundle
+configure_DEPEND_DIRS = bundle
+endif
+
 DIRS += setup
 setup_DEPEND_DIRS = configure
 
