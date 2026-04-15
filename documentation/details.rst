@@ -151,7 +151,7 @@ When committing changes please do:
 Contributors
 ------------
 
-Who did the [work](https://github.com/epics-base/pvxs/graphs/contributors) to make PVXS what it is.
+Who did the `work <https://github.com/epics-base/pvxs/graphs/contributors>`_ to make PVXS what it is.
 
 .. comment: git log --format=format:%aN|sort -u|while read aa; do echo "* $aa"; done
 
@@ -170,12 +170,12 @@ Who did the [work](https://github.com/epics-base/pvxs/graphs/contributors) to ma
 
 Those who supported this work.
 
-* [ALS-U](https://als.lbl.gov/als-u/overview/) project at [Berkeley Lab](https://www.lbl.gov/)
-* [Diamond Light Source](https://www.diamond.ac.uk/)
-* [European Spallation Source](https://europeanspallationsource.se/)
-* [Fermilab](https://fnal.gov/)
-* [SLAC National Accelerator Laboratory](https://www6.slac.stanford.edu/)
-* [SNS](https://neutrons.ornl.gov/sns) at [Oak Ridge National Lab](https://www.ornl.gov/)
+* `ALS-U <https://als.lbl.gov/als-u/overview/>`_ project at `Berkeley Lab <https://www.lbl.gov/>`_
+* `Diamond Light Source <https://www.diamond.ac.uk/>`_
+* `European Spallation Source <https://europeanspallationsource.se/>`_
+* `Fermilab <https://fnal.gov/>`_
+* `SLAC National Accelerator Laboratory <https://www6.slac.stanford.edu/>`_
+* `SNS <https://neutrons.ornl.gov/sns>`_ at `Oak Ridge National Lab <https://www.ornl.gov/>`_
 
 Implementation Notes
 ====================

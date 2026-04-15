@@ -124,8 +124,20 @@ void testAssignAny()
 
     val = 42;
 
+    // automagic ANY assignment promotes to StoreType
+    testEq(val["->"].type(), TypeCode::Int64);
+    testEq(val.as<int64_t>(), 42);
+
+    {
+        auto us = TypeDef(TypeCode::UInt32).create();
+        us = -1;
+        val.from(us); // typed ANY assignment
+    }
+    testEq(val["->"].type(), TypeCode::UInt32);
+    testEq(val.as<uint64_t>(), 0xffffffff);
+
     testThrows<std::logic_error>([&val](){
-        val.from(val);
+        val.from(val); // self assignment would create infinite recursion
     });
 }
 
@@ -550,7 +562,7 @@ void test_cache_sync()
 
 MAIN(testdata)
 {
-    testPlan(189);
+    testPlan(193);
     testSetup();
     testTraverse();
     testAssign();

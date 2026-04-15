@@ -1,8 +1,9 @@
 # Preparation
 
-1. Generate ABI change report from previous release tag to latest commit.
+1. Check that candidate revision passes all GHA jobs.
+1. Review ABI change report from previous release tag to latest commit.
    Ensure `PVXS_MINOR_VERSION` incrementes if not 100% (or if other ABI change
-   is known)
+   is known).  See GHA `.github/workflows/release.yml` job.
 
 ```sh
 ./abi-diff.sh A.A.A HEAD
@@ -27,33 +28,13 @@ Don't change in `details.rst` and `releasenotes.rst`
 git tag -s -m B.B.B B.B.B
 ```
 
-6. Generate ABI change report for upload
+6. Push branches/tag (point of no return...)
 
 ```sh
-./abi-diff.sh A.A.A B.B.B
+git push origin B.B.B master
 ```
 
-7. Generate test coverage report for upload
-
-```sh
-./coverage.sh B.B.B
-```
-
-8. Generate documentation and update `gh-pages` branch.
-
-```sh
-make
-make -C documentation clean
-make -C documentation commit
-```
-
-9. Push branches/tag (point of no return...)
-
-```sh
-git push origin B.B.B master +gh-pages
-```
-
-10. Verify GHA builds and pypi uploads
+7. Verify GHA builds and pypi uploads
 
 ```sh
 virtualenv /tmp/p4p-bin
@@ -65,12 +46,13 @@ virtualenv /tmp/p4p-src
 cd /tmp && /tmp/p4p-src/bin/python -m nose2 -v pvxslibs
 ```
 
-
-11. Create github.com release B.B.B
+8. Create github.com release B.B.B
 
 Summarize changes and attach coverage and ABI difference reports.
 
-12. Announce on tech-talk
+Download ABI diff and coverage reports from successful GHA job for tag, and attach to release.
+
+9. Announce on tech-talk
 
 Reply to previous announcement mail.
 

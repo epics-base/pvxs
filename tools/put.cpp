@@ -95,7 +95,7 @@ int main(int argc, char *argv[])
                 auto sep = fv.find_first_of('=');
 
                 if(sep==std::string::npos) {
-                    std::cerr<<"Error: expected <fld>=<value> not \""<<escape(fv)<<"\"\n";
+                    std::cerr<<ERL_ERROR ": expected <fld>=<value> not \""<<escape(fv)<<"\"\n";
                     return 1;
                 }
 
@@ -114,8 +114,10 @@ int main(int argc, char *argv[])
 
         auto op =ctxt.put(pvname)
                 .pvRequest(request)
-                .build([&values](Value&& prototype) -> Value {
+                .build([&values, verbose](Value&& prototype) -> Value {
                     auto val = std::move(prototype);
+                    // clear all defined fields, but retain "current" values for NTEnum lookup.
+                    val.unmark(false, true);
                     for(auto& pair : values) {
                         try{
                             val[pair.first] = pair.second;
@@ -123,13 +125,18 @@ int main(int argc, char *argv[])
                             throw std::runtime_error(SB()<<"Unable to assign "<<pair.first<<" from \""<<escape(pair.second)<<"\"");
                         }
                     }
+                    if(verbose) {
+                        std::cout<<"Writing fields:\n";
+                        Indented I(std::cout);
+                        std::cout<<val.format().delta()<<"\n";
+                    }
                     return val;
                 })
                 .result([&ret, &done](client::Result&& result) {
                     try {
                         result();
                     }catch(std::exception& e){
-                        std::cerr<<"Error "<<typeid(e).name()<<" : "<<e.what()<<"\n";
+                        std::cerr<<ERL_ERROR " "<<typeid(e).name()<<" : "<<e.what()<<"\n";
                         ret=1;
                     }
                     done.signal();
@@ -150,7 +157,7 @@ int main(int argc, char *argv[])
             return ret;
         }
     }catch(std::exception& e){
-        std::cerr<<"Error: "<<e.what()<<"\n";
+        std::cerr<<ERL_ERROR ": "<<e.what()<<"\n";
         return 1;
     }
 }

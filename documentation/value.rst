@@ -15,12 +15,12 @@ Value Container API
 
 `pvxs::Value` is the primary data container type used with PVXS.
 A `pvxs::Value` may be obtained via the remote peer (client or server),
-or created locally.  See `ntapi` or `typedefapi`.
+or created locally.  See :ref:`ntapi` or :ref:`typedefapi`.
 
 `pvxs::Value` is a safe pointer-like object which, maybe, references
 a node in a tree of sub-structures and leaf fields.
 This tree will be referred to as a Structure as it behaves
-in many ways like a C 'struct'.
+in many ways like a C struct.
 
 For example, the following code:
 
@@ -35,7 +35,7 @@ For example, the following code:
     fld = top["fldname"];
     fld = 2;
 
-Is analogous to the following pseudo code.
+Is analogous to the following pseudo C code.
 
 .. code-block:: c++
 
@@ -67,10 +67,10 @@ All operations on an invalid Value should be safe and well defined.
 .. code-block:: c++
 
     Value top(nt::NTScalar{TypeCode::Int32}.create());
-    int32_t val = top["nonexistent"].as<int32_t>();
+    int32_t val = top["nonexistent"].as<int32_t>(); // throws NoField
 
 In this example, the operator[] lookup of a non-existent field returns an invalid Value.
-Attempting to extract an integer from this will then throw a `pvxs::NoField` exception.
+Attempting to extract an integer from this will then throw a `pvxs::NoField` exception for the ``as<T>()`` method.
 
 Value
 -----
@@ -90,12 +90,12 @@ Iteration
 may be iterated.  Iteration comes in three variations: `pvxs::Value::iall`, `pvxs::Value::ichildren`,
 and `pvxs::Value::imarked`.
 
-For a Struct, iall() is a depth first traversal of all fields.
-ichildren() traverses all child fields (excluding eg. grandchildren
+For a Struct, ``iall()`` is a depth first traversal of all fields.
+ichildren() traverses only child fields (excluding eg. grandchildren
 and further).  imarked() considers all fields, but only visits
 those which have beem marked (`pvxs::Value::isMarked`).
 
-For a Union.  iall() and ichildren() are identical, and will
+For a Union.  ``iall()`` and ``ichildren()`` are identical, and will
 visit all possible Union members, excluding the implicit NULL member.
 Traversal does not effect member selection.
 imarked() for a Union will visit at most one member (if one is selected)>
@@ -120,9 +120,16 @@ Array fields
 ------------
 
 Array fields are represented with the `pvxs::shared_array` container
-using void vs. non-void, and const vs. non-const element types.
+using void vs. non-void, and const vs. mutable element types.
 
-Arrays are initially created as non-const and non-void.
+.. code-block:: c++
+
+    shared_array<uint32_t>       typed_mutable;
+    shared_array<const uint32_t> typed_const;
+    shared_array<void>           void_mutable;
+    shared_array<const void>     void_const;
+
+Arrays may be initially created as mutable and non-void.
 After being populated, an array must be transformed using
 `pvxs::shared_array::freeze` to become const before
 being stored in a `pvxs::Value`.
@@ -133,8 +140,8 @@ being stored in a `pvxs::Value`.
     Value top = nt::NTScalar{TypeCode::Float64A}.create();
 
     top["value"] = arr.freeze();
-    # freeze() acts like std::move().  arr is now empty
-    # only the read-only reference remains!
+    // freeze() acts like std::move().  arr is now empty
+    // only the read-only reference remains!
 
 The `pvxs::shared_array::freeze` method is special in that it
 acts like std::move() in that it moves the array reference into the returned object.
@@ -146,7 +153,7 @@ The const non-void option is a convenience which may **allocate** and do an elem
 
 .. code-block:: c++
 
-    # extract reference, or converted copy
+    // extract reference, or converted copy
     arr = top["value"].as<shared_array<const double>>();
 
 When it is desirable to avoid an implicit allocate and convert,
@@ -156,10 +163,10 @@ of the underlying array prior to using `pvxs::shared_array::castTo`.
 
 .. code-block:: c++
 
-    # extract untyped reference.  Never copies
+    // extract untyped reference.  Never copies
     shared_array<const void> varr = top["value"].as<shared_array<const void>>();
     if(varr.original_type()==ArrayType::Float64) {
-        # castTo() throws std::logic_error if the underlying type is not 'double'.
+        // castTo() throws std::logic_error if the underlying type is not 'double'.
         shared_array<const double> temp = varr.castTo<const double>();
     }
 

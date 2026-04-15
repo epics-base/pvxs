@@ -84,6 +84,9 @@ ServerConn::ServerConn(ServIface* iface, evutil_socket_t sock, struct sockaddr *
     timeval tmo(totv(iface->server->effective.tcpTimeout));
     bufferevent_set_timeouts(bev.get(), &tmo, &tmo);
 
+    // set threshold to begin clearing backlog
+    bufferevent_setwatermark(this->bev.get(), EV_WRITE, tcp_tx_limit, 0);
+
     auto tx = bufferevent_get_output(bev.get());
 
     std::vector<uint8_t> buf(128);
@@ -378,23 +381,6 @@ void ServerConn::cleanup()
     }
 }
 
-void ServerConn::bevRead()
-{
-    ConnBase::bevRead();
-
-    if(bev) {
-        auto tx = bufferevent_get_output(bev.get());
-
-        if(evbuffer_get_length(tx)>=tcp_tx_limit) {
-            // write buffer "full".  stop reading until it drains
-            // TODO configure
-            (void)bufferevent_disable(bev.get(), EV_READ);
-            bufferevent_setwatermark(bev.get(), EV_WRITE, tcp_tx_limit/2, 0);
-            log_debug_printf(connio, "%s suspend READ\n", peerName.c_str());
-        }
-    }
-}
-
 void ServerConn::bevWrite()
 {
     log_debug_printf(connio, "%s process backlog\n", peerName.c_str());
@@ -407,13 +393,6 @@ void ServerConn::bevWrite()
         backlog.pop_front();
 
         fn();
-    }
-
-    // TODO configure
-    if(evbuffer_get_length(tx)<tcp_tx_limit) {
-        (void)bufferevent_enable(bev.get(), EV_READ);
-        bufferevent_setwatermark(bev.get(), EV_WRITE, 0, 0);
-        log_debug_printf(connio, "%s resume READ\n", peerName.c_str());
     }
 }
 

@@ -3,6 +3,26 @@
 Release Notes
 =============
 
+1.5.1 (Feb 2026)
+----------------
+
+* Call ``epicsSignalInstallSigPipeIgnore()``.
+* When available, set ``SO_NOSIGPIPE`` on TCP sockets.
+* python: Handle setuptools v80 pkg_resources removal.
+
+1.5.0 (Jan 2026)
+----------------
+
+* server: plug channel cache leak when close Channel while reusing Connection.
+* server: disable one-sided attempt to handle saturated connection.
+* ioc: add `pvxs_log_config()` and `pvxs_log_reset()` IOCsh functions.
+* ioc: renamed semi-internal C symbol names to avoid conflicts with QSRV1:
+       `dbpvar()` -> ``dbpvxr()`, ``pvaLinkNWorkers`` -> ``pvxLinkNWorkers``.
+       Names in IOC shell remain unchanged.
+* ioc: fix PUT to scalar mapping
+* tools: pvxvct can use endpoint syntax to listen for multicast on a specific interface.
+         eg. ``pvxvct -B 224.1.2.23@eth0`` or ``pvxvct -B 224.1.2.23@10.1.1.100``.
+
 1.4.1 (Aug 2025)
 ----------------
 
@@ -76,7 +96,7 @@ Release Notes
   released promptly when that operation is ended.
 * server: relax post() after finish().  Return false instead of throwing ``std::logic_error``.
 * ioc: ensure db_cancel_event() before ~MonitorControlOp
-   * Workaround for [db_cancel_event()](https://github.com/epics-base/epics-base/issues/423) bug.
+   * Workaround for `db_cancel_event() <https://github.com/epics-base/epics-base/issues/423>`_ bug.
 * ioc: Fix typo preventing processing of DBR_STRING fields.
 * ioc: fix group put always `dbProcess()`.
 * ioc: fix block=true to DBF_ENUM.

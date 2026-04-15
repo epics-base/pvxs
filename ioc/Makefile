@@ -18,6 +18,7 @@ USR_CPPFLAGS += -I$(TOP)/src
 USR_CPPFLAGS += -DPVXS_IOC_API_BUILDING
 
 DBD += pvxsIoc.dbd
+CLEANS += pvxsIoc.dbd
 
 INC += pvxs/iochooks.h
 
@@ -80,14 +81,19 @@ LIB_LIBS += pvxs
 LIB_LIBS += $(EPICS_BASE_IOC_LIBS)
 #===========================
 
+# select DBD file depending on supported syntax
+ifdef BASE_7_0
+PVXS_DBD = pvxs7x.dbd
+else
+PVXS_DBD = pvxs3x.dbd
+endif
+
 include $(TOP)/configure/RULES
 #----------------------------------------
 #  ADD RULES AFTER THIS LINE
 
-ifdef BASE_7_0
-../O.Common/pvxsIoc.dbd: ../pvxs7x.dbd
+$(COMMON_DIR)/pvxsIoc.dbd: ../$(PVXS_DBD)
 	$(CP) $< $@
-else
-../O.Common/pvxsIoc.dbd: ../pvxs3x.dbd
-	$(CP) $< $@
-endif
+
+pvxsIoc.dbd$(DEP):
+	echo "$(COMMONDEP_TARGET): ../Makefile" > $@

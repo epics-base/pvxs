@@ -426,7 +426,7 @@ void testError(ErrorSource::phase_t phase)
             auto val = actual();
             testTrue(false)<<"unexpected result\n"<<val;
         }catch(client::RemoteError& e){
-            testStrMatch(e.what(), phase ? "Nope!" : "haha");
+            testStrMatch(phase ? "Nope!" : "haha", e.what());
         }
     } else {
         testSkip(1, "timeout");
@@ -483,7 +483,7 @@ void testErrorManual(ErrorSource::phase_t phase)
             auto val = actual();
             testTrue(false)<<"unexpected result\n"<<val;
         }catch(client::RemoteError& e){
-            testStrMatch(e.what(), phase ? "Nope!" : "haha");
+            testStrMatch(phase ? "Nope!" : "haha", e.what());
         }
     } else {
         testSkip(1, "timeout");

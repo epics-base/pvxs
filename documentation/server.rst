@@ -79,6 +79,7 @@ EPICS_PVAS_IGNORE_ADDR_LIST
 EPICS_PVA_CONN_TMO
     Inactivity timeout for TCP connections.  For compatibility with pvAccessCPP
     a multiplier of 4/3 is applied.  So a value of 30 results in a 40 second timeout.
+    This is an expert configuration, which will not normally be changed by end users.
 
 .. versionadded:: 0.3.0
    All ***_ADDR_LIST** may contain IPv4 multicast, and IPv6 uni/multicast addresses.

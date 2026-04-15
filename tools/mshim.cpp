@@ -60,7 +60,7 @@ SockEndpoint parseEP(const char* optarg, const server::Config& conf)
         ep = SockEndpoint(optarg, conf.udp_port);
 
     }catch(std::exception& e){
-        std::cerr<<"Error: Invalid group spec. '"<<escape(optarg)<<"' : "<<e.what()<<std::endl;
+        std::cerr<<ERL_ERROR ": Invalid group spec. '"<<escape(optarg)<<"' : "<<e.what()<<std::endl;
         exit(1);
     }
     if(ep.addr.family()!=AF_INET) {
@@ -103,9 +103,9 @@ struct App {
                     uint8_t(msg.mustReply ? pva_search_flags::MustReply : 0u),
                     0,0,0
                 });
-        assert(!msg.server.isAny() && msg.server.family()==AF_INET); // UDPManager has already handled this case
-        to_wire(buf, msg.server);
-        to_wire(buf, uint16_t(msg.server.port()));
+        assert(!msg.replyDest.isAny() && msg.replyDest.family()==AF_INET); // UDPManager has already handled this case
+        to_wire(buf, msg.replyDest);
+        to_wire(buf, uint16_t(msg.replyDest.port()));
 
         size_t nproto = msg.otherproto.size();
         if(msg.protoTCP)
@@ -166,8 +166,8 @@ struct App {
 
             } else {
                 log_debug_printf(applog, "Forwarded search to %s -> %s -> %s?\n",
-                                 msg.src.tostring().c_str(),
-                                 msg.server.tostring().c_str(),
+                                 msg.origSrc.tostring().c_str(),
+                                 msg.replyDest.tostring().c_str(),
                                  std::string(SB()<<dest).c_str());
             }
         }
@@ -278,7 +278,7 @@ int main(int argc, char *argv[])
 
         if(argc!=optind) {
             usage(argv[0]);
-            std::cerr<<"Error: Unexpected arguments."<<std::endl;
+            std::cerr<<ERL_ERROR ": Unexpected arguments."<<std::endl;
             return 1;
         }
 
@@ -294,7 +294,7 @@ int main(int argc, char *argv[])
 
         return 0;
     }catch(std::exception& e){
-        std::cerr<<"Error: "<<e.what()<<"\n";
+        std::cerr<<ERL_ERROR ": "<<e.what()<<"\n";
         return 1;
     }
 }

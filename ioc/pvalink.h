@@ -47,7 +47,7 @@ typedef epicsUInt64     epicsUTag;
 #endif
 
 extern "C" {
-    extern int pvaLinkNWorkers;
+    extern int pvxLinkNWorkers;
 }
 
 namespace pvxs {
@@ -60,7 +60,7 @@ struct pvaLink;
 struct pvaLinkChannel;
 
 extern lset pva_lset;
-extern jlif lsetPVA;
+extern jlif lsetPVX;
 
 struct pvaLinkConfig : public jlink
 {

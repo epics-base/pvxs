@@ -32,6 +32,7 @@
 #include "iocsh.h"
 #include "osiFileName.h"
 #include "epicsInstallDir.h"
+#include "utilpvt.h"
 
 #include <pvxs/iochooks.h>
 
@@ -289,7 +290,7 @@ int main(int argc, char *argv[])
         return 0;
 
     }catch(std::exception& e){
-        std::cerr<<"Error: "<<e.what()<<"\n";
+        std::cerr<<ERL_ERROR ": "<<e.what()<<"\n";
         epicsExit(2);
         return 2;
     }

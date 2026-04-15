@@ -90,7 +90,9 @@ struct MonitorOp final : public ServerOp
                 if(!conn || conn->state==ConnBase::Disconnected)
                     return;
 
-                if(conn->connection() && (bufferevent_get_enabled(conn->connection())&EV_READ)) {
+                auto bev(conn->connection());
+
+                if(bev && evbuffer_get_length(bufferevent_get_output(bev)) < conn->tcp_tx_limit) {
                     doReply(op);
                 } else {
                     // connection TX queue is too full

@@ -104,7 +104,7 @@ std::shared_ptr<pvaLinkChannel> testGetPVALink(struct link *plink)
 {
     DBLocker lock(plink->precord);
 
-    if(plink->type!=JSON_LINK || !plink->value.json.jlink || plink->value.json.jlink->pif!=&lsetPVA) {
+    if(plink->type!=JSON_LINK || !plink->value.json.jlink || plink->value.json.jlink->pif!=&lsetPVX) {
         testAbort("Not a PVA link");
     }
     pvaLink *pval = static_cast<pvaLink*>(plink->value.json.jlink);
@@ -182,7 +182,7 @@ QSrvWaitForLinkUpdate::~QSrvWaitForLinkUpdate()
 }
 
 extern "C"
-void dbpvar(const char *precordname, int level)
+void dbpvxr(const char *precordname, int level)
 {
     try {
         if(!linkGlobal) {
@@ -320,15 +320,15 @@ const iocshVarDef pvaLinkNWorkersDef[] = {
     {
         "pvaLinkNWorkers",
         iocshArgInt,
-        &pvaLinkNWorkers
+        &pvxLinkNWorkers
     },
     {0, iocshArgInt, 0}
 };
 
 void pvalink_enable()
 {
-    IOCShCommand<const char*, int>("dbpvar", "dbpvar", "record name", "level")
-            .implementation<&dbpvar>();
+    IOCShCommand<const char*, int>("dbpvar", "record name", "level")
+            .implementation<&dbpvxr>();
     iocshRegisterVariable(pvaLinkNWorkersDef);
 
 }

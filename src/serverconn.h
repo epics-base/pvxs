@@ -184,7 +184,6 @@ public:
     virtual void cleanup() override final;
 private:
     //void bevEvent(short events);
-    virtual void bevRead() override final;
     virtual void bevWrite() override final;
 };
 

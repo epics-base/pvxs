@@ -23,6 +23,11 @@ To enable all logging at full detail. ::
 
     export PVXS_LOG="*=DEBUG"
 
+To enable all internal logging at INFO detail,
+and any entries with the prefix "pvxs.foo*" at DEBUG detail. ::
+
+    export PVXS_LOG="pvxs.*=INFO,pvxs.foo*=DEBUG"
+
 .. doxygenenum:: pvxs::Level
 
 Controlling Logging
@@ -147,6 +152,7 @@ When possible, use of the ``TestIOC`` class is recommended for both
 forward and backward compatibility with EPICS Base (>= 3.15.0.1).
 
 .. doxygenclass:: pvxs::ioc::TestIOC
+    :members:
 
 
 Utilities

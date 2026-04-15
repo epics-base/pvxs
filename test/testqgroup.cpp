@@ -716,6 +716,21 @@ void testConst()
               );
 }
 
+void testBatch()
+{
+    testDiag("%s", __func__);
+    TestClient ctxt;
+
+    ctxt.put("tst:b:")
+        .set("A.value", 1.0)
+        .set("B.value", 2.0)
+        .set("C.value", 4.0) // ignored
+        .exec()->wait(5.0);
+
+    auto ret(ctxt.get("tst:b:").exec()->wait(5.0));
+    testEq(ret["SUM.value"].as<int32_t>(), 3);
+}
+
 void testDbLoadGroup()
 {
     testDiag("%s", __func__);
@@ -738,7 +753,7 @@ void testDbLoadGroup()
 
 MAIN(testqgroup)
 {
-    testPlan(38);
+    testPlan(39);
     testSetup();
     {
         generalTimeRegisterCurrentProvider("test", 1, &testTimeCurrent);
@@ -753,6 +768,7 @@ MAIN(testqgroup)
         testdbReadDatabase("ntenum.db", nullptr, "P=enm");
         testdbReadDatabase("iq.db", nullptr, "N=iq:");
         testdbReadDatabase("const.db", nullptr, "P=tst:");
+        testdbReadDatabase("batch.db", nullptr, "P=tst:b:");
         iocsh("../qgroup.cmd");
         ioc.init();
         testTable();
@@ -760,6 +776,7 @@ MAIN(testqgroup)
         testImage();
         testIQ();
         testConst();
+        testBatch();
         testDbLoadGroup();
     }
     // call epics atexits explicitly to handle older base w/o de-init hooks
