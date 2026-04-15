@@ -564,9 +564,10 @@ struct CertificateStatus {
       * @return cert_status_class_t::GOOD (VALID), cert_status_class_t::BAD (REVOKED, EXPIRED), or cert_status_class_t::UNKNOWN (everything else)
       */
      cert_status_class_t getStatusClass() const noexcept {
-         return status == VALID ? cert_status_class_t::GOOD : isRevokedOrExpired() ? cert_status_class_t::BAD : cert_status_class_t::UNKNOWN;
+         if (isRevokedOrExpired()) return cert_status_class_t::BAD;
+         if (!isStatusCurrent()) return cert_status_class_t::UNKNOWN;
+         return status == VALID ? cert_status_class_t::GOOD : cert_status_class_t::UNKNOWN;
      }
-     cert_status_class_t getEffectiveStatusClass() const noexcept { return isStatusCurrent() ? getStatusClass() : cert_status_class_t::UNKNOWN; }
 
     /**
      * @brief Check if the certificate is Expired of Revoked

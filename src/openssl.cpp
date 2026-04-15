@@ -124,7 +124,7 @@ void SSLContext::monitorStatusAndSetState(const ossl_ptr<X509> &cert, X509_STORE
     }
 
     // Set the state
-    const auto cert_status_class = static_cast<certs::CertificateStatus>(cert_status).getEffectiveStatusClass();
+    const auto cert_status_class = static_cast<certs::CertificateStatus>(cert_status).getStatusClass();
     if ( cert_status_class == certs::cert_status_class_t::BAD ) {
         // Should never happen
         setDegradedMode(true);
@@ -249,7 +249,7 @@ void SSLContext::setTlsOrTcpMode(const certs::cert_status_class_t cert_status_cl
  */
 void SSLContext::setTlsOrTcpMode() {
     const auto status = static_cast<certs::CertificateStatus>(cert_status);
-    setTlsOrTcpMode(status.getEffectiveStatusClass());
+    setTlsOrTcpMode(status.getStatusClass());
 }
 
 SSLContext::SSLContext(const impl::evbase loop, const bool is_client) : loop(loop), is_client(is_client)
@@ -857,6 +857,10 @@ void SSLPeerStatusAndMonitor::updateStatus(const certs::CertificateStatus &new_s
         {
             Guard G(self->lock);
             prior_status_class = self->status.getStatusClass();
+            if (prior_status_class == certs::cert_status_class_t::GOOD &&
+                new_status.getStatusClass() == certs::cert_status_class_t::UNKNOWN) {
+                return;
+            }
             self->status = new_status;
             status_class = self->status.getStatusClass();
         }

@@ -182,6 +182,8 @@ client::Config Server::clientConfig(const Config &server_config) {
     ret.disableStatusCheck(server_config.isStatusCheckDisabled());
     ret.disableStapling(server_config.isStaplingDisabled());
 
+    ret.nameServers = client::Config::fromEnv().nameServers;
+
     return ret;
 }
 
