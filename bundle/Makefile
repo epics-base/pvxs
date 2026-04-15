@@ -1,6 +1,6 @@
 TOP=..
 
-_PVXS_BOOTSTRAP = YES
+_PVXS_BOOTSTRAP=SKIP
 
 include $(TOP)/configure/CONFIG
 

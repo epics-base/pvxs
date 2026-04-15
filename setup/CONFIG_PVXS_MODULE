@@ -8,8 +8,12 @@ _PVXS_CONF_INCLUDED := YES
 
 ifdef T_A
 
-ifneq (YES,$(_PVXS_BOOTSTRAP))
+ifndef _PVXS_BOOTSTRAP
 include $(_PVXS)/TOOLCHAIN_PVXS.$(T_A)
+else
+ifneq (SKIP,$(_PVXS_BOOTSTRAP))
+include $(_PVXS_BOOTSTRAP)
+endif
 endif
 
 # from generated cfg/TOOLCHAIN_PVXS.$(T_A)

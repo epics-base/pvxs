@@ -4,9 +4,10 @@ TOP=..
 # step 2. generate cfg/TOOLCHAIN_PVXS.$(T_A)
 #         install cfg/*
 # remaining TOP directories will include generated files
-_PVXS_BOOTSTRAP = YES
+_PVXS_BOOTSTRAP=SKIP
 
 include $(TOP)/configure/CONFIG
+include $(TOP)/setup/CONFIG_PVXS_MODULE
 
 LIBEVENT ?= $(LIBEVENT_$(T_A))
 LIBEVENT_$(T_A) ?= $(wildcard $(abspath $(INSTALL_LOCATION)/bundle/usr/$(T_A)))

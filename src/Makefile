@@ -1,6 +1,10 @@
 TOP=..
 
+_PVXS_BOOTSTRAP=$(TOP)/setup/O.$(T_A)/TOOLCHAIN_PVXS.$(T_A)
+
 include $(TOP)/configure/CONFIG
+include $(TOP)/configure/CONFIG_PVXS_VERSION
+include $(TOP)/setup/CONFIG_PVXS_MODULE
 #----------------------------------------
 #  ADD MACRO DEFINITIONS AFTER THIS LINE
 #=============================

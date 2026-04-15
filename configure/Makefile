@@ -3,9 +3,10 @@ TOP=..
 # step 1.  Use -I... to test event-config.h
 #          produce configure/O.$(T_A)/TOOLCHAIN
 # step 2 in setup/Makefile
-_PVXS_BOOTSTRAP = YES
+_PVXS_BOOTSTRAP:=SKIP
 
 include $(TOP)/configure/CONFIG
+-include $(TOP)/setup/CONFIG_PVXS_MODULE
 
 # use custom libevent2 install prefix by:
 #   setting LIBEVENT only for single arch build
