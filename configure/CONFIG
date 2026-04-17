@@ -28,3 +28,7 @@ ifdef T_A
  -include $(TOP)/configure/O.$(T_A)/TOOLCHAIN
 endif
 
+ifneq ($(INSTALL_LOCATION),$(TOP))
+  include $(wildcard $(INSTALL_CFG)/CONFIG*)
+endif
+
