@@ -101,9 +101,15 @@ enum ocspcertstatus_t { OCSP_CERT_STATUS_LIST };
 #define CERT_STATES {CERT_STATUS_LIST}
 #define OCSP_CERT_STATES {OCSP_CERT_STATUS_LIST}
 
-// Gets status name based on index
-#define CERT_STATE(index) ((const char*[])CERT_STATES[(index)])
-#define OCSP_CERT_STATE(index) ((const char*[])OCSP_CERT_STATES[(index)])
+// Gets status name based on index (portable: GCC/Clang compound literal -> static array)
+inline const char* CERT_STATE(std::size_t index) {
+    static const char* const _names[] = CERT_STATES;
+    return _names[index];
+}
+inline const char* OCSP_CERT_STATE(std::size_t index) {
+    static const char* const _names[] = OCSP_CERT_STATES;
+    return _names[index];
+}
 
 // Certificate status classes
 //
