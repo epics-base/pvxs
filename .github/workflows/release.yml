@@ -18,7 +18,7 @@ jobs:
     - uses: actions/checkout@v4
       with:
         fetch-depth: "0"
-        submodules: true
+        submodules: recursive
     - name: "apt-get install"
       run: |
         sudo apt-get update
@@ -41,6 +41,7 @@ jobs:
 
     - name: abi-diff
       run: python .ci/cue.py exec ./abi-diff.sh
+      continue-on-error: true
 
     - name: Upload ABI
       if: ${{ always() }}

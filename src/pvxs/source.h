@@ -274,14 +274,7 @@ struct PVXS_API Source {
         //! The list
         std::shared_ptr<const std::set<std::string>> names;
         //! True if the list may change at some future time.
-        bool dynamic = false;
-        List() = default;
-        List(decltype(names)& names, bool dynamic=false)
-            :names(names), dynamic(dynamic)
-        {}
-        List(decltype(names)&& names, bool dynamic=false)
-            :names(std::move(names)), dynamic(dynamic)
-        {}
+        bool dynamic;
     };
 
     /** A Client is requesting a list of Channel names which we may claim.

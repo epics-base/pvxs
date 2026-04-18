@@ -20,6 +20,8 @@
 #include <pvxs/log.h>
 #include <pvxs/nt.h>
 #include <pvxs/source.h>
+#include <pvxs/credentials.h>
+
 #include <dbNotify.h>
 
 #include "dbentry.h"
@@ -28,7 +30,6 @@
 #include "iocsource.h"
 #include "singlesource.h"
 #include "singlesrcsubscriptionctx.h"
-#include "credentials.h"
 #include "securitylogger.h"
 #include "securityclient.h"
 #include "typeutils.h"
@@ -85,11 +86,6 @@ void subscriptionValueCallback(void* userArg, struct dbChannel* pChannel,
     // ARCHIVE events will get the same data fields as VALUE
     if(change & DBE_ARCHIVE)
         change = (change&~DBE_ARCHIVE)|DBE_VALUE;
-
-    // promote DBE_ALARM only to also fetch value
-    if((change & (DBE_VALUE|DBE_ARCHIVE|DBE_ALARM)) == DBE_ALARM)
-        change |= DBE_VALUE;
-
     change &= UpdateType::Everything; // does not include DBE_ARCHIVE
     subscriptionCallback(subscriptionContext, UpdateType::type(change), pChannel, pDbFieldLog);
 }

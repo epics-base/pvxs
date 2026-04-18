@@ -11,13 +11,13 @@
 #define PVXS_IOCSOURCE_H
 
 #include <pvxs/data.h>
+#include <pvxs/credentials.h>
 
 #include <dbAccess.h>
 
 #include "dbeventcontextdeleter.h"
 #include "fieldconfig.h"
 #include "singlesrcsubscriptionctx.h"
-#include "credentials.h"
 #include "securitylogger.h"
 #include "securityclient.h"
 

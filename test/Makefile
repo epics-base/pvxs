@@ -1,11 +1,14 @@
 TOP=..
 
 include $(TOP)/configure/CONFIG
+# cfg/ sometimes isn't correctly included due to a Base bug
+# so we do here (maybe again) as workaround
+-include $(wildcard $(TOP)/cfg/CONFIG*)
 #----------------------------------------
 #  ADD MACRO DEFINITIONS AFTER THIS LINE
 #=============================
 
-# access to private headers
+# access to private headers and source
 USR_CPPFLAGS += -I$(TOP)/src
 USR_CPPFLAGS += -I$(TOP)/ioc
 
@@ -113,15 +116,36 @@ testudpfwd_SRCS += testudpfwd.cpp
 TESTS += testudpfwd
 
 ifdef BASE_3_15
-ifeq (YES,$(EVENT2_HAS_OPENSSL))
+ifeq ($(EVENT2_HAS_OPENSSL),YES)
+USR_CPPFLAGS += -DPVXS_ENABLE_OPENSSL
+
+ifneq (WIN32,$(OS_CLASS))
+# test/ builds some PVXS implementation sources directly.
+# Avoid PVXS_API resolving to dllimport for these definitions.
+USR_CPPFLAGS += -DPVXS_API_BUILDING
+endif
+
+SRC_DIRS += $(TOP)/src
+SRC_DIRS += $(TOP)/src/pvxs
+
 TESTPROD_HOST += gen_test_certs
-gen_test_certs += gen_test_certs.cpp
+gen_test_certs_SRCS += gen_test_certs.cpp
 
 TESTPROD_HOST += testtls
 testtls_SRCS += testtls.cpp
+testtls_SRCS += certstatus.cpp
 TESTS += testtls
-TESTFILES += ca.p12 client1.p12 client2.p12 intermediateCA.p12 ioc1.p12 server1.p12 server2.p12 superserver1.p12
-endif
+TESTFILES += cert_auth.p12 cert_authcert.p12 client1.p12 client2.p12 intermediateCA.p12 ioc1.p12 server1.p12 server2.p12 superserver1.p12 alt_server1.p12 alt_client1.p12 alt_client1_with_main_root.p12 alt_cert_auth.p12
+
+TESTPROD_HOST += testtlstime
+testtlstime_SRCS += testtlstime.cpp
+TESTS += testtlstime
+
+TESTPROD_HOST += testasn1uint64
+testasn1uint64_SRCS += testasn1uint64.cpp
+testasn1uint64_SRCS += certstatus.cpp
+TESTS += testasn1uint64
+endif # EVENT2_HAS_OPENSSL
 endif
 
 ifdef BASE_7_0
@@ -131,7 +155,6 @@ benchdata_SRCS += benchdata.cpp
 
 TESTPROD_HOST += testpvalink
 testpvalink_SRCS += testpvalink.cpp
-testpvalink_SRCS += capturestd.cpp
 testpvalink_SRCS += testioc_registerRecordDeviceDriver.cpp
 testpvalink_LIBS += pvxsIoc pvxs $(EPICS_BASE_IOC_LIBS)
 TESTS += testpvalink
@@ -147,7 +170,6 @@ TESTFILES += $(COMMON_DIR)/testioc.dbd
 
 TESTPROD_HOST += testqsingle
 testqsingle_SRCS += testqsingle
-testqsingle_SRCS += capturestd.cpp
 testqsingle_SRCS += testioc_registerRecordDeviceDriver.cpp
 testqsingle_LIBS = pvxsIoc pvxs $(EPICS_BASE_IOC_LIBS)
 TESTFILES += ../testqsingle.db
@@ -162,18 +184,17 @@ ifdef BASE_7_0
 
 TESTPROD_HOST += testqgroup
 testqgroup_SRCS += testqgroup
-testqgroup_SRCS += capturestd.cpp
 testqgroup_SRCS += testioc_registerRecordDeviceDriver.cpp
 testqgroup_LIBS = pvxsIoc pvxs $(EPICS_BASE_IOC_LIBS)
 TESTFILES += ../table.db
 TESTFILES += ../image.db
 TESTFILES += ../image.json
+TESTFILES += ../qgroup.cmd
+TESTFILES += ../qgroup.json
 TESTFILES += ../iq.db
 TESTFILES += ../ntenum.db
 TESTFILES += ../const.db
 TESTFILES += ../batch.db
-TESTFILES += ../qgroup.cmd
-TESTFILES += ../qgroup.json
 TESTS += testqgroup
 
 PROD_SRCS_RTEMS += rtemsTestData.c
@@ -203,6 +224,7 @@ endif
 #===========================
 
 include $(TOP)/configure/RULES
+-include $(wildcard $(TOP)/cfg/RULES*)
 #----------------------------------------
 #  ADD RULES AFTER THIS LINE
 
@@ -210,16 +232,16 @@ ifdef BASE_3_15
 rtemsTestData.c : $(TESTFILES) $(TOOLS)/epicsMakeMemFs.pl
 	$(PERL) $(TOOLS)/epicsMakeMemFs.pl $@ epicsRtemsFSImage $(TESTFILES)
 
-ifeq (YES,$(EVENT2_HAS_OPENSSL))
-testtls$(EXE): | ca.p12
+ifeq ($(EVENT2_HAS_OPENSSL),YES)
+testtls$(EXE): | cert_auth.p12
 
 # generate test certs only with EPICS_HOST_ARCH
 ifdef T_A
-ca.p12 :
+cert_auth.p12 :
 	$(RM) *.p12
 	../O.$(EPICS_HOST_ARCH)/gen_test_certs$(HOSTEXE) -O .
 ifeq ($(T_A),$(EPICS_HOST_ARCH))
-ca.p12 : gen_test_certs$(HOSTEXE)
+cert_auth.p12 : gen_test_certs$(HOSTEXE)
 endif # T_A==EPICS_HOST_ARCH
 endif # T_A
 endif # EVENT2_HAS_OPENSSL

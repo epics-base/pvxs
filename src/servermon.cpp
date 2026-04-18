@@ -7,6 +7,7 @@
 #include <cassert>
 
 #include <deque>
+#include <iomanip>
 
 #include <epicsMutex.h>
 #include <epicsGuard.h>
@@ -17,8 +18,9 @@
 #include "pvrequest.h"
 
 namespace pvxs { namespace impl {
-DEFINE_LOGGER(connsetup, "pvxs.tcp.setup");
+DEFINE_LOGGER(connsetup, "pvxs.tcp.init");
 DEFINE_LOGGER(connio, "pvxs.tcp.io");
+DEFINE_LOGGER(status_cms, "pvxs.st.cms");
 
 namespace {
 
@@ -83,7 +85,21 @@ struct MonitorOp final : public ServerOp
         {
             // based on operation state, yes
             server->acceptor_loop.dispatch([op](){
-                doReply(op);
+                auto ch(op->chan.lock());
+                if(!ch)
+                    return;
+                auto conn(ch->conn.lock());
+                if(!conn || conn->state==ConnBase::Disconnected)
+                    return;
+
+                auto bev(conn->connection());
+
+                if(bev && evbuffer_get_length(bufferevent_get_output(bev)) < conn->tcp_tx_limit) {
+                    doReply(op);
+                } else {
+                    // connection TX queue is too full
+                    conn->backlog.emplace_back([op]() { doReply(op); });
+                }
             });
 
             op->scheduled = true;
@@ -97,7 +113,6 @@ struct MonitorOp final : public ServerOp
         }
     }
 
-    // on tcp worker thread
     static
     void doReply(const std::shared_ptr<MonitorOp>& self)
     {
@@ -105,30 +120,16 @@ struct MonitorOp final : public ServerOp
         if(!ch)
             return;
         auto conn = ch->conn.lock();
-        if(!conn || !conn->connection() || conn->state==ConnBase::Disconnected)
+        if(!conn || !conn->connection())
             return;
 
         Guard G(self->lock);
-
         self->scheduled = false;
 
         log_debug_printf(connio, "%s state=%d\n", __func__, self->state);
 
         if(self->state==Dead)
             return;
-
-        // check connection TX buffer level
-        {
-            auto bev = conn->connection();
-            if(evbuffer_get_length(bufferevent_get_output(bev)) >= conn->tcp_tx_limit) {
-                log_debug_printf(connio, "Client %s IOID %u TX queue is too full defer to backlog\n",
-                                 conn->peerName.c_str(), unsigned(self->ioid));
-
-                conn->backlog.emplace_back([self]() { doReply(self); });
-                self->scheduled = true;
-                return;
-            }
-        }
 
         uint8_t subcmd = 0u;
         if(self->state==Creating) {
@@ -171,6 +172,21 @@ struct MonitorOp final : public ServerOp
             } else if(!self->queue.empty()) {
                 auto& ent = self->queue.front();
                 if(ent) {
+                    // Log certificate status subscriptions if requested
+                    if(status_cms.test(Level::Debug)) {
+                        std::string cert_id, state;
+                        try {
+                            state = ent["state"].as<std::string>();
+                            auto serial_number = ent["serial"].as<uint64_t>();
+                            std::ostringstream oss;
+                            oss << std::setw(20)
+                                << std::setfill('0')
+                                << serial_number;
+                            cert_id = "CERT:STATUS:xxxxxxxx:" + oss.str();
+                        } catch (...) {}
+                        if ( !state.empty() && !cert_id.empty())
+                            log_debug_printf(status_cms, "%24.24s = %-12s : %-41s: %s\n", "Value::state", state.c_str(), "MonitorOp::doReply()", cert_id.c_str());
+                    }
                     to_wire_valid(R, ent, &self->pvMask);
                     // TODO: placeholder for overrun mask
                     to_wire(R, uint8_t(0u));
@@ -692,10 +708,10 @@ void ServerConn::handle_MONITOR()
             // destroy
 
             chan->opByIOID.erase(ioid);
-            auto it = opByIOID.find(ioid);
-            if(it!=opByIOID.end()) {
-                auto self(it->second);
-                opByIOID.erase(it);
+            auto iter = opByIOID.find(ioid);
+            if(iter!=opByIOID.end()) {
+                auto self(iter->second);
+                opByIOID.erase(iter);
 
                 iface->server->acceptor_loop.dispatch([self](){
                     self->cleanup();

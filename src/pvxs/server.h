@@ -6,29 +6,30 @@
 #ifndef PVXS_SERVER_H
 #define PVXS_SERVER_H
 
-#include <osiSock.h>
-
-#include <iosfwd>
+#include <array>
 #include <functional>
+#include <iosfwd>
+#include <map>
+#include <memory>
+#include <set>
 #include <string>
 #include <tuple>
-#include <set>
-#include <map>
 #include <vector>
-#include <memory>
-#include <array>
 
 #include <epicsEndian.h>
+#include <osiSock.h>
 
-#include <pvxs/version.h>
-#include <pvxs/util.h>
 #include <pvxs/data.h>
 #include <pvxs/netcommon.h>
+#include <pvxs/util.h>
+#include <pvxs/version.h>
+
 
 namespace pvxs {
 namespace client {
 struct Config;
 }
+
 namespace server {
 
 struct SharedPV;
@@ -59,6 +60,7 @@ public:
     constexpr Server() = default;
     //! Create/allocate, but do not start, a new server with the provided config.
     explicit Server(const Config&);
+
     Server(const Server&) = default;
     Server(Server&& o) = default;
     Server& operator=(const Server&) = default;
@@ -107,6 +109,10 @@ public:
     //! Create a client configuration which can communicate with this Server.
     //! Suitable for use in self-contained unit-tests.
     client::Config clientConfig() const;
+    //! Create a client configuration which can communicate with the given Server.
+    //! Suitable for creating inner client context for certificate status monitoring.
+    //! @since UNRELEASED
+    static client::Config clientConfig(const Config &server_config);
 
     //! Add a SharedPV to the "__builtin" StaticSource
     Server& addPV(const std::string& name, const SharedPV& pv);
@@ -178,7 +184,7 @@ struct PVXS_API Config : public impl::ConfigCommon {
     bool auto_beacon = true;
 
     //! Server unique ID.  Only meaningful in readback via Server::config()
-    ServerGUID guid{};
+    ServerGUID guid;
 
 private:
     bool BE = EPICS_BYTE_ORDER==EPICS_ENDIAN_BIG;
@@ -187,17 +193,15 @@ public:
 
     // compat
     static inline Config from_env() { return Config{}.applyEnv(); }
-
     //! Default configuration using process environment
     static inline Config fromEnv()  { return Config{}.applyEnv(); }
+    //! update using defined EPICS_PVA* environment variables
+    Config& applyEnv();
 
     //! Configuration limited to the local loopback interface on a randomly chosen port.
     //! Suitable for use in self-contained unit-tests.
     //! @since 0.3.0 Address family argument added.
     static Config isolated(int family=AF_INET);
-
-    //! update using defined EPICS_PVA* environment variables
-    Config& applyEnv();
 
     typedef std::map<std::string, std::string> defs_t;
     //! update with definitions as with EPICS_PVA* environment variables.
@@ -205,8 +209,7 @@ public:
     Config& applyDefs(const defs_t& def);
 
     //! extract definitions with environment variable names as keys.
-    //! Process environment is not changed.
-    void updateDefs(defs_t& defs) const;
+    virtual void updateDefs(defs_t& defs) const;
 
     /** Apply rules to translate current requested configuration
      *  into one which can actually be loaded based on current host network configuration.
@@ -225,11 +228,27 @@ public:
 
 #ifdef PVXS_EXPERT_API_ENABLED
     // for protocol compatibility testing
-    inline Config& overrideSendBE(bool be) { BE = be; return *this; }
+    inline Config& overrideSendBE(bool be) {
+        BE = be;
+        return *this;
+    }
     inline bool sendBE() const { return BE; }
-    inline Config& overrideShareUDP(bool share) { UDP = share; return *this; }
+    inline Config& overrideShareUDP(bool share) {
+        UDP = share;
+        return *this;
+    }
     inline bool shareUDP() const { return UDP; }
 #endif
+    //! From definitions
+    //! @since UNRELEASED
+    void fromDefs(Config& self, const std::map<std::string, std::string>& defs, bool useenv);
+
+    Config()
+        : auto_beacon(true)
+        , guid()
+        , BE(EPICS_BYTE_ORDER==EPICS_ENDIAN_BIG)
+        , UDP(true)
+    {}
 };
 
 PVXS_API

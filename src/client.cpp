@@ -8,18 +8,23 @@
 #include <set>
 #include <tuple>
 
-#include <osiSock.h>
+#include <clientimpl.h>
 #include <dbDefs.h>
-#include <epicsThread.h>
 #include <epicsGuard.h>
+#include <epicsThread.h>
+#include <osiSock.h>
 
 #include <pvxs/log.h>
-#include <clientimpl.h>
 
-DEFINE_LOGGER(setup, "pvxs.client.setup");
-DEFINE_LOGGER(io, "pvxs.client.io");
-DEFINE_LOGGER(beacon, "pvxs.client.beacon");
-DEFINE_LOGGER(duppv, "pvxs.client.dup");
+DEFINE_LOGGER(setup, "pvxs.cli.init");
+DEFINE_LOGGER(io, "pvxs.cli.io");
+DEFINE_LOGGER(beacon, "pvxs.cli.beacon");
+DEFINE_LOGGER(duppv, "pvxs.cli.dup");
+DEFINE_LOGGER(status_cli, "pvxs.st.cli");
+
+#ifdef PVXS_ENABLE_OPENSSL
+DEFINE_LOGGER(watcher, "pvxs.certs.mon");
+#endif
 
 typedef epicsGuard<epicsMutex> Guard;
 typedef epicsGuardRelease<epicsMutex> UnGuard;
@@ -188,6 +193,7 @@ void Channel::disconnect(const std::shared_ptr<Channel>& self)
     }
 
     state = Channel::Searching;
+    log_debug_printf(status_cli, "%24.24s = %-12s : %-41s: %s\n", "Channel::state", "Searching", "Channel::disconnect()", name.c_str());
     sid = 0xdeadbeef; // spoil
 
     auto conns(connectors); // copy list
@@ -218,12 +224,14 @@ void Channel::disconnect(const std::shared_ptr<Channel>& self)
                          current ? current->peerName.c_str() : "<disconnected>",
                          name.c_str());
 
-    } else if(context->state==ContextImpl::Running) { // reconnect to specific server
+    } else if (context->isRunning()) {  // reconnect to specific server
         conn = Connection::build(context, forcedServer.addr, true,
                                  forcedServer.scheme==SockEndpoint::TLS);
 
         conn->pending[cid] = self;
         state = Connecting;
+        log_debug_printf(status_cli, "%24.24s = %-12s : %-41s: %s\n", "Connection::ready", "false", "Connection::build()", name.c_str());
+        log_debug_printf(status_cli, "%24.24s = %-12s : %-41s: %s\n", "Channel::state", "Connecting", "Channel::disconnect()", name.c_str());
 
         conn->createChannels();
 
@@ -305,13 +313,13 @@ Value ResultWaiter::wait(double timeout)
         throw Interrupted();
 }
 
-void ResultWaiter::complete(Result&& result, bool interrupt)
+void ResultWaiter::complete(Result&& res, bool interrupt)
 {
     {
         Guard G(lock);
         if(outcome!=Busy)
             return;
-        this->result = std::move(result);
+        this->result = std::move(res);
         outcome = interrupt ? Abort : Done;
     }
     notify.signal();
@@ -354,7 +362,7 @@ std::shared_ptr<Channel> Channel::build(const std::shared_ptr<ContextImpl>& cont
                                         const std::string& name,
                                         const std::string& server)
 {
-    if(context->state!=ContextImpl::Running)
+    if(!context->isRunning())
         throw std::logic_error("Context close()d");
 
     SockEndpoint forceServer;
@@ -392,13 +400,15 @@ std::shared_ptr<Channel> Channel::build(const std::shared_ptr<ContextImpl>& cont
         } else { // bypass search and connect so a specific server
             chan->forcedServer = forceServer;
             chan->conn = Connection::build(context, forceServer.addr, false,
-                                           forceServer.scheme==SockEndpoint::TLS);
+                                           forceServer.scheme == SockEndpoint::TLS
+            );
 
             chan->conn->pending[chan->cid] = chan;
             chan->state = Connecting;
+            log_debug_printf(status_cli, "%24.24s = %-12s : %-41s: %s\n", "Connection::ready", "false",   "Channel::build()", name.c_str());
+            log_debug_printf(status_cli, "%24.24s = %-12s : %-41s: %s\n", "Channel::state", "Connecting", "Channel::build()", name.c_str());
 
             chan->conn->createChannels();
-
         }
     }
 
@@ -418,42 +428,12 @@ Context::Context(const Config& conf)
     :pvt(std::make_shared<Pvt>(conf))
 {
     pvt->impl->startNS();
+    #ifdef PVXS_ENABLE_OPENSSL
+    pvt->impl->configureExpirationHandler(pvt->impl.get());
+#endif
 }
 
 Context::~Context() {}
-
-void Context::reconfigure(const Config& newconf)
-{
-    if(!pvt)
-        throw std::logic_error("NULL Context");
-
-#ifdef PVXS_ENABLE_OPENSSL
-
-    ossl::SSLContext new_context;
-    if(!newconf.tls_keychain_file.empty()) {
-        new_context = ossl::SSLContext::for_client(newconf);
-    }
-
-    pvt->impl->manager.loop().call([this, &new_context](){
-
-        log_debug_printf(setup, "Client reconfigure%s", "\n");
-
-        auto conns(std::move(pvt->impl->connByAddr));
-
-        for(auto& pair : conns) {
-            auto conn = pair.second.lock();
-            conn->cleanup();
-        }
-
-        conns.clear();
-
-        pvt->impl->tls_context = new_context;
-    });
-
-#else
-    pvt->impl->manager.loop().sync();
-#endif
-}
 
 const Config& Context::config() const
 {
@@ -560,7 +540,7 @@ Value buildCAMethod()
                    }).create();
 }
 
-ContextImpl::ContextImpl(const Config& conf, const evbase& tcp_loop)
+ContextImpl::ContextImpl(const Config& conf, const evbase tcp_loop)
     :effective([conf]() -> Config{
         Config eff(conf);
         eff.expand();
@@ -570,6 +550,9 @@ ContextImpl::ContextImpl(const Config& conf, const evbase& tcp_loop)
     ,searchTx4(AF_INET, SOCK_DGRAM, 0)
     ,searchTx6(AF_INET6, SOCK_DGRAM, 0)
     ,tcp_loop(tcp_loop)
+#ifdef PVXS_ENABLE_OPENSSL
+    ,tls_context(nullptr)
+#endif
     ,searchRx4(__FILE__, __LINE__,
                event_new(tcp_loop.base, searchTx4.sock, EV_READ|EV_PERSIST, &ContextImpl::onSearchS, this))
     ,searchRx6(__FILE__, __LINE__,
@@ -585,14 +568,35 @@ ContextImpl::ContextImpl(const Config& conf, const evbase& tcp_loop)
                   event_new(tcp_loop.base, -1, EV_TIMEOUT|EV_PERSIST, &ContextImpl::cacheCleanS, this))
     ,nsChecker(__FILE__, __LINE__,
                event_new(tcp_loop.base, -1, EV_TIMEOUT|EV_PERSIST, &ContextImpl::onNSCheckS, this))
+#ifdef PVXS_ENABLE_OPENSSL
+    ,cert_expiration_timer(__FILE__, __LINE__,
+           event_new(tcp_loop.base, -1, EV_TIMEOUT | EV_PERSIST, &ContextImpl::certExpirationHandlerS, nullptr))
+#endif
 {
 #ifdef PVXS_ENABLE_OPENSSL
-    if(!effective.tls_keychain_file.empty()) {
+    if(effective.isTlsConfigured()) {
+        log_debug_printf(setup, "TLS is configured.  Attempting to create a TLS context for: %s\n", effective.tls_keychain_file.c_str());
         try {
-            tls_context = ossl::SSLContext::for_client(effective);
+            // TODO: currently not possible to disable TLS for an individual search.
+            //   until then, create a separate inner context to retrieve certificate status as a signed payload from CMS
+            log_debug_printf(setup, "Creating a client context for certificate status to use in TLS context creation%s", "\n");
+            auto innerConf = effective;
+            innerConf.tls_disabled = true;
+            auto inner = innerConf.build();
+            log_debug_printf(setup, "Created a client context for certificate status%s", "\n");
+            tls_context = ossl::SSLContext::for_client(effective, inner, tcp_loop);
+            log_debug_printf(setup, "Created TLS context for: %s\n", effective.tls_keychain_file.c_str());
+            tls_context->setOnTlsReady([this]() { onTlsReady(); });
         }catch(std::exception& e){
-            log_err_printf(setup, "Unable to setup TLS.  Disabled for client : %s\n", e.what());
+            log_debug_printf(setup, "Failed to configure TLS for client: %s\n", e.what());
+            if (tls_context) {
+                tls_context->setDegradedMode(true);
+                log_warn_printf(setup, "TLS disabled for client: %s\n", e.what());
         }
+        }
+    } else if (tls_context) {
+        tls_context->setDegradedMode(true);
+        log_debug_printf(setup, "TLS is not configured.  Setting Degraded Mode.%s", "\n");
     }
 #endif
 
@@ -699,8 +703,12 @@ ContextImpl::ContextImpl(const Config& conf, const evbase& tcp_loop)
         log_err_printf(setup, "Error enabling beacon clean timer on\n%s", "");
     if(event_add(cacheCleaner.get(), &channelCacheCleanInterval))
         log_err_printf(setup, "Error enabling channel cache clean timer on\n%s", "");
-
+#ifdef PVXS_ENABLE_OPENSSL
+    initializeState();
+#else
     state = Running;
+#endif
+    log_debug_printf(status_cli, "%24.24s = %-12s : %-41s: %p\n", "ContextImpl::state", state == Running ? "Running" : "Init", "ContextImpl::ContextImpl()", this);
 }
 
 ContextImpl::~ContextImpl() {}
@@ -715,7 +723,8 @@ void ContextImpl::startNS()
         for(auto& ns : nameServers) {
             const auto& serv = ns.first;
             ns.second = Connection::build(shared_from_this(), serv.addr, false,
-                                          serv.scheme==SockEndpoint::TLS);
+                                         serv.scheme == SockEndpoint::TLS
+            );
             ns.second->nameserver = true;
             log_debug_printf(io, "Connecting to nameserver %s%s\n",
                              ns.second->peerName.c_str(), ns.second->isTLS ? " TLS" : "");
@@ -735,6 +744,7 @@ void ContextImpl::close()
         if(state == Stopped)
             return;
         state = Stopped;
+        log_debug_printf(status_cli, "%24.24s = %-12s : %-41s: %p\n", "ContextImpl::state", "Stopped", "ContextImpl::close()", this);
 
         (void)event_del(searchTimer.get());
         (void)event_del(searchRx4.get());
@@ -936,15 +946,13 @@ void procSearchReply(ContextImpl& self, const SockAddr& src, uint8_t peerVersion
     }
 
     bool isTCP = proto=="tcp";
+    bool isTLS = proto=="tls";
 
 #ifdef PVXS_ENABLE_OPENSSL
-    bool isTLS = proto=="tls";
-    if(!self.tls_context && isTLS)
-        return;
+    if (!found || !(isTCP || isTLS))
 #else
-    const bool isTLS = false;
+    if (!found || !isTCP)
 #endif
-    if(!found || !(isTCP || isTLS))
         return;
 
     for(auto n : range(nSearch)) {
@@ -977,6 +985,8 @@ void procSearchReply(ContextImpl& self, const SockAddr& src, uint8_t peerVersion
             chan->conn->pending[chan->cid] = chan;
             chan->nSearch = 0u;
             chan->state = Channel::Connecting;
+            log_debug_printf(status_cli, "%24.24s = %-12s : %-41s: %s\n", "Connection::ready", "false", "procSearchReply()", chan->name.c_str());
+            log_debug_printf(status_cli, "%24.24s = %-12s : %-41s: %s\n", "Channel::state", "Connecting", "procSearchReply()", chan->name.c_str());
 
             chan->conn->createChannels();
 
@@ -1137,7 +1147,7 @@ void ContextImpl::tickSearch(SearchKind kind, bool poked)
             to_wire(M, uint8_t(0u));
 
 #ifdef PVXS_ENABLE_OPENSSL
-        } else if(tls_context) {
+        } else if(isTlsConfigured()) {
             to_wire(M, uint8_t(2u));
             to_wire(M, "tls");
             to_wire(M, "tcp");
@@ -1367,6 +1377,16 @@ void ContextImpl::tickBeaconCleanS(evutil_socket_t fd, short evt, void *raw)
     }
 }
 
+#ifdef PVXS_ENABLE_OPENSSL
+void ContextImpl::certExpirationHandlerS(evutil_socket_t, short, void* raw) {
+    try {
+        static_cast<ContextImpl*>(raw)->certExpirationHandler();
+    } catch (std::exception& e) {
+        log_exc_printf(io, "Unhandled error in certificate expiration callback: %s\n", e.what());
+    }
+}
+#endif
+
 void ContextImpl::onNSCheck()
 {
     for(auto& ns : nameServers) {
@@ -1374,7 +1394,8 @@ void ContextImpl::onNSCheck()
             continue;
 
         ns.second = Connection::build(shared_from_this(), ns.first.addr, false,
-                                      ns.first.scheme==SockEndpoint::TLS);
+                                    ns.first.scheme == SockEndpoint::TLS
+        );
         ns.second->nameserver = true;
         log_debug_printf(io, "Reconnecting nameserver %s\n", ns.second->peerName.c_str());
     }
@@ -1445,6 +1466,160 @@ Context::Pvt::~Pvt()
     impl->close();
 }
 
+void Context::reconfigure(const Config& new_conf) {
+    if (!pvt) throw std::logic_error("NULL Context");
+    pvt->impl->reconfigure(new_conf);
+}
+
+void ContextImpl::reconfigure(const Config& new_conf) {
+#ifdef PVXS_ENABLE_OPENSSL
+    if (new_conf.isTlsConfigured()) {
+        if (tls_context) tls_context->setDegradedMode(true);
+        // Force reload of context from cert
+        manager.loop().call([this, &new_conf]() mutable { reloadTlsFromConfig(new_conf); });
+    }
+#endif
+    manager.loop().sync();
+}
+
+#ifdef PVXS_ENABLE_OPENSSL
+void ContextImpl::certExpirationHandler() {
+    reconfigure(effective);
+}
+#endif
+
+#ifdef PVXS_ENABLE_OPENSSL
+/**
+ * @brief Called (on the event loop thread) when the client SSLContext transitions to TlsReady.
+ *
+ * Iterates all existing connections and re-evaluates channel creation readiness,
+ * in case Connection::ready was set to false because the TLS context wasn't ready
+ * at the time handle_CONNECTION_VALIDATED() ran.
+ */
+void ContextImpl::onTlsReady() {
+    log_debug_printf(setup, "SSLContext now TlsReady, re-evaluating %zu connection(s)\n", connByAddr.size());
+    for (auto& pair : connByAddr) {
+        if (auto conn = pair.second.lock()) {
+            conn->createChannels();
+        }
+    }
+}
+#endif
+
+#ifdef PVXS_ENABLE_OPENSSL
+/**
+ * @brief Enable TLS by reloading the same effective config
+ */
+void ContextImpl::reloadTls() {
+    reloadTlsFromConfig(effective);
+}
+
+/**
+ * @brief Enable TLS with the optional config if provided
+ * @param new_config optional config (check the is_initialized flag to see if it's blank or not)
+ */
+void ContextImpl::reloadTlsFromConfig(const Config& new_config) {
+    // If the context is already in the TlsReady state, then don't do anything
+    if (isTlsReady()) return;
+    try {
+        log_debug_printf(setup, "Attempting to recreate a TLS context using: %s\n", new_config.tls_keychain_file.c_str());
+        // TODO: currently not possible to disable TLS for an individual search.
+        //   until then, create a separate inner context to retrieve signed payload from CMS
+        auto innerConf = new_config;
+        innerConf.tls_disabled = true;
+        const auto new_context = ossl::SSLContext::for_client(new_config, innerConf.build(), tcp_loop);
+
+        // If unsuccessful in getting a certificate, or it has EXPIRED, then don't enable TLS
+        if (!isTlsPossible(new_context) || new_context->hasExpired()) {
+            log_debug_printf(setup, "TLS was not reconfigured.  Skipping recreation of TLS context.%s", "\n");
+            return;
+        }
+
+        // Remove all peer (server) connections.  They will be reconnected as TLS automatically
+        removePeer();
+
+        tls_context = new_context;
+        tls_context->setOnTlsReady([this]() { onTlsReady(); });
+        effective = new_config;
+    } catch (std::exception& e) {
+        log_debug_printf(setup, "Failed to reconfigure TLS for client: %s\n", e.what());
+        if (tls_context && tls_context->state != ossl::SSLContext::DegradedMode) tls_context->setDegradedMode(true);
+    }
+}
+#endif
+
+#ifdef PVXS_ENABLE_OPENSSL
+/**
+ * @brief Clean up all peer connections or the specified peer connection
+ *
+ * Remove the specified peer connection or if not specified then remove all peer connections.
+ *
+ * @param client_conn the peer connection to clean up, nullptr to remove all peers
+ */
+void ContextImpl::removePeer(const Connection* client_conn) {
+    // Find the connection(s) to clean-up
+    auto conns(std::move(connByAddr));
+    std::vector<std::weak_ptr<Connection>> to_cleanup;
+    for (auto& pair : conns) {
+        auto conn = pair.second.lock();
+        if (conn && (!client_conn || conn.get() == client_conn)) {
+            to_cleanup.push_back(conn);
+        }
+    }
+
+    log_debug_printf(watcher, "Closing %zu connections\n", to_cleanup.size());
+
+    // Clean them up
+    for (auto& weak_conn : to_cleanup) {
+        auto conn = weak_conn.lock();
+        if (conn) {
+            conn->cleanup();
+        }
+    }
+    if (!client_conn) conns.clear();
+    connByAddr.swap(conns);
+}
+#endif
+
+#ifdef PVXS_ENABLE_OPENSSL
+/**
+ * @brief Called to disable TLS - if TLS is not Enabled, then this will do nothing.  It is idempotent
+ */
+void ContextImpl::enterDegradedMode() const {
+    if (!isTlsConfigured()) return;
+
+    tls_context->setDegradedMode(true);
+
+    // Remove all TLS peer connections
+    removeTlsPeer();
+}
+#endif
+
+#ifdef PVXS_ENABLE_OPENSSL
+/**
+ * @brief Called to remove any existing TLS connections in this client context
+ */
+void ContextImpl::removeTlsPeer(const Connection* client_conn) const {
+    // Collect tls connections to clean up
+    std::vector<std::weak_ptr<Connection>> to_cleanup;
+    for (auto& pair : connByAddr) {
+        auto conn = pair.second.lock();
+        if (conn && conn->isTLS && (!client_conn || conn.get() == client_conn)) {
+            to_cleanup.push_back(pair.second);
+        }
+    }
+
+    log_debug_printf(watcher, "Closing %zu TLS connection(s) to replace with TCP ones\n", to_cleanup.size());
+
+    // Clean them up
+    for (auto& weak_conn : to_cleanup) {
+        auto conn = weak_conn.lock();
+        if (conn) {
+            conn->cleanup();
+        }
+    }
+}
+#endif
 } // namespace client
 
 } // namespace pvxs

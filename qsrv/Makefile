@@ -21,6 +21,10 @@ DBD += softIocPVX.dbd
 softIocPVX_DBD += softIoc.dbd
 softIocPVX_DBD += pvxsIoc.dbd
 
+# Ensure correct build order when generating the expanded DBD.
+# pvxsIoc.dbd is produced by ioc/ and installed into $(INSTALL_LOCATION)/dbd.
+$(COMMON_DIR)/softIocPVX.dbd: $(INSTALL_LOCATION)/dbd/pvxsIoc.dbd
+
 DB += softIocPVXExit.db
 
 # used with Base < 7.0.5

@@ -7,59 +7,31 @@
 #ifndef EVHELPER_H
 #define EVHELPER_H
 
-#include <sstream>
 #include <functional>
-#include <memory>
-#include <string>
 #include <map>
+#include <memory>
 #include <set>
+#include <sstream>
+#include <string>
 
-#include <event2/event.h>
 #include <event2/buffer.h>
-#include <event2/listener.h>
 #include <event2/bufferevent.h>
+#include <event2/event.h>
+#include <event2/listener.h>
+
+#include "evhelper.h"
 
 #ifdef PVXS_ENABLE_OPENSSL
 #  include <event2/bufferevent_ssl.h>
 #endif
 
-#include <pvxs/version.h>
+#include <epicsTime.h>
 #include <utilpvt.h>
 
-#include <epicsTime.h>
+#include <pvxs/version.h>
 
+#include "ownedptr.h"
 #include "pvaproto.h"
-#ifdef PVXS_ENABLE_OPENSSL
-#  include "ossl.h"
-#endif
-
-// hooks for std::unique_ptr
-namespace std {
-template<>
-struct default_delete<event_config> {
-    inline void operator()(event_config* ev) { event_config_free(ev); }
-};
-template<>
-struct default_delete<event_base> {
-    inline void operator()(event_base* ev) { event_base_free(ev); }
-};
-template<>
-struct default_delete<event> {
-    inline void operator()(event* ev) { event_free(ev); }
-};
-template<>
-struct default_delete<evconnlistener> {
-    inline void operator()(evconnlistener* ev) { evconnlistener_free(ev); }
-};
-template<>
-struct default_delete<bufferevent> {
-    inline void operator()(bufferevent* ev) { bufferevent_free(ev); }
-};
-template<>
-struct default_delete<evbuffer> {
-    inline void operator()(evbuffer* ev) { evbuffer_free(ev); }
-};
-}
 
 namespace pvxs {namespace impl {
 
@@ -76,35 +48,6 @@ DEFINE_DELETE(evconnlistener);
 DEFINE_DELETE(bufferevent);
 DEFINE_DELETE(evbuffer);
 #undef DEFINE_DELETE
-
-//! unique_ptr which is never constructed with NULL
-template<typename T, typename D>
-struct owned_ptr : public std::unique_ptr<T, D>
-{
-    typedef std::unique_ptr<T, D> base_t;
-    constexpr owned_ptr() {}
-    constexpr owned_ptr(std::nullptr_t np) : base_t(np) {}
-    explicit owned_ptr(const char* file, int line, T* ptr) : base_t(ptr) {
-        if(!*this)
-            throw loc_bad_alloc(file, line);
-    }
-
-    // for functions which return a pointer in an argument
-    //   int some(T** presult); // store *presult = output
-    // use like
-    //   owned_ptr<T> x;
-    //   some(x.acquire());
-    struct acquisition {
-        base_t* o;
-        T* ptr = nullptr;
-        operator T** () { return &ptr; }
-        constexpr acquisition(base_t* o) :o(o) {}
-        ~acquisition() {
-            o->reset(ptr);
-        }
-    };
-    acquisition acquire() { return acquisition{this}; }
-};
 
 /* It seems that std::function<void()>(Fn&&) from gcc (circa 8.3) and clang (circa 7.0)
  * always copies the functor/lambda.  We can't allow this when transferring ownership
@@ -220,7 +163,7 @@ public:
 };
 
 template<typename T>
-using ev_owned_ptr = owned_ptr<T, ev_delete<T>>;
+using ev_owned_ptr = pvxs::OwnedPtr<T, ev_delete<T>>;
 typedef ev_owned_ptr<event_config> evconfig;
 typedef ev_owned_ptr<event_base> evbaseptr;
 typedef ev_owned_ptr<event> evevent;
@@ -257,9 +200,6 @@ struct PVXS_API evsocket
     evsocket& operator=(const evsocket&) = delete;
 
     ~evsocket();
-
-    // caller takes ownership of socket
-    void release();
 
     SockAddr sockname() const;
 

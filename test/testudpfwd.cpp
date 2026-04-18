@@ -89,6 +89,7 @@ bool testFwdVia(const server::Config& base, const SockAddr& ifaddr)
             return false;
         }
     };
+    (void)doGet;
 
     ok &= doGet("testpv1");
     ok &= doGet("testpv2");

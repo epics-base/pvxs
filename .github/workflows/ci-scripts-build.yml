@@ -22,8 +22,7 @@ env:
   CMP: gcc
   _PVXS_ABORT_ON_CRIT: 1
   PVXS_LOG: pvxs.*=WARN
-  # test debugging logic in testtls
-  SSLKEYLOGFILE: key.log
+  OPENSSL_VERSION: "3.1.4"
 
 jobs:
   native:
@@ -48,7 +47,6 @@ jobs:
             os: ubuntu-latest
             cmp: gcc
             configuration: default
-            base: "7.0"
             extra: "CMD_CPPFLAGS=-Werror"
             doc: 1
 
@@ -56,7 +54,6 @@ jobs:
             os: ubuntu-latest
             cmp: gcc
             configuration: default
-            base: "7.0"
             # https://gcc.gnu.org/onlinedocs/libstdc++/manual/using_macros.html
             extra: "CMD_CPPFLAGS=\"-D_GLIBCXX_ASSERTIONS -D_GLIBCXX_DEBUG -D_GLIBCXX_DEBUG_PEDANTIC\""
             doc: 1
@@ -65,48 +62,43 @@ jobs:
             os: ubuntu-latest
             cmp: gcc
             configuration: default
-            base: "7.0"
             extra: "CMD_CXXFLAGS=-std=c++17"
 
           - name: Cross mingw64 DLL
             os: ubuntu-latest
             cmp: gcc
             configuration: default
-            base: "7.0"
             cross: "windows-x64-mingw"
+#            extra: "WITH_OPENSSL=YES"
 
           - name: Cross mingw64 static
             os: ubuntu-latest
             cmp: gcc
             configuration: static
-            base: "7.0"
             cross: "windows-x64-mingw"
+#            extra: "WITH_OPENSSL=YES"
 
           - name: RTEMS5
             os: ubuntu-22.04
             cmp: gcc
             configuration: default
-            base: "7.0"
             cross: "RTEMS-pc686-qemu@5"
  
           - name: Native Linux with clang
             os: ubuntu-latest
             cmp: clang
             configuration: default
-            base: "7.0"
 
           - name: Native Linux with clang ubsan
             os: ubuntu-latest
             cmp: clang
             configuration: default
-            base: "7.0"
             extra: "CMD_CFLAGS=-fsanitize=undefined CMD_CXXFLAGS=-fsanitize=undefined CMD_LDFLAGS=-fsanitize=undefined"
 
           - name: Native Linux with libevent stable
             os: ubuntu-latest
             cmp: gcc
             configuration: default
-            base: "7.0"
             libevent: "release-2.1.12-stable"
 
           - name: Native Linux with 7.0.2
@@ -137,21 +129,18 @@ jobs:
             os: macos-latest
             cmp: clang
             configuration: default
-            base: "7.0"
 
           - name: vs2022 DLL
             os: windows-2022
             cmp: vs2022
             configuration: debug
-            base: "7.0"
-            extra: "CMD_CXXFLAGS=-analyze"
+            extra: "CMD_CXXFLAGS=-analysis"
 
           - name: vs2022 static
             os: windows-2022
             cmp: vs2022
             configuration: static-debug
-            base: "7.0"
-            extra: "CMD_CXXFLAGS=-analyze"
+            extra: "CMD_CXXFLAGS=-analysis"
 
     steps:
     - uses: actions/checkout@v4
@@ -160,25 +149,34 @@ jobs:
     - name: "apt-get install"
       run: |
         sudo apt-get update
-        sudo apt-get -y install libreadline-dev g++-mingw-w64-x86-64 cmake gdb qemu-system-x86 libssl-dev
+        sudo apt-get -y install libreadline-dev g++-mingw-w64-x86-64 cmake gdb qemu-system-x86 libssl-dev mingw-w64-x86-64-dev
       if: runner.os == 'Linux'
-    - name: vcpkg cache
-      uses: actions/cache@v4
-      with:
-        path: c:/vcpkg-cache
-        key: ${{ runner.os }}-vcpkg
-    - name: vcpkg
+    - name: mingw openssl
       shell: bash
       run: |
-        install -d c:/vcpkg-cache
-        vcpkg install --binarysource="clear;files,c:/vcpkg-cache,readwrite" "openssl[tools]"
-        ls C:/vcpkg/installed/x64-windows
-        cat <<EOF >> configure/CONFIG_SITE.local
-        OPENSSL=C:/vcpkg/installed/x64-windows
-        EOF
-        echo "C:/vcpkg/installed/x64-windows/bin" >> "$GITHUB_PATH"
-        echo "C:/vcpkg/installed/x64-windows/tools/openssl" >> "$GITHUB_PATH"
-      if: runner.os == 'Windows'
+        wget https://www.openssl.org/source/openssl-${OPENSSL_VERSION}.tar.gz
+        tar xzf openssl-${OPENSSL_VERSION}.tar.gz
+        cd openssl-${OPENSSL_VERSION}
+        ./Configure mingw64 --cross-compile-prefix=x86_64-w64-mingw32- --prefix=/usr/x86_64-w64-mingw32
+        make -j$(nproc)
+        sudo make install
+
+        SYSROOT=/usr/x86_64-w64-mingw32
+        for lib in ssl crypto; do
+          for kind in dll.a a; do
+            tgt="$SYSROOT/lib/lib${lib}.${kind}"
+            if [ ! -e "$tgt" ]; then
+              cand=$(ls -1 "$SYSROOT"/lib/lib${lib}*.${kind} "$SYSROOT"/lib64/lib${lib}*.${kind} 2>/dev/null | head -n1 || true)
+              if [ -n "$cand" ]; then
+                sudo ln -sf "$cand" "$tgt"
+              fi
+            fi
+          done
+        done
+
+        cd ..
+        rm -rf openssl-${OPENSSL_VERSION}*
+      if: runner.os == 'Linux' && matrix.cross == 'windows-x64-mingw'
     - name: Host Info
       run: openssl version -a
     - name: Automatic core dumper analysis
@@ -255,13 +253,11 @@ jobs:
             image: centos:7
             cmp: gcc
             configuration: default
-            base: "7.0"
 
           - name: Linux fedora latest
             image: fedora:latest
             cmp: gcc
             configuration: default
-            base: "7.0"
 
     steps:
     - uses: actions/checkout@v3

@@ -10,12 +10,13 @@
 #  error Do not include netcommon.h directly
 #endif
 
-#include <string>
-#include <set>
 #include <list>
 #include <memory>
+#include <set>
+#include <string>
 #include <vector>
 
+#include <pvxs/config.h>
 #include <pvxs/version.h>
 
 namespace pvxs {
@@ -25,7 +26,7 @@ namespace pvxs {
  * Primarily a way of presenting peer address and a remote account name.
  * The ``method`` gives the authentication sub-protocol used and is presently one of:
  *
- * - "x509" - Peer certificate.  Common Names of root CA and peer used as authority and account.
+ * - "x509" - Peer certificate.  Common Names of root Certificate Authority and peer used as authority and account.
  * - "ca" - Client provided account name.
  * - "anonymous" - Client provided no credentials.  account will also be "anonymous".
  *
@@ -42,9 +43,15 @@ struct PVXS_API PeerCredentials {
     //! Who vouches for this account.
     //!
     //! Empty for "anonymous" and "ca" methods.
-    //! For "x509" method, common name of the root CA.
+    //! For "x509" method, common name of the root Certificate Authority.
     //! @since UNRELEASED
     std::string authority;
+    // For "x509"
+    // Peer certificate issuer ID (not passed to EPICS security)
+    std::string issuer_id;
+    // For "x509"
+    // Peer certificate serial number (not passed to EPICS security)
+    std::string serial;
     //! Remote user account name.  Meaning depends upon method.
     std::string account;
     /** Lookup (locally) roles associated with the account.
@@ -55,7 +62,9 @@ struct PVXS_API PeerCredentials {
      * On other targets, an empty list is returned.
      */
     std::set<std::string> roles() const;
-    /** Operation over secure transport
+
+    /** Context configured to use TLS?
+     *  Ignore as a setting.
      * @since UNRELEASED
      */
     bool isTLS = false;
@@ -122,49 +131,6 @@ struct PVXS_API ReportInfo {
 };
 
 #endif // PVXS_EXPERT_API_ENABLED
-
-struct PVXS_API ConfigCommon {
-    virtual ~ConfigCommon() =0;
-
-    //! TCP port to bind.  Default is 5075.  May be zero.
-    unsigned short tcp_port = 5075;
-    //! TCP port to bind for TLS traffic.  Default is 5076
-    //! @since UNRELEASED
-    unsigned short tls_port = 5076;
-    //! UDP port to bind.  Default is 5076.  May be zero, cf. Server::config() to find allocated port.
-    unsigned short udp_port = 5076;
-
-    //! Inactivity timeout interval for TCP connections.  (seconds)
-    //! @since 0.2.0
-    double tcpTimeout = 40.0;
-
-    /** Path to PKCS#12 file containing key and/or certificates.
-     *  @since UNRELEASED
-     */
-    std::string tls_keychain_file;
-
-    /** Client certificate request during TLS handshake.
-     *
-     *  - Default.   Currently equivalent to Optional
-     *  - Optional.  Server will ask for a client cert.  But will continue if none is provided.
-     *               If a client cert. is provided, then it is validated.  An invalid cert.
-     *               will fail the handshake.
-     *  - Require.   Server will require a valid client cert. or the TLS handshake will fail.
-     *
-     *  @since UNRELEASED
-     */
-    enum tls_client_cert_t {
-        Default,
-        Optional,
-        Require,
-    } tls_client_cert = Default;
-
-    /** Is TLS support available?
-     *  @since UNRELEASED
-     */
-    static
-    bool has_tls_support();
-};
 
 } // namespace impl
 } // namespace pvxs

@@ -21,12 +21,13 @@ Dependencies
 
 * `EPICS Base <https://epics-controls.org/resources-and-support/base/>`_ >=3.15.1
 * `libevent <http://libevent.org/>`_ >=2.0.1  (Optionally bundled)
+* `openssl <https://openssl-library.org/>`_ >=3.1.0
 * (optional) `CMake <https://cmake.org/>`_ >=3.10, only needed when building bundled libevent
 
 Download
 --------
 
-Releases are published to https://github.com/epics-base/pvxs/releases.
+Releases are published to https://github.com/slac-epics/pvxs-tls/releases.
 See :ref:`relpolicy` for details.
 
 Getting Started

@@ -13,6 +13,12 @@
 #  endif
 #endif
 
+#ifdef __linux__
+#include <errno.h>
+#elif defined(__APPLE__) || defined(__FreeBSD__)
+#include <stdlib.h>
+#endif
+
 // for signal handling
 #include <signal.h>
 
@@ -22,20 +28,38 @@
 #endif
 
 #include <iomanip>
-#include <cstring>
 #include <sstream>
 #include <stdexcept>
 #include <atomic>
 
+#include <climits>
+#include <fstream>
+#include <iterator>
+#include <list>
+#include <map>
+#include <regex>
+
 #include <ctype.h>
+
+#ifdef _WIN32
+#include <direct.h>
+#else
+#include <pwd.h>
+#include <libgen.h>
+#include <unistd.h>
+#endif
+
+#include <sys/stat.h>
+#include <sys/types.h>
 
 #include <pvxs/log.h>
 #include <pvxs/util.h>
-#include <pvxs/sharedArray.h>
 #include <pvxs/data.h>
+#include <pvxs/version.h>
+
+#include "osiFileName.h"
 #include "utilpvt.h"
 #include "udp_collector.h"
-
 #include "pvxsVCS.h"
 
 extern "C" {
@@ -423,7 +447,9 @@ size_t SockAddr::size() const noexcept
 {
     switch(store.sa.sa_family) {
     case AF_INET: return sizeof(store.in);
+#ifdef AF_INET6
     case AF_INET6: return sizeof(store.in6);
+#endif
     default: // AF_UNSPEC and others
         return sizeof(store);
     }
@@ -433,7 +459,9 @@ unsigned short SockAddr::port() const noexcept
 {
     switch(store.sa.sa_family) {
     case AF_INET: return ntohs(store.in.sin_port);
+#ifdef AF_INET6
     case AF_INET6:return ntohs(store.in6.sin6_port);
+#endif
     default: return 0;
     }
 }
@@ -442,7 +470,9 @@ void SockAddr::setPort(unsigned short port)
 {
     switch(store.sa.sa_family) {
     case AF_INET: store.in.sin_port = htons(port); break;
+#ifdef AF_INET6
     case AF_INET6:store.in6.sin6_port = htons(port); break;
+#endif
     default:
         throw std::logic_error("SockAddr: set family before port");
     }
@@ -560,7 +590,9 @@ bool SockAddr::isAny() const noexcept
 {
     switch(store.sa.sa_family) {
     case AF_INET: return store.in.sin_addr.s_addr==htonl(INADDR_ANY);
+#ifdef AF_INET6
     case AF_INET6: return IN6_IS_ADDR_UNSPECIFIED(&store.in6.sin6_addr);
+#endif
     default: return false;
     }
 }
@@ -569,7 +601,9 @@ bool SockAddr::isLO() const noexcept
 {
     switch(store.sa.sa_family) {
     case AF_INET: return store.in.sin_addr.s_addr==htonl(INADDR_LOOPBACK);
+#ifdef AF_INET6
     case AF_INET6: return IN6_IS_ADDR_LOOPBACK(&store.in6.sin6_addr);
+#endif
     default: return false;
     }
 }
@@ -578,7 +612,9 @@ bool SockAddr::isMCast() const noexcept
 {
     switch(store.sa.sa_family) {
     case AF_INET: return IN_MULTICAST(ntohl(store.in.sin_addr.s_addr));
+#ifdef AF_INET6
     case AF_INET6: return IN6_IS_ADDR_MULTICAST(&store.in6.sin6_addr);
+#endif
     default: return false;
     }
 }
@@ -636,10 +672,12 @@ SockAddr SockAddr::any(int af, unsigned port)
         ret->in.sin_addr.s_addr = htonl(INADDR_ANY);
         ret->in.sin_port = htons(port);
         break;
+#ifdef AF_INET6
     case AF_INET6:
         ret->in6.sin6_addr = IN6ADDR_ANY_INIT;
         ret->in6.sin6_port = htons(port);
         break;
+#endif
     default:
         throw std::invalid_argument("Unsupported address family");
     }
@@ -654,10 +692,12 @@ SockAddr SockAddr::loopback(int af, unsigned port)
         ret->in.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
         ret->in.sin_port = htons(port);
         break;
+#ifdef AF_INET6
     case AF_INET6:
         ret->in6.sin6_addr = IN6ADDR_LOOPBACK_INIT;
         ret->in6.sin6_port = htons(port);
         break;
+#endif
     default:
         throw std::invalid_argument("Unsupported address family");
     }
@@ -679,6 +719,7 @@ std::ostream& operator<<(std::ostream& strm, const SockAddr& addr)
             strm<<':'<<ntohs(addr->in.sin_port);
         break;
     }
+#ifdef AF_INET6
     case AF_INET6: {
             char buf[INET6_ADDRSTRLEN+1];
             if(evutil_inet_ntop(AF_INET6, &addr->in6.sin6_addr, buf, sizeof(buf))) {
@@ -694,6 +735,7 @@ std::ostream& operator<<(std::ostream& strm, const SockAddr& addr)
                 strm<<':'<<port;
             break;
     }
+#endif
     case AF_UNSPEC:
         strm<<"<>";
         break;
@@ -823,6 +865,47 @@ int64_t parseTo<int64_t>(const std::string& s) {
     return ret;
 }
 
+template <>
+bool parseTo<bool>(const std::string &s) {
+    std::string lower;
+    std::transform(s.begin(), s.end(), std::back_inserter(lower), ::tolower);
+    return lower == "yes" ||lower == "on" || lower == "enabled" || lower == "true" || lower == "1";
+}
+
+#ifdef PVXS_ENABLE_OPENSSL
+enum CertStatusSubscription {
+    DEFAULT=-1,  // Use the no_status flag from the client request
+    YES=1,       // Always require status subscription
+    NO=0         // Never require status subscription
+};
+
+/**
+ * @brief create a CertStatusSubscription flag based on a string parameter value
+ *
+ * YES for "yes"/"true"/"1"
+ * NO for "no"/"false"/"0"
+ * DEFAULT for default
+ *
+ * @param input the string parameter value
+ * @return the corresponding CertStatusSubscription value
+ * @throw std::invalid_argument if the string doesn't match any expected value
+ */
+template<>
+int8_t parseTo<int8_t>(const std::string& input) {
+    // Create a lowercase copy of the input string
+    std::string lower = input;
+    std::transform(lower.begin(), lower.end(), lower.begin(),
+                  [](const unsigned char c) { return std::tolower(c); });
+
+    if (lower == "yes" || lower == "true" || lower == "enabled" || lower == "on" || lower == "1") return YES;
+    if (lower == "no" || lower == "false" || lower == "disabled" || lower == "off" || lower == "0") return NO;
+    if (lower == "default") return DEFAULT;
+
+    // No match found - throw an exception
+    throw NoConvert(SB() << "Invalid value: must be 'yes'/'true'/'enabled'/'on'/'1', 'no'/'false'/'disabled'/'off'/'0', or 'default': " << input);
+}
+#endif
+
 static
 std::vector<std::string>
 splitLines(const char *inp)
@@ -899,9 +982,9 @@ done:
     }
 }
 
-FLock::FLock(FILE *fp, bool writing)
+FLock::FLock(FILE *fp, bool for_writing)
     :fp(fp)
-    ,writing(writing)
+    ,writing(for_writing)
 {
 #ifdef USE_POSIX_FLOCK
     if(flock(fileno(fp), writing ? LOCK_EX : LOCK_SH)) {
@@ -920,5 +1003,149 @@ FLock::~FLock()
     }
 #endif
 }
+
+/**
+ * @brief Convert given path to expand tilde, dot and dot-dot at beginning
+ * @param path the containing tilde, dot and/or dot-dot
+ * @return the expanded path
+ */
+std::string convertPath(std::string &path) {
+    std::string abs_path;
+
+    if (!path.empty()) {
+        if (path[0] == '~') {
+            char const *home = getenv("HOME");
+            if (home || ((home = getenv("USERPROFILE")))) {
+                abs_path = home + path.substr(1);
+            }
+#ifndef _WIN32
+           else {
+                auto pw = getpwuid(getuid());
+                if (pw) abs_path = pw->pw_dir + path.substr(1);
+            }
+        } else if (path[0] == '.') {
+            char temp[PATH_MAX];
+            if (getcwd(temp, sizeof(temp)) != nullptr) {
+                if (path.size() > 1 && path[1] == '.') {
+                    // Handle '..' to get parent directory
+                    abs_path = dirname(temp);
+                    // Append the rest of the path after the '..'
+                    abs_path += path.substr(2);
+                } else {
+                    // Handle '.'
+                    abs_path = temp + path.substr(1);  // remove '.' then append
+                }
+            }
+#endif
+        }
+    }
+
+    if (abs_path.empty()) {
+        abs_path = path;
+    }
+
+    return (path = abs_path);
+}
+
+/**
+ * @brief Ensure that the directory specified in the path exist
+ * @param filepath the file path containing an optional directory component
+ * @param convert_path true to convert path first
+ */
+void PVXS_API ensureDirectoryExists(std::string &filepath, const bool convert_path) {
+    std::string temp_path = convert_path ? convertPath(filepath) : filepath;
+
+    const auto delimiter = std::string(OSI_PATH_SEPARATOR);
+    size_t pos = 0;
+    std::string path = "";
+    struct stat info {};
+    while ((pos = temp_path.find(delimiter)) != std::string::npos) {
+        std::string token = temp_path.substr(0, pos);
+        path += token + delimiter;
+        temp_path.erase(0, pos + delimiter.length());
+        if (stat(path.c_str(), &info) != 0 || !(info.st_mode & S_IFDIR)) {
+#ifdef _WIN32
+            mkdir(path.c_str());  // Windows version takes only the path
+#else
+            mkdir(path.c_str(), S_IRWXU);  // Unix version takes path and permissions
+#endif
+        }
+    }
+}
+
+std::string getHomeDir() {
+#ifdef _WIN32
+    const char* home = getenv("USERPROFILE");
+    if (!home) {
+        home = getenv("HOMEDRIVE");
+        if (home) {
+            static std::string homePath;
+            const char* homedir = getenv("HOMEPATH");
+            if (homedir) {
+                homePath = std::string(home) + homedir;
+                return homePath;
+            }
+        }
+    }
+#else
+    const auto pw = getpwuid(getuid());
+    const char* home = pw ? pw->pw_dir : nullptr;
+    if (!home) {
+        home = getenv("HOME");
+    }
+#endif
+    return home ? std::string(home) : std::string("");
+}
+
+std::string getFileContents(const std::string &file_name) {
+    std::ifstream ifs(file_name);
+    std::string contents((std::istreambuf_iterator<char>(ifs)), (std::istreambuf_iterator<char>()));
+
+    if (!contents.empty() && contents.back() == '\n') {
+        contents.pop_back();
+    }
+
+    return contents;
+}
+
+
+std::string getXdgConfigHome() {
+#ifdef _WIN32
+    const auto default_home = getHomeDir();
+#else
+    const auto default_home = getHomeDir() + "/.config";
+#endif
+    const char* config_home = getenv("XDG_CONFIG_HOME");
+    return config_home ? config_home : default_home;
+}
+
+std::string getXdgDataHome() {
+#ifdef _WIN32
+    const auto default_data_home = "C:\\ProgramData";
+#else
+    const auto default_data_home = getHomeDir() + "/.local/share";
+#endif
+    const char* data_home = getenv("XDG_DATA_HOME");
+    return data_home ? data_home : default_data_home;
+}
+
+std::string getXdgPvaConfigHome() {
+    const std::string suffix = SB() << OSI_PATH_SEPARATOR << "pva" << OSI_PATH_SEPARATOR << versionString() ;
+    return getXdgConfigHome() + suffix;
+}
+
+std::string getXdgPvaDataHome() {
+    const std::string suffix = SB() << OSI_PATH_SEPARATOR << "pva" << OSI_PATH_SEPARATOR << versionString() ;
+    return getXdgDataHome() + suffix;
+}
+
+#define stringifyX(X) #X
+#define stringify(X) stringifyX(X)
+
+std::string versionString() {
+    return stringify(PVXS_MAJOR_VERSION) "."  stringify(PVXS_MINOR_VERSION);
+}
+#undef stringify
+#undef stringifyX
 
 }}

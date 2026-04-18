@@ -5,45 +5,59 @@
  */
 
 #include <algorithm>
-#include <vector>
-#include <string>
-#include <sstream>
-#include <limits>
 #include <cmath>
+#include <fstream>
+#include <limits>
+#include <stdexcept>
 
-#include <dbDefs.h>
-#include <osiSock.h>
-#include <epicsMath.h>
+#ifndef _WIN32
+#include <pwd.h>
+#include <unistd.h>
+#endif
+
+#include <cstdlib>
+#include <sstream>
+#include <string>
+#include <vector>
+
 #include <epicsStdlib.h>
 #include <epicsString.h>
+#include <osiFileName.h>
+#include <osiSock.h>
+
+#include <sys/stat.h>
 
 #include <pvxs/log.h>
-#include "serverconn.h"
-#include "clientimpl.h"
-#include "utilpvt.h"
-#include "evhelper.h"
 
-DEFINE_LOGGER(serversetup, "pvxs.server.setup");
-DEFINE_LOGGER(clientsetup, "pvxs.client.setup");
+#include "clientimpl.h"
+#include "evhelper.h"
+#include "serverconn.h"
+#include "utilpvt.h"
+#ifdef PVXS_ENABLE_OPENSSL
+#include "opensslgbl.h"
+#endif
+
+
+DEFINE_LOGGER(serversetup, "pvxs.svr.init");
+DEFINE_LOGGER(clientsetup, "pvxs.cli.init");
 DEFINE_LOGGER(config, "pvxs.config");
 
 namespace pvxs {
 
 namespace impl {
 ConfigCommon::~ConfigCommon() {}
+}  // namespace impl
 
-bool has_tls_support() {
+bool ConfigCommon::isTlsConfigured() const {
 #ifdef PVXS_ENABLE_OPENSSL
-    return true;
+    ossl::osslInit();
+    return !ossl::ossl_gbl->tls_disabled && !tls_disabled && !tls_keychain_file.empty();
 #else
     return false;
 #endif
 }
 
-} // namespace impl
-
-SockEndpoint::SockEndpoint(const char* ep, const impl::ConfigCommon *conf, uint16_t defdefport)
-{
+SockEndpoint::SockEndpoint(const char* ep, const impl::ConfigCommon* conf, uint16_t defdefport) {
     uint16_t defport = conf ? conf->tcp_port : defdefport;
     // look for URI-ish prefix
     std::string urlstore;
@@ -54,7 +68,8 @@ SockEndpoint::SockEndpoint(const char* ep, const impl::ConfigCommon *conf, uint1
         } else if(schemeLen==4u && strncmp(ep, "pvas", 4)==0) {
             scheme = TLS;
             defport = conf ? conf->tls_port : defdefport;
-        } else if(schemeLen==3u && strncmp(ep, "pva", 3)==0) {
+        } else
+        if (schemeLen == 3u && strncmp(ep, "pva", 3) == 0) {
             scheme = Plain;
         } else {
             throw std::runtime_error(SB()<<"Unsupported scheme '"<<ep<<"'");
@@ -121,10 +136,8 @@ SockEndpoint::SockEndpoint(const char* ep, const impl::ConfigCommon *conf, uint1
     }
 }
 
-MCastMembership SockEndpoint::resolve() const
-{
-    if(!addr.isMCast())
-        throw std::logic_error("not mcast");
+MCastMembership SockEndpoint::resolve() const {
+    if (!addr.isMCast()) throw std::logic_error("not mcast");
 
     auto ifmap(IfaceMap::instance());
 
@@ -158,24 +171,17 @@ MCastMembership SockEndpoint::resolve() const
     return m;
 }
 
-std::ostream& operator<<(std::ostream& strm, const SockEndpoint& addr)
-{
-    if(addr.scheme==SockEndpoint::TLS)
-        strm<<"pvas://";
+std::ostream& operator<<(std::ostream& strm, const SockEndpoint& addr) {
+    if (addr.scheme == SockEndpoint::TLS) strm << "pvas://";
     strm<<addr.addr;
     if(addr.addr.isMCast()) {
-        if(addr.ttl)
-            strm<<','<<addr.ttl;
-        if(!addr.iface.empty())
-            strm<<'@'<<addr.iface;
+        if (addr.ttl) strm << ',' << addr.ttl;
+        if (!addr.iface.empty()) strm << '@' << addr.iface;
     }
     return strm;
 }
 
-bool operator==(const SockEndpoint& lhs, const SockEndpoint& rhs)
-{
-    return lhs.addr==rhs.addr && lhs.ttl==rhs.ttl && lhs.iface==rhs.iface;
-}
+bool operator==(const SockEndpoint& lhs, const SockEndpoint& rhs) { return lhs.addr == rhs.addr && lhs.ttl == rhs.ttl && lhs.iface == rhs.iface; }
 
 namespace {
 
@@ -188,18 +194,15 @@ constexpr double tmoScale = 4.0/3.0; // 40 second idle timeout / 30 configured
 
 // remove duplicates while preserving order of first appearance
 template<typename A>
-void removeDups(std::vector<A>& addrs)
-{
+void removeDups(std::vector<A>& addrs) {
     std::sort(addrs.begin(), addrs.end());
-    addrs.erase(std::unique(addrs.begin(), addrs.end()),
-                addrs.end());
+    addrs.erase(std::unique(addrs.begin(), addrs.end()), addrs.end());
 }
 
 // special handling for SockEndpoint where duplication is based on
 // address,interface.  Duplicates are combined with the longest TTL.
 template<>
-void removeDups(std::vector<SockEndpoint>& addrs)
-{
+void removeDups(std::vector<SockEndpoint>& addrs) {
     std::map<std::pair<SockAddr, std::string>, size_t> seen;
     for(size_t i=0; i<addrs.size(); ) {
         auto& ep = addrs[i];
@@ -221,8 +224,7 @@ void removeDups(std::vector<SockEndpoint>& addrs)
     }
 }
 
-void split_into(std::vector<std::string>& out, const std::string& inp)
-{
+void split_into(std::vector<std::string>& out, const std::string& inp) {
     size_t pos=0u;
 
     while(pos<inp.size()) {
@@ -238,11 +240,22 @@ void split_into(std::vector<std::string>& out, const std::string& inp)
     removeDups(out);
 }
 
-void split_addr_into(const char* name, std::vector<std::string>& out, const std::string& inp,
-                     const impl::ConfigCommon* conf, uint16_t defaultPort, bool required=false)
-{
+/**
+ * Replace vector with given string list if string list is not empty
+ * @param name the environment variable to read from
+ * @param out the vector to replace with the given string list
+ * @param inp the string list to replace with (space separated)
+ * @param conf
+ * @param defaultPort
+ * @param required
+ */
+void split_addr_into(const char* name, std::vector<std::string>& out, const std::string& inp, const impl::ConfigCommon* conf, uint16_t defaultPort,
+                     bool required = false) {
     std::vector<std::string> raw;
     split_into(raw, inp);
+
+    if (raw.empty()) return;
+    out.clear(); // Remove existing and replace with new
 
     // parse, resolve host names, then re-print.
     // Catch syntax errors early, and normalize prior to removing duplicates
@@ -252,15 +265,13 @@ void split_addr_into(const char* name, std::vector<std::string>& out, const std:
             out.push_back(SB()<<ep);
 
         } catch(std::exception& e){
-            if(required)
-                throw std::runtime_error(SB()<<"invalid endpoint \""<<temp<<"\" "<<e.what());
+            if (required) throw std::runtime_error(SB() << "invalid endpoint \"" << temp << "\" " << e.what());
             log_err_printf(config, "%s ignoring invalid '%s' : %s\n", name, temp.c_str(), e.what());
         }
     }
 }
 
-std::string join_addr(const std::vector<std::string>& in)
-{
+std::string join_addr(const std::vector<std::string>& in) {
     std::ostringstream strm;
     bool first=true;
     for(auto& addr : in) {
@@ -273,66 +284,30 @@ std::string join_addr(const std::vector<std::string>& in)
     return strm.str();
 }
 
-void parse_bool(bool& dest, const std::string& name, const std::string& val)
-{
+void parse_bool(bool& dest, const std::string& name, const std::string& val) {
     if(epicsStrCaseCmp(val.c_str(), "YES")==0 || val=="1") {
         dest = true;
     } else if(epicsStrCaseCmp(val.c_str(), "NO")==0 || val=="0") {
         dest = false;
     } else {
-        log_err_printf(config, "%s invalid bool value (YES/NO) : '%s'\n",
-                       name.c_str(), val.c_str());
+        log_err_printf(config, "%s invalid bool value (YES/NO) : '%s'\n", name.c_str(), val.c_str());
     }
 }
 
-void parse_timeout(double& dest, const std::string& name, const std::string& val)
-{
+void parse_timeout(double& dest, const std::string& name, const std::string& val) {
     double temp;
     try {
         temp = parseTo<double>(val);
 
-        if(!std::isfinite(temp)
-                || temp<0.0
-                || temp>double(std::numeric_limits<time_t>::max()))
-            throw std::out_of_range("Out of range");
+        if (!std::isfinite(temp) || temp < 0.0 || temp > double(std::numeric_limits<time_t>::max())) throw std::out_of_range("Out of range");
 
         dest = temp*tmoScale;
     } catch(std::exception& e) {
-        log_err_printf(serversetup, "%s invalid double value : '%s'\n",
-                       name.c_str(), val.c_str());
+        log_err_printf(serversetup, "%s invalid double value : '%s'\n", name.c_str(), val.c_str());
     }
 }
 
-struct PickOne {
-    const std::map<std::string, std::string>& defs;
-    bool useenv;
-
-    std::string name, val;
-
-    bool operator()(std::initializer_list<const char*> names) {
-        for(auto candidate : names) {
-            if(useenv) {
-                if(auto eval = getenv(candidate)) {
-                    name = candidate;
-                    val = eval;
-                    return true;
-                }
-
-            } else {
-                auto it = defs.find(candidate);
-                if(it!=defs.end()) {
-                    name = candidate;
-                    val = it->second;
-                    return true;
-                }
-            }
-        }
-        return false;
-    }
-};
-
-std::vector<SockEndpoint> parseAddresses(const std::vector<std::string>& addrs)
-{
+std::vector<SockEndpoint> parseAddresses(const std::vector<std::string>& addrs) {
     std::vector<SockEndpoint> ret;
     for(const auto& addr : addrs) {
         try {
@@ -432,69 +407,94 @@ void enforceTimeout(double& tmo)
         tmo = 2.0;
 }
 
-void parseTLSOptions(ConfigCommon& conf, const std::string& options)
-{
+#ifdef PVXS_ENABLE_OPENSSL
+void parseTLSOptions(ConfigCommon& conf, const std::string& options) {
     std::vector<std::string> opts;
     split_into(opts, options);
 
     for(auto opt : opts) {
         auto sep(opt.find_first_of('='));
+        if ( sep == std::string::npos)
+            sep = opt.size();
         auto key(opt.substr(0, sep));
         auto val(sep<=key.size() ? opt.substr(sep+1) : std::string());
 
         if(key=="client_cert") {
             if(val=="require") {
-                conf.tls_client_cert = ConfigCommon::Require;
+                conf.tls_client_cert_required = ConfigCommon::Require;
             } else if(val=="optional") {
-                conf.tls_client_cert = ConfigCommon::Optional;
+                conf.tls_client_cert_required = ConfigCommon::Optional;
             } else {
-                log_warn_printf(config, "Ignore unknown TLS option value %s.  expected require or optional\n", opt.c_str());
+                log_warn_printf(config, "Ignore unknown TLS option `client_cert` value %s.  expected `require` or `optional`\n", opt.c_str());
             }
+        } else if (key == "on_expiration") {
+            if (val == "fallback-to-tcp") {
+                conf.expiration_behaviour = ConfigCommon::FallbackToTCP;
+            } else if (val == "shutdown") {
+                conf.expiration_behaviour = ConfigCommon::Shutdown;
+            } else if (val == "standby") {
+                conf.expiration_behaviour = ConfigCommon::Standby;
+            } else {
+                log_warn_printf(config, "Ignore unknown TLS option `on_expiration` value %s.  expected `fallback-to-tcp`, `shutdown` or `standby`\n", opt.c_str());
+            }
+        } else if (key == "no_revocation_check") {
+            if ( val.empty())
+                conf.disableStatusCheck();
+            else
+                log_warn_printf(config, "Ignore unknown TLS option `no_revocation_check` value %s.  no value expected\n", opt.c_str());
+        } else if (key == "no_stapling") {
+            if ( val.empty())
+                conf.disableStapling();
+            else
+                log_warn_printf(config, "Ignore unknown TLS option `no_stapling` value %s.  no value expected\n", opt.c_str());
         } else {
             log_warn_printf(config, "Ignore unknown TLS option key %s\n", opt.c_str());
         }
     }
 }
 
-std::string printTLSOptions(const ConfigCommon& conf)
-{
+std::string printTLSOptions(const ConfigCommon& conf) {
     std::vector<std::string> opts;
-    switch(conf.tls_client_cert) {
-    case ConfigCommon::Default: break;
-    case ConfigCommon::Optional: opts.push_back("client_cert=optional"); break;
-    case ConfigCommon::Require: opts.push_back("client_cert=require"); break;
+    switch (conf.tls_client_cert_required) {
+        case ConfigCommon::Default:
+            break;
+        case ConfigCommon::Optional:
+            opts.push_back("client_cert=optional");
+            break;
+        case ConfigCommon::Require:
+            opts.push_back("client_cert=require");
+            break;
     }
+    switch (conf.expiration_behaviour) {
+        case ConfigCommon::FallbackToTCP:
+            opts.push_back("on_expiration=fallback-to-tcp");
+            break;
+        case ConfigCommon::Shutdown:
+            opts.push_back("on_expiration=shutdown");
+            break;
+        case ConfigCommon::Standby:
+            opts.push_back("on_expiration=standby");
+            break;
+    }
+    if ( conf.isStatusCheckDisabled())
+        opts.push_back("no_revocation_check");
+    if ( conf.isStaplingDisabled())
+        opts.push_back("no_stapling");
     return join_addr(opts);
 }
+#endif
 
 } // namespace
 
 namespace server {
 
-static
-void _fromDefs(Config& self, const std::map<std::string, std::string>& defs, bool useenv)
-{
+void Config::fromDefs(Config& self, const std::map<std::string, std::string>& defs, bool useenv) {
     PickOne pickone{defs, useenv};
-
-    if(pickone({"EPICS_PVAS_TLS_KEYCHAIN", "EPICS_PVA_TLS_KEYCHAIN"})) {
-        self.tls_keychain_file = pickone.val;
-    }
-
-    if(pickone({"EPICS_PVAS_TLS_OPTIONS", "EPICS_PVA_TLS_OPTIONS"})) {
-        parseTLSOptions(self, pickone.val);
-    }
+    PickOne pick_another_one{defs, useenv};
 
     if(pickone({"EPICS_PVAS_SERVER_PORT", "EPICS_PVA_SERVER_PORT"})) {
         try {
             self.tcp_port = parseTo<uint64_t>(pickone.val);
-        }catch(std::exception& e) {
-            log_err_printf(serversetup, "%s invalid integer : %s", pickone.name.c_str(), e.what());
-        }
-    }
-
-    if(pickone({"EPICS_PVAS_TLS_PORT", "EPICS_PVA_TLS_PORT"})) {
-        try {
-            self.tls_port = parseTo<uint64_t>(pickone.val);
         }catch(std::exception& e) {
             log_err_printf(serversetup, "%s invalid integer : %s", pickone.name.c_str(), e.what());
         }
@@ -509,18 +509,15 @@ void _fromDefs(Config& self, const std::map<std::string, std::string>& defs, boo
     }
 
     if(pickone({"EPICS_PVAS_INTF_ADDR_LIST"})) {
-        split_addr_into(pickone.name.c_str(), self.interfaces, pickone.val,
-                        nullptr, self.tcp_port, true);
+        split_addr_into(pickone.name.c_str(), self.interfaces, pickone.val, nullptr, self.tcp_port, true);
     }
 
     if(pickone({"EPICS_PVAS_IGNORE_ADDR_LIST"})) {
-        split_addr_into(pickone.name.c_str(), self.ignoreAddrs, pickone.val,
-                        nullptr, 0, true);
+        split_addr_into(pickone.name.c_str(), self.ignoreAddrs, pickone.val, nullptr, 0, true);
     }
 
     if(pickone({"EPICS_PVAS_BEACON_ADDR_LIST", "EPICS_PVA_ADDR_LIST"})) {
-        split_addr_into(pickone.name.c_str(), self.beaconDestinations, pickone.val,
-                        nullptr, self.udp_port);
+        split_addr_into(pickone.name.c_str(), self.beaconDestinations, pickone.val, nullptr, self.udp_port);
     }
 
     if(pickone({"EPICS_PVAS_AUTO_BEACON_ADDR_LIST", "EPICS_PVA_AUTO_ADDR_LIST"})) {
@@ -530,16 +527,71 @@ void _fromDefs(Config& self, const std::map<std::string, std::string>& defs, boo
     if(pickone({"EPICS_PVA_CONN_TMO"})) {
         parse_timeout(self.tcpTimeout, pickone.name, pickone.val);
     }
+
+#ifdef PVXS_ENABLE_OPENSSL
+    // EPICS_PVAS_TLS_KEYCHAIN
+    if (pickone({"EPICS_PVAS_TLS_KEYCHAIN", "EPICS_PVA_TLS_KEYCHAIN"})) {
+        // Check if value contains semicolon separator (file;password)
+        auto sep = pickone.val.find(';');
+        if (sep != std::string::npos) {
+            // Split on semicolon: part before is the keychain filename, the part after is the keychain file password
+            self.tls_keychain_file = pickone.val.substr(0, sep);
+            self.setKeychainPassword(pickone.val.substr(sep + 1));
+            ensureDirectoryExists(self.tls_keychain_file);
+        } else {
+            // No semicolon: value is the file, look for a password file separately
+            ensureDirectoryExists(self.tls_keychain_file = pickone.val);
+            // EPICS_PVAS_TLS_KEYCHAIN_PWD_FILE
+            std::string password_filename;
+            if (pickone.name == "EPICS_PVAS_TLS_KEYCHAIN") {
+                pick_another_one({"EPICS_PVAS_TLS_KEYCHAIN_PWD_FILE"});
+                password_filename = pick_another_one.val;
+            } else {
+                pick_another_one({"EPICS_PVA_TLS_KEYCHAIN_PWD_FILE"});
+                password_filename = pick_another_one.val;
+            }
+            ensureDirectoryExists(password_filename);
+            try {
+                self.setKeychainPassword(getFileContents(password_filename));
+            } catch (std::exception& e) {
+                log_err_printf(serversetup, "error reading password file: %s. %s", password_filename.c_str(), e.what());
+            }
+        }
+    } else {
+        std::string filename = SB() << getXdgPvaConfigHome() << OSI_PATH_SEPARATOR << "server.p12";
+        std::ifstream file(filename.c_str());
+        if (file.good()) tls_keychain_file = filename;
 }
 
-Config& Config::applyEnv()
-{
-    _fromDefs(*this, std::map<std::string, std::string>(), true);
+    // EPICS_PVAS_TLS_OPTIONS
+    if (pickone({"EPICS_PVAS_TLS_OPTIONS", "EPICS_PVA_TLS_OPTIONS"})) {
+        parseTLSOptions(self, pickone.val);
+    }
+
+    // EPICS_PVAS_TLS_PORT
+    if (pickone({"EPICS_PVAS_TLS_PORT", "EPICS_PVA_TLS_PORT"})) {
+        try {
+            self.tls_port = parseTo<uint64_t>(pickone.val);
+        } catch (std::exception& e) {
+            log_err_printf(serversetup, "%s invalid integer : %s", pickone.name.c_str(), e.what());
+        }
+    }
+
+    if (pickone({"EPICS_PVAS_CERT_PV_PREFIX", "EPICS_PVA_CERT_PV_PREFIX"})) self.setCertPvPrefix(pickone.val);
+#endif  // PVXS_ENABLE_OPENSSL
+}
+Config& Config::applyEnv() {
+    fromDefs(*this, std::map<std::string, std::string>(), true);
     return *this;
 }
 
-Config Config::isolated(int family)
-{
+/**
+ * @brief Create a Config object with default values suitable for isolated testing
+ *
+ * @param family AF_INET or AF_INET6
+ * @return Config
+ */
+Config Config::isolated(int family) {
     Config ret;
 
     ret.udp_port = 0u;
@@ -558,30 +610,52 @@ Config Config::isolated(int family)
         throw std::logic_error(SB()<<"Unsupported address family "<<family);
     }
 
+#ifdef PVXS_ENABLE_OPENSSL
+    // For testing purposes disable status checking and stapling when using isolated config
+    ret.disableStatusCheck();
+    ret.disableStapling();
+#endif
+
     return ret;
 }
 
-Config& Config::applyDefs(const std::map<std::string, std::string>& defs)
-{
-    _fromDefs(*this, defs, false);
+Config& Config::applyDefs(const std::map<std::string, std::string>& defs) {
+    fromDefs(*this, defs, false);
     return *this;
 }
 
-void Config::updateDefs(defs_t& defs) const
-{
-    defs["EPICS_PVAS_TLS_KEYCHAIN"] = defs["EPICS_PVA_TLS_KEYCHAIN"] = SB()<<tls_keychain_file;
-    defs["EPICS_PVAS_TLS_OPTIONS"]  = defs["EPICS_PVA_TLS_OPTIONS"] = printTLSOptions(*this);
-    defs["EPICS_PVA_BROADCAST_PORT"] = defs["EPICS_PVAS_BROADCAST_PORT"] = SB()<<udp_port;
-    defs["EPICS_PVA_SERVER_PORT"]    = defs["EPICS_PVAS_SERVER_PORT"]    = SB()<<tcp_port;
+void Config::updateDefs(defs_t& defs) const {
+    defs["EPICS_PVA_BROADCAST_PORT"] = defs["EPICS_PVAS_BROADCAST_PORT"] = std::to_string(udp_port);
+    defs["EPICS_PVA_SERVER_PORT"] = defs["EPICS_PVAS_SERVER_PORT"] = std::to_string(tcp_port);
     defs["EPICS_PVA_AUTO_ADDR_LIST"] = defs["EPICS_PVAS_AUTO_BEACON_ADDR_LIST"] = auto_beacon ? "YES" : "NO";
-    defs["EPICS_PVA_ADDR_LIST"]      = defs["EPICS_PVAS_BEACON_ADDR_LIST"] = join_addr(beaconDestinations);
-    defs["EPICS_PVA_INTF_ADDR_LIST"] = defs["EPICS_PVAS_INTF_ADDR_LIST"]   = join_addr(interfaces);
-    defs["EPICS_PVAS_IGNORE_ADDR_LIST"]   = join_addr(ignoreAddrs);
-    defs["EPICS_PVA_CONN_TMO"] = SB()<<tcpTimeout/tmoScale;
+
+    if (!beaconDestinations.empty()) defs["EPICS_PVA_ADDR_LIST"] = defs["EPICS_PVAS_BEACON_ADDR_LIST"] = join_addr(beaconDestinations);
+    if (!interfaces.empty()) defs["EPICS_PVA_INTF_ADDR_LIST"] = defs["EPICS_PVAS_INTF_ADDR_LIST"] = join_addr(interfaces);
+    if (!ignoreAddrs.empty()) defs["EPICS_PVAS_IGNORE_ADDR_LIST"] = join_addr(ignoreAddrs);
+    defs["EPICS_PVA_CONN_TMO"] = std::to_string(tcpTimeout / tmoScale);
+
+    defs["XDG_DATA_HOME"] = getXdgDataHome();
+    defs["XDG_CONFIG_HOME"] = getXdgConfigHome();
+
+#ifdef PVXS_ENABLE_OPENSSL
+    // EPICS_PVAS_TLS_KEYCHAIN
+    if (!tls_keychain_file.empty()) defs["EPICS_PVAS_TLS_KEYCHAIN"] = tls_keychain_file;
+
+    // EPICS_PVAS_TLS_KEYCHAIN_PWD_FILE
+    if (!getKeychainPassword().empty()) defs["EPICS_PVAS_TLS_KEYCHAIN_PWD_FILE"] = "<password read>";
+
+    // EPICS_PVAS_TLS_OPTIONS
+    defs["EPICS_PVAS_TLS_OPTIONS"] = printTLSOptions(*this);
+
+    // EPICS_PVAS_TLS_PORT
+    defs["EPICS_PVA_TLS_PORT"] = defs["EPICS_PVAS_TLS_PORT"] = std::to_string(tls_port);
+
+    // EPICS_PVAS_CERT_PV_PREFIX
+    if (!getCertPvPrefix().empty()) defs["EPICS_PVAS_CERT_PV_PREFIX"] = getCertPvPrefix();
+#endif  // PVXS_ENABLE_OPENSSL
 }
 
-void Config::expand()
-{
+void Config::expand() {
     auto ifaces(parseAddresses(interfaces));
     auto bdest(parseAddresses(beaconDestinations));
 
@@ -623,41 +697,34 @@ void Config::expand()
     removeDups(ignoreAddrs);
 
     enforceTimeout(tcpTimeout);
-
 }
 
-std::ostream& operator<<(std::ostream& strm, const Config& conf)
-{
+#define MATCHING_DEF(D) (pair.first.size() >= sizeof(D##prefix) - 1u && strncmp(pair.first.c_str(), D##prefix, sizeof(D##prefix) - 1u) == 0)
+std::ostream& operator<<(std::ostream& strm, const Config& conf) {
     Config::defs_t defs;
     conf.updateDefs(defs);
 
     for(const auto& pair : defs) {
         // only print the server variant
-        static const char prefix[] = "EPICS_PVAS_";
-        if(pair.first.size() >= sizeof(prefix)-1u && strncmp(pair.first.c_str(),
-                                                             prefix,
-                                                             sizeof(prefix)-1u)==0)
+        static constexpr char prefix[] = "EPICS_PVAS_";
+        static constexpr char cert_auth_prefix[] = "EPICS_CERT_AUTH_";
+        static constexpr char pvacms_prefix[] = "EPICS_PVACMS_";
+        static constexpr char ocsp_prefix[] = "EPICS_OCSP_";
+        static constexpr char auth_prefix[] = "EPICS_AUTH_";
+
+        if (MATCHING_DEF() || MATCHING_DEF(cert_auth_) || MATCHING_DEF(pvacms_) || MATCHING_DEF(ocsp_) || MATCHING_DEF(auth_))
             strm<<indent{}<<pair.first<<'='<<pair.second<<'\n';
     }
+
     return strm;
 }
-
+#undef MATCHING_DEF
 } // namespace server
 
 namespace client {
 
-static
-void _fromDefs(Config& self, const std::map<std::string, std::string>& defs, bool useenv)
-{
+void Config::fromDefs(Config& self, const std::map<std::string, std::string>& defs, bool useenv) {
     PickOne pickone{defs, useenv};
-
-    if(pickone({"EPICS_PVA_TLS_KEYCHAIN"})) {
-        self.tls_keychain_file = pickone.val;
-    }
-
-    if(pickone({"EPICS_PVA_TLS_OPTIONS"})) {
-        parseTLSOptions(self, pickone.val);
-    }
 
     if(pickone({"EPICS_PVA_BROADCAST_PORT"})) {
         try {
@@ -684,13 +751,11 @@ void _fromDefs(Config& self, const std::map<std::string, std::string>& defs, boo
     }
 
     if(pickone({"EPICS_PVA_ADDR_LIST"})) {
-        split_addr_into(pickone.name.c_str(), self.addressList, pickone.val,
-                        nullptr, self.udp_port);
+        split_addr_into(pickone.name.c_str(), self.addressList, pickone.val, nullptr, self.udp_port);
     }
 
     if(pickone({"EPICS_PVA_NAME_SERVERS"})) {
-        split_addr_into(pickone.name.c_str(), self.nameServers, pickone.val,
-                        &self, 0);
+        split_addr_into(pickone.name.c_str(), self.nameServers, pickone.val, &self, 0);
     }
 
     if(pickone({"EPICS_PVA_AUTO_ADDR_LIST"})) {
@@ -698,38 +763,96 @@ void _fromDefs(Config& self, const std::map<std::string, std::string>& defs, boo
     }
 
     if(pickone({"EPICS_PVA_INTF_ADDR_LIST"})) {
-        split_addr_into(pickone.name.c_str(), self.interfaces, pickone.val,
-                        nullptr, 0);
+        split_addr_into(pickone.name.c_str(), self.interfaces, pickone.val, nullptr, 0);
     }
 
     if(pickone({"EPICS_PVA_CONN_TMO"})) {
         parse_timeout(self.tcpTimeout, pickone.name, pickone.val);
     }
+
+#ifdef PVXS_ENABLE_OPENSSL
+    // EPICS_PVA_TLS_KEYCHAIN
+    if (pickone({"EPICS_PVA_TLS_KEYCHAIN"})) {
+        auto sep = pickone.val.find(';');
+        if (sep != std::string::npos) {
+            self.tls_keychain_file = pickone.val.substr(0, sep);
+            self.setKeychainPassword(pickone.val.substr(sep + 1));
+            ensureDirectoryExists(self.tls_keychain_file);
+        } else {
+            ensureDirectoryExists(self.tls_keychain_file = pickone.val);
+            if (pickone({"EPICS_PVA_TLS_KEYCHAIN_PWD_FILE"})) {
+                std::string password_filename(pickone.val);
+                try {
+                    ensureDirectoryExists(password_filename);
+                    self.setKeychainPassword(getFileContents(password_filename));
+                } catch (std::exception& e) {
+                    log_err_printf(serversetup, "error reading password file: %s. %s", password_filename.c_str(), e.what());
+                }
+            }
+        }
+    } else {
+        std::string filename = SB() << getXdgPvaConfigHome() << OSI_PATH_SEPARATOR << "client.p12";
+        std::ifstream file(filename.c_str());
+        if (file.good()) tls_keychain_file = filename;
+    }
+
+    // EPICS_PVA_TLS_OPTIONS
+    if (pickone({"EPICS_PVA_TLS_OPTIONS"})) {
+        parseTLSOptions(self, pickone.val);
+    }
+
+    // EPICS_PVA_TLS_PORT
+    if (pickone({"EPICS_PVA_TLS_PORT"})) {
+        try {
+            self.tls_port = parseTo<uint64_t>(pickone.val);
+        } catch (std::exception& e) {
+            log_err_printf(serversetup, "%s invalid integer : %s", pickone.name.c_str(), e.what());
+        }
+    }
+
+    if (pickone({"EPICS_PVA_CERT_PV_PREFIX"})) self.setCertPvPrefix(pickone.val);
+#endif  // PVXS_ENABLE_OPENSSL
 }
 
-Config& Config::applyEnv()
-{
-    _fromDefs(*this, std::map<std::string, std::string>(), true);
+Config& Config::applyEnv() {
+    fromDefs(*this, std::map<std::string, std::string>(), true);
     return *this;
 }
 
-Config& Config::applyDefs(const std::map<std::string, std::string>& defs)
-{
-    _fromDefs(*this, defs, false);
+Config& Config::applyDefs(const std::map<std::string, std::string>& defs) {
+    fromDefs(*this, defs, false);
     return *this;
 }
 
-void Config::updateDefs(defs_t& defs) const
-{
-    defs["EPICS_PVA_TLS_KEYCHAIN"] = SB()<<tls_keychain_file;
-    defs["EPICS_PVA_TLS_OPTIONS"] = printTLSOptions(*this);
-    defs["EPICS_PVA_BROADCAST_PORT"] = SB()<<udp_port;
-    defs["EPICS_PVA_SERVER_PORT"] = SB()<<tcp_port;
+void Config::updateDefs(defs_t& defs) const {
+    defs["EPICS_PVA_BROADCAST_PORT"] = std::to_string(udp_port);
+    defs["EPICS_PVA_SERVER_PORT"] = std::to_string(tcp_port);
     defs["EPICS_PVA_AUTO_ADDR_LIST"] = autoAddrList ? "YES" : "NO";
-    defs["EPICS_PVA_ADDR_LIST"] = join_addr(addressList);
-    defs["EPICS_PVA_INTF_ADDR_LIST"] = join_addr(interfaces);
-    defs["EPICS_PVA_CONN_TMO"] = SB()<<tcpTimeout/tmoScale;
-    defs["EPICS_PVA_NAME_SERVERS"] = join_addr(nameServers);
+    if (!addressList.empty()) defs["EPICS_PVA_ADDR_LIST"] = join_addr(addressList);
+    if (!interfaces.empty()) defs["EPICS_PVA_INTF_ADDR_LIST"] = join_addr(interfaces);
+    defs["EPICS_PVA_CONN_TMO"] = std::to_string(tcpTimeout / tmoScale);
+    if (!nameServers.empty()) defs["EPICS_PVA_NAME_SERVERS"] = join_addr(nameServers);
+
+    defs["XDG_DATA_HOME"] = getXdgDataHome();
+    defs["XDG_CONFIG_HOME"] = getXdgConfigHome();
+
+#ifdef PVXS_ENABLE_OPENSSL
+    // EPICS_PVA_TLS_KEYCHAIN
+    if (!tls_keychain_file.empty()) defs["EPICS_PVA_TLS_KEYCHAIN"] = tls_keychain_file;
+
+    // EPICS_PVA_TLS_KEYCHAIN_PWD_FILE
+    if (!getKeychainPassword().empty()) defs["EPICS_PVA_TLS_KEYCHAIN_PWD_FILE"] = "<password read>";
+
+    // EPICS_PVA_TLS_OPTIONS
+    defs["EPICS_PVA_TLS_OPTIONS"] = printTLSOptions(*this);
+
+    // EPICS_PVA_TLS_PORT
+    defs["EPICS_PVA_TLS_PORT"] = std::to_string(tls_port);
+
+    // EPICS_PVA_CERT_PV_PREFIX
+    if (!getCertPvPrefix().empty()) defs["EPICS_PVA_CERT_PV_PREFIX"] = getCertPvPrefix();
+
+#endif  // PVXS_ENABLE_OPENSSL
 }
 
 void Config::expand()
@@ -761,8 +884,7 @@ void Config::expand()
     enforceTimeout(tcpTimeout);
 }
 
-std::ostream& operator<<(std::ostream& strm, const Config& conf)
-{
+std::ostream& operator<<(std::ostream& strm, const Config& conf) {
     Config::defs_t defs;
     conf.updateDefs(defs);
 

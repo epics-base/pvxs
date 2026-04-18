@@ -1,0 +1,144 @@
+name: Tag SPVA snapshot
+
+on:
+  workflow_dispatch:
+    inputs:
+      date:
+        description: "YYYYMMDD (blank = today)"
+        required: false
+      tag_prefix:
+        description: "Tag prefix (default pvxs)"
+        required: false
+        default: "pvxs"
+      spva_label:
+        description: "Pre-release label (default spva)"
+        required: false
+        default: "spva"
+      target_ref:
+        description: "Git ref to tag (blank = workflow ref)"
+        required: false
+
+permissions:
+  contents: write
+
+jobs:
+  tag:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ inputs.target_ref || github.ref }}
+
+      - name: Compute tag
+        id: vars
+        shell: bash
+        run: |
+          set -euo pipefail
+          CFG="configure/CONFIG_PVXS_VERSION"
+          [[ -f "$CFG" ]] || { echo "Missing $CFG"; exit 1; }
+
+          get_var() {
+            local var="$1"
+            awk -F'=' -v v="$var" '
+              $0 ~ "^[[:space:]]*"v"[[:space:]]*=" {
+                gsub(/[[:space:]]/, "", $2);
+                print $2;
+                exit
+              }' "$CFG"
+          }
+
+          MAJOR="$(get_var PVXS_MAJOR_VERSION)"
+          MINOR="$(get_var PVXS_MINOR_VERSION)"
+          PATCH="$(get_var PVXS_MAINTENANCE_VERSION)"
+
+          [[ "$MAJOR" =~ ^[0-9]+$ && "$MINOR" =~ ^[0-9]+$ && "$PATCH" =~ ^[0-9]+$ ]] || {
+            echo "Failed to parse version"; exit 1;
+          }
+
+          PVXS_VER="${MAJOR}.${MINOR}.${PATCH}"
+
+          if [[ -n "${{ inputs.date }}" ]]; then
+            DATE="${{ inputs.date }}"
+            [[ "$DATE" =~ ^[0-9]{8}$ ]] || { echo "Bad date: $DATE"; exit 1; }
+          else
+            DATE="$(date -u +%Y%m%d)"
+          fi
+
+          PREFIX="${{ inputs.tag_prefix }}"
+          LABEL="${{ inputs.spva_label }}"
+
+          TAG="${PREFIX}-${PVXS_VER}-${LABEL}.${DATE}"
+
+          SHA="$(git rev-parse HEAD)"
+          echo "pvxs_ver=$PVXS_VER" >> "$GITHUB_OUTPUT"
+          echo "date=$DATE"         >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG"           >> "$GITHUB_OUTPUT"
+          echo "sha=$SHA"           >> "$GITHUB_OUTPUT"
+
+      - name: Show plan
+        run: |
+          echo "Commit : ${{ steps.vars.outputs.sha }}"
+          echo "Version: ${{ steps.vars.outputs.pvxs_ver }}"
+          echo "Tag    : ${{ steps.vars.outputs.tag }}"
+
+      - name: Ensure tag does not exist
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG="${{ steps.vars.outputs.tag }}"
+          git fetch --tags origin
+          if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
+            echo "Tag already exists: $TAG"
+            exit 1
+          fi
+
+      - name: Configure git identity (actor)
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name  "${{ github.actor }}"
+          git config user.email "${{ github.actor }}@users.noreply.github.com"
+
+      - name: Create and push annotated tag (with changelog)
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG="${{ steps.vars.outputs.tag }}"
+          VER="${{ steps.vars.outputs.pvxs_ver }}"
+          DATE="${{ steps.vars.outputs.date }}"
+          SHA="$(git rev-parse --short=12 HEAD)"
+
+          PREV_TAG="$(git describe --tags --abbrev=0 --match 'pvxs-*-spva.*' 2>/dev/null || true)"
+
+          if [[ -z "$PREV_TAG" ]]; then
+            LEGACY_TAG="spva-2026-01-12"
+            if git rev-parse -q --verify "refs/tags/$LEGACY_TAG" >/dev/null; then
+              PREV_TAG="$LEGACY_TAG"
+            else
+              PREV_TAG=""
+            fi
+          fi
+
+          if [[ -n "$PREV_TAG" ]]; then
+            BASELINE_LINE="Changes since ${PREV_TAG}:"
+            CHANGES="$(git log --no-merges --pretty=format:'- %s' "${PREV_TAG}..HEAD")"
+          else
+            BASELINE_LINE="Changes (no previous tag found):"
+            CHANGES="$(git log --no-merges --pretty=format:'- %s' HEAD)"
+          fi
+
+          MSG="$(printf "SPVA snapshot based on pvxs %s (%s) [%s]\n%s\n%s\n" \
+            "$VER" "$DATE" "$SHA" \
+            "$BASELINE_LINE" \
+            "$CHANGES")"
+
+          echo "Tag message:"
+          echo "----------------"
+          echo "$MSG"
+          echo "----------------"
+
+          git tag -a "$TAG" -m "$MSG"
+          git push origin "refs/tags/$TAG"

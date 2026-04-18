@@ -464,11 +464,6 @@ evsocket::~evsocket()
         evutil_closesocket(sock);
 }
 
-void evsocket::release()
-{
-    sock = evutil_socket_t(-1);
-}
-
 SockAddr evsocket::sockname() const
 {
     SockAddr addr;
