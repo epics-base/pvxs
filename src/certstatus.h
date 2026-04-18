@@ -44,8 +44,7 @@ DEFINE_LOGGER(status, "pvxs.certs.status");
 #elif defined(__INT_MAX__)
 #define PERMANENTLY_VALID_STATUS (time_t)(__INT_MAX__)
 #else
-PERMANENTLY_VALID_STATUS(time_t)
-((~(unsigned long long)0) >> 1)
+#define PERMANENTLY_VALID_STATUS (time_t)(((unsigned long long)~0) >> 1)
 #endif
 
 namespace pvxs {
