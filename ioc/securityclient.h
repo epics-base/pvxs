@@ -15,20 +15,13 @@
 #include <dbChannel.h>
 #include <dbNotify.h>
 
-#include "credentials.h"
+#include <pvxs/credentials.h>
+
 #include "typeutils.h"
 #include "utilpvt.h"
 
 namespace pvxs {
 namespace ioc {
-
-class SecurityClient {
-public:
-	std::vector<ASCLIENTPVT> cli;
-	~SecurityClient();
-	void update(dbChannel* ch, Credentials& cred);
-	bool canWrite() const;
-};
 
 /**
  * Security objects that can be controlled
@@ -68,7 +61,12 @@ struct PutOperationCache : public SingleSecurityCache {
 	Value valueToSet;
 	std::unique_ptr<server::ExecOp> putOperation;
     INST_COUNTER(PutOperationCache);
-	~PutOperationCache();
+    ~PutOperationCache() {
+        // To avoid bug epics-base: unchecked access to notify.chan
+        if (notify.chan) {
+            dbNotifyCancel(&notify);
+        }
+    }
 };
 
 } // pvxs

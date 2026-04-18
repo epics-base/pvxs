@@ -11,7 +11,7 @@
 #include "serverconn.h"
 
 namespace pvxs { namespace impl {
-DEFINE_LOGGER(connsetup, "pvxs.tcp.setup");
+DEFINE_LOGGER(connsetup, "pvxs.tcp.init");
 
 namespace {
 struct ServerIntrospect final : public ServerOp

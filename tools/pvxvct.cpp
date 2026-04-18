@@ -23,9 +23,13 @@
 #include <pvxs/log.h>
 #include <pvxs/util.h>
 
-#include <udp_collector.h>
-#include <utilpvt.h>
-#include <pvaproto.h>
+#include "pvaproto.h"
+#include "udp_collector.h"
+#include "utilpvt.h"
+
+#ifdef PVXS_ENABLE_OPENSSL
+#include "openssl.h"
+#endif
 
 namespace pva = pvxs;
 using pvxs::impl::SB;

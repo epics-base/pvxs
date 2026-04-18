@@ -13,8 +13,8 @@
 namespace pvxs {
 namespace client {
 
-DEFINE_LOGGER(setup, "pvxs.client.setup");
-DEFINE_LOGGER(io, "pvxs.client.io");
+DEFINE_LOGGER(setup, "pvxs.cli.init");
+DEFINE_LOGGER(io, "pvxs.cli.io");
 
 namespace detail {
 
@@ -160,9 +160,10 @@ struct GPROp : public OperationBase
             if(done)
                 done(std::move(result));
         } catch(std::exception& e) {
-            if(chan && chan->conn)
-                log_err_printf(io, "Server %s channel %s error in result cb : %s\n",
-                               chan->conn->peerName.c_str(), chan->name.c_str(), e.what());
+            if(chan && chan->conn) {
+                log_err_printf(io, "Result Callback Error: Server %s channel %s\n", chan->conn->peerName.c_str(), chan->name.c_str());
+            }
+            log_err_printf(io, "Result Callback Error: %s\n", e.what());
 
             // keep first error (eg. from put builder)
             if(!result.error())

@@ -29,7 +29,7 @@ typedef epicsGuard<epicsMutex> Guard;
 namespace pvxs {namespace impl {
 
 DEFINE_LOGGER(logio, "pvxs.udp.io");
-DEFINE_LOGGER(logsetup, "pvxs.udp.setup");
+DEFINE_LOGGER(logsetup, "pvxs.udp.init");
 
 DEFINE_INST_COUNTER(UDPListener);
 

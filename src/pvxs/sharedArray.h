@@ -143,13 +143,13 @@ public:
     {}
 
     // build around existing shared_ptr
-    sa_base(const std::shared_ptr<E>& a, size_t len) noexcept
+    sa_base(const std::shared_ptr<E>& a, size_t len)
         :_data(a),_count(len)
     {}
 
     // alias existing shared_ptr
     template<typename A>
-    sa_base(const std::shared_ptr<A>& a, E* b, size_t len) noexcept
+    sa_base(const std::shared_ptr<A>& a, E* b, size_t len)
         :_data(a, b),_count(len)
     {}
 
@@ -164,14 +164,14 @@ public:
     }
 
     //! Number of elements
-    inline size_t size() const noexcept { return _count; }
+    inline size_t size() const { return _count; }
     inline bool empty() const noexcept { return _count==0; }
 
     inline bool unique() const noexcept { return !_data || _data.use_count()<=1; }
 
     E* data() const noexcept { return _data.get(); }
 
-    const std::shared_ptr<E>& dataPtr() const noexcept { return _data; }
+    const std::shared_ptr<E>& dataPtr() const { return _data; }
 };
 
 //! Provide options when rendering with std::ostream.
@@ -209,8 +209,6 @@ shared_array<void> copyAs(ArrayType dtype, ArrayType stype, const void *sbase, s
 } // namespace detail
 
 /** std::vector-like contiguous array of items passed by reference.
- *
- * Somewhat analogous to ``std::shared_ptr<std::vector<T>>``.
  *
  * shared_array comes in const and non-const, as well as void and non-void variants.
  *
@@ -259,18 +257,9 @@ public:
 
     typedef E element_type;
 
-    //! Pointer to no array.
-    //! @post size()==0
     constexpr shared_array() noexcept :base_t() {}
 
-    /** Allocate new array and populate from initializer list.
-     *
-     * @code
-     * shared_array<uint32> arr({1,2,3});
-     * @endcode
-     *
-     * @post size()==L.size()
-     */
+    //! allocate new array and populate from initializer list
     template<typename A>
     shared_array(std::initializer_list<A> L)
         :base_t(new _E_non_const[L.size()], L.size())
@@ -279,16 +268,8 @@ public:
         std::copy(L.begin(), L.end(), raw);
     }
 
-    /** Construct a copy of a sequence or range of random access iterators.
-     *
-     * @code
-     * special_vectorish<uint32_t> X(...);
-     * shared_array<uint32_t> Y(X.begin(), X.end());
-     *
-     * uint32_t cvals[] = {1,2,3,4};
-     * shared_array<uint32_t> Z(cvals, cvals + NELEMENTS(cvals));
-     * @endcode
-     */
+    //! Construct a copy of another a sequence.
+    //! Requires random access iterators.
     template<typename Iter, typename std::iterator_traits<Iter>::difference_type=0>
     shared_array(Iter begin, Iter end)
         :shared_array(std::distance(begin, end))
@@ -296,12 +277,12 @@ public:
         std::copy(begin, end, const_cast<_E_non_const*>(this->begin()));
     }
 
-    //! Allocate (with new[]) a new vector of c elements, which are default constructed.
+    //! @brief Allocate (with new[]) a new vector of size c
     explicit shared_array(size_t c)
         :base_t(new _E_non_const[c], c)
     {}
 
-    //! @brief Allocate (with new[]) a new vector of size c and fill with copies of e
+    //! @brief Allocate (with new[]) a new vector of size c and fill with value e
     template<typename V>
     shared_array(size_t c, V e)
         :base_t(new _E_non_const[c], c)
@@ -309,56 +290,25 @@ public:
         std::fill_n((_E_non_const*)this->_data.get(), this->_count, e);
     }
 
-    /** Wrap existing alloc with delete[]
-     *
-     *  @param a Array allocated with ``new E[len]``.
-     *  @param len Number of elements
-     */
+    //! use existing alloc with delete[]
     shared_array(E* a, size_t len)
         :base_t(a, len)
     {}
 
-    /** Wrap existing alloc w/ custom deletor
-     *
-     * @param a Array base pointer
-     * @param b Deletor object. ``b(a)`` must be valid.
-     * @param len Number of elements
-     */
+    //! use existing alloc w/ custom deletor
     template<typename B>
     shared_array(E* a, B b, size_t len)
         :base_t(a, b, len)
     {}
 
-    /** Wrap around existing shared_ptr
-     *
-     * Argument shared_ptr will likely be creating using that class's aliasing constructor.
-     */
-    shared_array(const std::shared_ptr<E>& a, size_t len) noexcept
+    //! build around existing shared_ptr
+    shared_array(const std::shared_ptr<E>& a, size_t len)
         :base_t(a, len)
     {}
 
-    /** Alias existing shared_ptr
-     *
-     * A powerful tool for adapting external data containers to shared_array without copying.
-     *
-     * @param a Ownership object
-     * @param b Base pointer.  Must remain valid until ownership object is destructed.
-     * @param len Number of elements
-     *
-     * @post data()==b
-     *
-     * @code
-     * auto stdvec(std::make_shared<std::vector<uint32_t>>({1,2,3}));
-     *
-     * shared_array<uint32_t> aliasvec(stdvec, stdvec->data(), stdvec->size());
-     *
-     * stdvec.reset(); // release original reference
-     *
-     * aliasvec.reset(); // ~vector runs!
-     * @endcode
-     */
+    //! alias existing shared_array
     template<typename A>
-    shared_array(const std::shared_ptr<A>& a, E* b, size_t len) noexcept
+    shared_array(const std::shared_ptr<A>& a, E* b, size_t len)
         :base_t(a, b, len)
     {}
 
@@ -407,7 +357,7 @@ private:
      * Unfortunately, many of the MSVC (<= VS 2010) STL methods assert() that iterators are never NULL.
      * So we fudge here by abusing 'this' so that our iterators are always !NULL.
      */
-    inline E* base_ptr() const noexcept {
+    inline E* base_ptr() const {
 #if defined(_MSC_VER) && _MSC_VER<=1600
         return this->_count ? this->_data.get() : (E*)(this-1);
 #else
@@ -448,24 +398,10 @@ public:
         return (*this)[i];
     }
 
-    /** Cast single mutable reference to const, consuming this
-     *
-     * Transfers reference from this object to the returned object.
-     *
-     * @pre unique()==true
-     * @post empty()==true
-     * @throws std::logic_error if !unique()
-     *
-     * @code
-     * shared_array<uint32_t> mutator({1,2,3});
-     * mutator[0] = 42;
-     *
-     * shared_array<const utin32_t> frozen(mutator.freeze());
-     *
-     * assert(mutator.empty()); // array reference transferred to 'frozen'
-     * assert(frozen.size()==3);
-     * @endcode
-     */
+    //! Cast to const, consuming this
+    //! @pre unique()==true
+    //! @post empty()==true
+    //! @throws std::logic_error if !unique()
     shared_array<typename std::add_const<E>::type>
     freeze() {
         if(!this->unique())
@@ -656,14 +592,14 @@ public:
     {}
 
     //! build around existing shared_ptr and length
-    shared_array(const std::shared_ptr<E>& a, size_t len, ArrayType type) noexcept
+    shared_array(const std::shared_ptr<E>& a, size_t len, ArrayType type)
         :base_t(a, len)
         ,_type(type)
     {}
 
     //! alias existing shared_ptr and length
     template<typename A>
-    shared_array(const std::shared_ptr<A>& a, E* b, size_t len) noexcept
+    shared_array(const std::shared_ptr<A>& a, E* b, size_t len)
         :base_t(a, b, len)
         ,_type(detail::CaptureBase<A>::code)
     {}
@@ -690,7 +626,7 @@ public:
 
     size_t max_size() const noexcept{return (size_t)-1;}
 
-    inline ArrayType original_type() const noexcept { return _type; }
+    inline ArrayType original_type() const { return _type; }
 
     shared_array<typename std::add_const<E>::type>
     freeze() {

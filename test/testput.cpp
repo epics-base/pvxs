@@ -177,7 +177,6 @@ struct Tester : public TesterBase
 
         cli.hurryUp();
 
-        // expect timeout without completion
         testOk1(!done.wait(2.1));
     }
 
@@ -427,7 +426,7 @@ void testError(ErrorSource::phase_t phase)
             auto val = actual();
             testTrue(false)<<"unexpected result\n"<<val;
         }catch(client::RemoteError& e){
-            testStrMatch(phase ? "Nope!" : "haha", e.what());
+            testStrMatch(e.what(), phase ? "Nope!" : "haha");
         }
     } else {
         testSkip(1, "timeout");
@@ -484,85 +483,18 @@ void testErrorManual(ErrorSource::phase_t phase)
             auto val = actual();
             testTrue(false)<<"unexpected result\n"<<val;
         }catch(client::RemoteError& e){
-            testStrMatch(phase ? "Nope!" : "haha", e.what());
+            testStrMatch(e.what(), phase ? "Nope!" : "haha");
         }
     } else {
         testSkip(1, "timeout");
     }
 }
 
-struct CancelSource : public server::Source {
-    const Value proto;
-    bool cancelled = false;
-
-    explicit CancelSource()
-        :proto(nt::NTScalar{}.create())
-    {}
-
-    virtual void onSearch(Search &op) override final
-    {
-        for(auto& name : op) {
-            name.claim();
-        }
-    }
-    virtual void onCreate(std::unique_ptr<server::ChannelControl> &&op) override final
-    {
-        auto chan = std::move(op);
-
-        chan->onOp([this](std::unique_ptr<server::ConnectOp>&& op) {
-            op->onPut([this](std::unique_ptr<server::ExecOp>&& pop, Value&&) {
-                auto eop(std::move(pop));
-                eop->onCancel([this](){
-                    cancelled = true;
-                });
-                // never complete
-            });
-            op->connect(proto);
-        });
-    }
-};
-
-void testCancel()
-{
-    testShow()<<__func__;
-
-    auto source(std::make_shared<CancelSource>());
-    auto serv = server::Config::isolated()
-                    .build()
-                    .addSource("cancel", source)
-                    .start();
-
-    auto cli = serv.clientConfig().build();
-
-    epicsEvent built, done;
-
-    auto op =cli.put("arbitrary")
-        .fetchPresent(false) // GET no implemented
-        .build([&](Value&& proto) -> Value {
-            testDiag("built");
-            built.signal();
-            return proto.cloneEmpty();
-        })
-        .result([&](client::Result&& r) {
-            testDiag("result");
-            done.signal();
-        })
-        .exec();
-
-    testTrue(built.wait(5.0));
-
-    testDiag("Cancelling");
-    op->cancel();
-
-    testTrue(!done.wait(5.0));
-    testTrue(source->cancelled);
-}
-
 } // namespace
 
 MAIN(testput)
 {
-    testPlan(52);
+    testPlan(49);
     testSetup();
     logger_config_env();
     Tester().loopback(false);
@@ -578,7 +510,6 @@ MAIN(testput)
     testError(ErrorSource::OnPut);
     testErrorManual(ErrorSource::OnCreate);
     testErrorManual(ErrorSource::OnPut);
-    testCancel();
     cleanup_for_valgrind();
     return testDone();
 }

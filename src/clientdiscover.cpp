@@ -9,8 +9,8 @@
 #include "utilpvt.h"
 #include "clientimpl.h"
 
-DEFINE_LOGGER(setup, "pvxs.client.setup");
-DEFINE_LOGGER(io, "pvxs.client.io");
+DEFINE_LOGGER(setup, "pvxs.cli.init");
+DEFINE_LOGGER(io, "pvxs.cli.io");
 
 namespace pvxs {
 namespace client {
@@ -71,9 +71,9 @@ std::shared_ptr<Operation> DiscoverBuilder::exec()
         // (maybe) user thread
         auto loop(op->context->tcp_loop);
         auto temp(std::move(op));
-        loop.tryInvoke(syncCancel, std::bind([](std::shared_ptr<Discovery>& op){
+        loop.tryInvoke(syncCancel, std::bind([](const std::shared_ptr<Discovery>& operation){
                            // on worker
-                           op->context->discoverers.erase(op.get());
+                           operation->context->discoverers.erase(operation.get());
 
                        }, std::move(temp)));
     });
@@ -82,7 +82,7 @@ std::shared_ptr<Operation> DiscoverBuilder::exec()
 
     context->tcp_loop.dispatch([op, context, ping]() {
 
-        if(context->state!=ContextImpl::Running)
+        if(!context->isRunning())
             throw std::logic_error("Context close()d");
 
         bool first = context->discoverers.empty();

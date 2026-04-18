@@ -106,6 +106,17 @@ void strDiff(std::ostream& out,
              const char *lhs,
              const char *rhs);
 
+PVXS_API std::string convertPath(std::string &path);
+PVXS_API void ensureDirectoryExists(std::string &filepath, bool convert_path = true);
+std::string versionString();
+PVXS_API std::string getHomeDir();
+PVXS_API std::string getFileContents(const std::string &file_name);
+
+PVXS_API std::string getXdgDataHome();
+PVXS_API std::string getXdgConfigHome();
+PVXS_API std::string getXdgPvaDataHome();
+PVXS_API std::string getXdgPvaConfigHome();
+
 struct threadOnceInfo {
     epicsThreadOnceId id = EPICS_THREAD_ONCE_INIT;
     void (* const fn)();
@@ -116,6 +127,7 @@ struct threadOnceInfo {
 PVXS_API
 void threadOnce_(threadOnceInfo *info) ;
 
+// Assumes that there is only once call site per function (onceFn)
 template<void (*onceFn)()>
 void threadOnce() noexcept {
     // global name qualified by onceFn address.
@@ -169,6 +181,13 @@ uint64_t parseTo<uint64_t>(const std::string& s);
 template<>
 PVXS_API
 int64_t parseTo<int64_t>(const std::string& s);
+template<>
+PVXS_API
+bool parseTo<bool>(const std::string& s);
+
+template<>
+PVXS_API
+int8_t parseTo<int8_t>(const std::string& input);
 
 #ifdef _WIN32
 #  define RWLOCK_TYPE SRWLOCK
@@ -336,6 +355,34 @@ struct InstCounter {
                     InstCounter<cnt_ ## KLASS> instances{#KLASS}
 #define DEFINE_INST_COUNTER2(KLASS, NAME) std::atomic<size_t> KLASS::cnt_ ## NAME {0u}
 #define DEFINE_INST_COUNTER(KLASS) DEFINE_INST_COUNTER2(KLASS, KLASS)
+
+struct PickOne {
+    const std::map<std::string, std::string> &defs;
+    bool useenv;
+
+    std::string name, val;
+
+    bool operator()(std::initializer_list<const char *> names) {
+        for (auto candidate : names) {
+            if (useenv) {
+                if (auto eval = getenv(candidate)) {
+                    name = candidate;
+                    val = eval;
+                    return true;
+                }
+
+            } else {
+                auto it = defs.find(candidate);
+                if (it != defs.end()) {
+                    name = candidate;
+                    val = it->second;
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+};
 
 } // namespace pvxs
 

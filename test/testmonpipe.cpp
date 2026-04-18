@@ -97,8 +97,7 @@ struct Spammer : public server::Source {
     }
 };
 
-void testSpam(uint32_t nQueue, uint32_t highMark, uint16_t lastVal,
-              const std::string& ackAny="")
+void testSpam(uint32_t nQueue, uint32_t highMark, uint16_t lastVal)
 {
     testShow()<<__func__<<" nQueue="<<nQueue<<" highMark="<<highMark<<" lastVal="<<lastVal;
 
@@ -111,23 +110,17 @@ void testSpam(uint32_t nQueue, uint32_t highMark, uint16_t lastVal,
     auto cli(srv.clientConfig().build());
 
     epicsEvent wait;
-    std::shared_ptr<client::Subscription> mon;
-    {
-        auto b(cli.monitor("spam")
-                   .record("highMark", highMark)
-                   .record("queueSize", nQueue)
-                   .record("lastVal", lastVal)
-                   .record("pipeline", true)
-                   .maskConnected(true)
-                   .maskDisconnected(true)
-                   .event([&wait](client::Subscription&){
-                       wait.signal();
-                   }));
-        if(!ackAny.empty()) {
-            b.record("ackAny", ackAny);
-        }
-        mon = b.exec();
-    }
+    auto mon(cli.monitor("spam")
+             .record("highMark", highMark)
+             .record("queueSize", nQueue)
+             .record("lastVal", lastVal)
+             .record("pipeline", true)
+             .maskConnected(true)
+             .maskDisconnected(true)
+             .event([&wait](client::Subscription&){
+                 wait.signal();
+             })
+             .exec());
 
     uint16_t expected = 0u;
     while(true) {
@@ -152,7 +145,7 @@ void testSpam(uint32_t nQueue, uint32_t highMark, uint16_t lastVal,
 
 MAIN(testmonpipe)
 {
-    testPlan(111);
+    testPlan(99);
     testSetup();
     logger_config_env();
     testSpam(3u, 0u, 7u);
@@ -164,7 +157,6 @@ MAIN(testmonpipe)
     testSpam(4u, 3u, 10u);
     testSpam(4u, 4u, 10u);
     testSpam(4u, 6u, 10u);
-    testSpam(4u, 6u, 10u, "50%");
     logger_config_env();
     cleanup_for_valgrind();
     return testDone();

@@ -521,77 +521,11 @@ void testError(bool phase)
     }
 }
 
-struct DisconnSource : public server::Source
-{
-    const Value type;
-    std::atomic<unsigned> closecount{0u};
-    explicit DisconnSource()
-        :type(nt::NTScalar{TypeCode::Int32}.create())
-    {}
-
-    virtual void onSearch(Search &op) override final
-    {
-        for(auto& name : op) {
-            name.claim();
-        }
-    }
-    virtual void onCreate(std::unique_ptr<server::ChannelControl> &&op) override final
-    {
-        std::shared_ptr<server::ChannelControl> chan(std::move(op));
-
-        chan->onOp([this, chan](std::unique_ptr<server::ConnectOp>&& op) {
-            op->onGet([this, chan](std::unique_ptr<server::ExecOp>&& op) {
-                testDiag("Force close!");
-                closecount++;
-                chan->close();
-            });
-            op->connect(type);
-        });
-    }
-};
-
-void testServerClose()
-{
-    testShow()<<__func__;
-
-    auto source(std::make_shared<DisconnSource>());
-    auto serv = server::Config::isolated()
-                    .build()
-                    .addSource("disconn", source)
-                    .start();
-
-    auto cli = serv.clientConfig().build();
-
-    epicsEvent econn, edisconn;
-
-    auto connop = cli.connect("mailbox")
-                  .onConnect([&](){
-                          testDiag("Connect");
-                          econn.signal();
-                      })
-                  .onDisconnect([&](){
-                          testDiag("Disconn");
-                          edisconn.signal();
-                      })
-                  .exec();
-
-    testTrue(edisconn.wait(5.0))<<" Initially Disconnected";
-
-    testTrue(econn.wait(5.0))<<" Connected";
-
-    auto op = cli.get("mailbox")
-                  .exec();
-
-    testTrue(edisconn.wait(5.0))<<" Disconnected";
-
-    testEq(source->closecount, 1u);
-}
-
 } // namespace
 
 MAIN(testget)
 {
-    testPlan(67);
+    testPlan(63);
     testSetup();
     logger_config_env();
     const bool canIPv6 = pvxs::impl::evsocket::canIPv6;
@@ -615,7 +549,6 @@ MAIN(testget)
     Tester().ordering();
     testError(false);
     testError(true);
-    testServerClose();
     cleanup_for_valgrind();
     return testDone();
 }

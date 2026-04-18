@@ -9,7 +9,10 @@
 
 #include <functional>
 #include <memory>
+#include <tuple>
+#include <set>
 #include <vector>
+#include <array>
 
 #include <pvxs/version.h>
 #include "evhelper.h"
