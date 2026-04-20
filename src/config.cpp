@@ -11,6 +11,8 @@
 #include <limits>
 #include <cmath>
 
+#include <event2/util.h>
+
 #include <dbDefs.h>
 #include <osiSock.h>
 #include <epicsMath.h>
@@ -148,8 +150,84 @@ namespace {
  */
 constexpr double tmoScale = 4.0/3.0; // 40 second idle timeout / 30 configured
 
+std::string endpointAddressPart(const std::string& inp)
+{
+    auto end = inp.find_first_of(",@");
+    auto ep = inp.substr(0u, end);
+
+    if(ep.empty())
+        return ep;
+    if(ep[0]=='[') {
+        auto close = ep.find(']');
+
+        if(close!=std::string::npos)
+            return ep.substr(1u, close-1u);
+    }
+
+    auto first = ep.find(':');
+    auto last = ep.rfind(':');
+
+    if(first!=std::string::npos && first==last)
+        return ep.substr(0u, first);
+    return ep;
+}
+
+bool endpointUsesHostname(const std::string& inp)
+{
+    auto host(endpointAddressPart(inp));
+    char buf[sizeof(in6_addr)];
+
+    if(host.empty())
+        return false;
+    if(evutil_inet_pton(AF_INET, host.c_str(), buf)==1)
+        return false;
+    if(evutil_inet_pton(AF_INET6, host.c_str(), buf)==1)
+        return false;
+    return true;
+}
+
+bool listUsesHostname(const std::vector<std::string>& inp)
+{
+    for(auto& addr : inp) {
+        if(endpointUsesHostname(addr))
+            return true;
+    }
+    return false;
+}
+
+bool endpointSeen(const std::vector<SockEndpoint>& inp, const SockEndpoint& ep)
+{
+    for(auto& addr : inp) {
+        if(addr==ep)
+            return true;
+    }
+    return false;
+}
+
+void printAddressesPreservingHostnames(std::vector<std::string>& out,
+                                       const std::vector<std::string>& original)
+{
+    std::vector<std::string> temp;
+
+    temp.reserve(original.size());
+    for(auto& addr : original) {
+        try {
+            SockEndpoint ep(addr);
+
+            if(endpointUsesHostname(addr))
+                temp.push_back(addr);
+            else
+                temp.emplace_back(SB()<<ep);
+
+        }catch(std::runtime_error& e){
+            log_warn_printf(config, "Ignoring %s : %s\n", addr.c_str(), e.what());
+        }
+    }
+    out = std::move(temp);
+}
+
 void split_addr_into(const char* name, std::vector<std::string>& out, const std::string& inp,
-                     uint16_t defaultPort, bool required=false)
+                     uint16_t defaultPort, bool required=false, bool preserveHostnames=false)
 {
     size_t pos=0u;
 
@@ -164,9 +242,14 @@ void split_addr_into(const char* name, std::vector<std::string>& out, const std:
             auto temp(inp.substr(start, end==std::string::npos ? end : end-start));
             try {
                 SockEndpoint ep(temp);
-                if(ep.addr.port()==0)
-                    ep.addr.setPort(defaultPort);
-                out.push_back(SB()<<ep);
+                if(preserveHostnames && endpointUsesHostname(temp)) {
+                    out.push_back(temp);
+
+                } else {
+                    if(ep.addr.port()==0)
+                        ep.addr.setPort(defaultPort);
+                    out.push_back(SB()<<ep);
+                }
 
             } catch(std::exception& e){
                 if(required)
@@ -578,11 +661,13 @@ void _fromDefs(Config& self, const std::map<std::string, std::string>& defs, boo
     }
 
     if(pickone({"EPICS_PVA_ADDR_LIST"})) {
-        split_addr_into(pickone.name.c_str(), self.addressList, pickone.val, self.udp_port);
+        split_addr_into(pickone.name.c_str(), self.addressList, pickone.val,
+                        self.udp_port, false, true);
     }
 
     if(pickone({"EPICS_PVA_NAME_SERVERS"})) {
-        split_addr_into(pickone.name.c_str(), self.nameServers, pickone.val, self.tcp_port);
+        split_addr_into(pickone.name.c_str(), self.nameServers, pickone.val,
+                        self.tcp_port, false, true);
     }
 
     if(pickone({"EPICS_PVA_AUTO_ADDR_LIST"})) {
@@ -631,8 +716,11 @@ void Config::expand()
     if(tcp_port==0)
         tcp_port = 5075;
 
+    auto requestedAddressList(addressList);
     auto ifaces(parseAddresses(interfaces));
     auto addrs(parseAddresses(addressList));
+    auto requestedAddrs(addrs);
+    bool preserveAddressNames = listUsesHostname(requestedAddressList);
 
     if(ifaces.empty())
         ifaces.emplace_back(SockAddr::any(AF_INET));
@@ -645,7 +733,15 @@ void Config::expand()
 
     printAddresses(interfaces, ifaces);
     removeDups(addrs);
-    printAddresses(addressList, addrs);
+    if(preserveAddressNames) {
+        printAddressesPreservingHostnames(addressList, requestedAddressList);
+        for(auto& addr : addrs) {
+            if(!endpointSeen(requestedAddrs, addr))
+                addressList.emplace_back(SB()<<addr);
+        }
+    } else {
+        printAddresses(addressList, addrs);
+    }
 
     enforceTimeout(tcpTimeout);
 }

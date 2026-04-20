@@ -6,7 +6,9 @@
 #ifndef CLIENTIMPL_H
 #define CLIENTIMPL_H
 
+#include <ctime>
 #include <list>
+#include <set>
 
 #include <epicsTime.h>
 #include <epicsEvent.h>
@@ -290,10 +292,16 @@ struct ContextImpl : public std::enable_shared_from_this<ContextImpl>
 
     // search destination address and whether to set the unicast flag
     struct SearchDest {
-        const SockEndpoint dest;
-        const bool isucast;
+        std::string source;
+        SockEndpoint dest;
+        bool isucast;
+        bool resolved = true;
+        bool stateful = false;
+        time_t expires = 0;
         bool lastSuccess = true;
-        SearchDest(SockEndpoint dest, bool isu) :dest(dest), isucast(isu) {}
+        SearchDest(const std::string& source, SockEndpoint dest, bool isu,
+                   bool stateful, time_t expires)
+            :source(source), dest(dest), isucast(isu), stateful(stateful), expires(expires) {}
     };
 
     std::vector<SearchDest> searchDest;
@@ -314,7 +322,20 @@ struct ContextImpl : public std::enable_shared_from_this<ContextImpl>
 
     std::map<SockAddr, std::weak_ptr<Connection>> connByAddr;
 
-    std::vector<std::pair<SockAddr, std::shared_ptr<Connection>>> nameServers;
+    struct NameServerDest {
+        std::string source;
+        SockAddr addr;
+        std::shared_ptr<Connection> conn;
+        bool resolved = true;
+        bool stateful = false;
+        time_t expires = 0;
+        NameServerDest(const std::string& source, const SockAddr& addr,
+                       bool stateful, time_t expires)
+            :source(source), addr(addr), stateful(stateful), expires(expires) {}
+    };
+
+    std::vector<NameServerDest> nameServers;
+    std::set<SockAddr, SockAddrOnlyLess> searchBcasts;
 
     evbase tcp_loop;
     const evevent searchRx4, searchRx6;

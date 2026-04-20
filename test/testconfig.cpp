@@ -96,11 +96,13 @@ void testDefs()
         defs["EPICS_PVA_BROADCAST_PORT"] = "1234";
         defs["EPICS_PVA_AUTO_ADDR_LIST"] = "NO";
         defs["EPICS_PVA_ADDR_LIST"] = "1.2.1.2 4.3.2.1:1234";
+        defs["EPICS_PVA_NAME_SERVERS"] = "localhost:9876";
         defs["EPICS_PVA_INTF_ADDR_LIST"] = "1.2.3.4 1.1.1.1";
         conf.applyDefs(defs);
         testEq(conf.udp_port, 1234);
         testFalse(conf.autoAddrList);
         testEq(conf.addressList, std::vector<std::string>({"1.2.1.2:1234", "4.3.2.1:1234"}));
+        testEq(conf.nameServers, std::vector<std::string>({"localhost:9876"}));
         testEq(conf.interfaces, std::vector<std::string>({"1.1.1.1", "1.2.3.4"}));
     }
 
@@ -188,12 +190,12 @@ void testDNS()
         testArrEq(conf.addressList, expect)<<" numeric address";
     }
     {
-        std::vector<std::string> expect({"127.0.0.1"});
+        std::vector<std::string> expect({"localhost"});
         client::Config conf;
         conf.addressList.push_back("localhost"); // copy
         conf.autoAddrList = false;
         conf.expand();
-        testArrEq(conf.addressList, expect)<<" localhost";
+        testArrEq(conf.addressList, expect)<<" localhost preserved";
     }
     {
         std::vector<std::string> expect;
@@ -209,7 +211,7 @@ void testDNS()
 
 MAIN(testconfig)
 {
-    testPlan(34);
+    testPlan(35);
     testSetup();
     testDefs();
     logger_config_env();

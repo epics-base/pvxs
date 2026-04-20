@@ -5,8 +5,16 @@
  */
 
 #include <algorithm>
+#include <ctime>
+#include <cstring>
 #include <set>
 #include <tuple>
+
+#if defined(__linux__) || defined(__APPLE__) || defined(__FreeBSD__) || defined(__sun)
+#  include <arpa/nameser.h>
+#  include <resolv.h>
+#  define PVXS_USE_DNS_TTL 1
+#endif
 
 #include <osiSock.h>
 #include <dbDefs.h>
@@ -42,6 +50,240 @@ constexpr timeval bucketIntervalFast{0,200000};
 constexpr timeval initialSearchDelay{0, 10000}; // 10 ms
 // number of buckets in the search ring
 constexpr size_t nBuckets = 30u;
+constexpr unsigned dnsTTLFallback = 300u;
+constexpr unsigned dnsRetry = 60u;
+
+std::string endpointAddressPart(const std::string& inp)
+{
+    auto end = inp.find_first_of(",@");
+    auto ep = inp.substr(0u, end);
+
+    if(ep.empty())
+        return ep;
+    if(ep[0]=='[') {
+        auto close = ep.find(']');
+
+        if(close!=std::string::npos)
+            return ep.substr(1u, close-1u);
+    }
+
+    auto first = ep.find(':');
+    auto last = ep.rfind(':');
+
+    if(first!=std::string::npos && first==last)
+        return ep.substr(0u, first);
+    return ep;
+}
+
+bool endpointUsesHostname(const std::string& inp)
+{
+    auto host(endpointAddressPart(inp));
+    char buf[sizeof(in6_addr)];
+
+    if(host.empty())
+        return false;
+    if(evutil_inet_pton(AF_INET, host.c_str(), buf)==1)
+        return false;
+    if(evutil_inet_pton(AF_INET6, host.c_str(), buf)==1)
+        return false;
+    return true;
+}
+
+#ifdef PVXS_USE_DNS_TTL
+bool dnsTTL(const std::string& host, const SockAddr& addr, unsigned& ttl)
+{
+    unsigned char answer[4096];
+    ns_msg handle;
+    int qtype;
+    const void *selected;
+    size_t selectedLen;
+    int len;
+    int count;
+    bool found = false;
+    unsigned best = 0u;
+
+    if(addr.family()==AF_INET) {
+        qtype = ns_t_a;
+        selected = &addr->in.sin_addr.s_addr;
+        selectedLen = sizeof(addr->in.sin_addr.s_addr);
+
+    } else if(addr.family()==AF_INET6) {
+        qtype = ns_t_aaaa;
+        selected = &addr->in6.sin6_addr;
+        selectedLen = sizeof(addr->in6.sin6_addr);
+
+    } else {
+        return false;
+    }
+
+    len = res_query(host.c_str(), ns_c_in, qtype, answer, sizeof(answer));
+    if(len < 0 || len > (int)sizeof(answer) || ns_initparse(answer, len, &handle))
+        return false;
+
+    count = ns_msg_count(handle, ns_s_an);
+    for(int i = 0; i < count; i++) {
+        ns_rr rr;
+
+        if(ns_parserr(&handle, ns_s_an, i, &rr))
+            continue;
+        if(ns_rr_type(rr) != qtype || ns_rr_class(rr) != ns_c_in)
+            continue;
+        if(ns_rr_rdlen(rr) != selectedLen)
+            continue;
+        if(memcmp(ns_rr_rdata(rr), selected, selectedLen) != 0)
+            continue;
+
+        if(!found || ns_rr_ttl(rr) < best)
+            best = ns_rr_ttl(rr);
+        found = true;
+    }
+    if(found) {
+        ttl = best;
+        return true;
+    }
+    return false;
+}
+#endif
+
+time_t currentTime()
+{
+    auto now = time(nullptr);
+
+    if(now==(time_t)-1)
+        now = 0;
+    return now;
+}
+
+bool computeIsUcast(const SockEndpoint& ep,
+                    const std::set<SockAddr, SockAddrOnlyLess>& bcasts)
+{
+    auto isucast = !ep.addr.isMCast();
+
+    if(isucast && ep.addr.family()==AF_INET && bcasts.find(ep.addr)!=bcasts.end())
+        isucast = false;
+    return isucast;
+}
+
+bool resolveSearchEndpoint(const std::string& source, uint16_t port,
+                           SockEndpoint& ep, time_t& expires)
+{
+    auto now(currentTime());
+
+    try {
+        ep = SockEndpoint(source, port);
+    }catch(std::exception& e){
+        expires = now + dnsRetry;
+        log_warn_printf(setup, "%s  Retrying address %s later\n", e.what(), source.c_str());
+        return false;
+    }
+
+    if(endpointUsesHostname(source)) {
+        unsigned ttl = dnsTTLFallback;
+
+#ifdef PVXS_USE_DNS_TTL
+        (void)dnsTTL(endpointAddressPart(source), ep.addr, ttl);
+#endif
+        expires = now + ttl;
+
+    } else {
+        expires = 0;
+    }
+    return true;
+}
+
+bool resolveNameServer(const std::string& source, uint16_t port,
+                       SockAddr& addr, time_t& expires)
+{
+    auto now(currentTime());
+
+    try {
+        addr.setAddress(source.c_str(), port);
+    }catch(std::exception& e) {
+        expires = now + dnsRetry;
+        log_warn_printf(setup, "%s  Retrying nameserver %s later\n", e.what(), source.c_str());
+        return false;
+    }
+
+    if(endpointUsesHostname(source)) {
+        unsigned ttl = dnsTTLFallback;
+
+#ifdef PVXS_USE_DNS_TTL
+        (void)dnsTTL(endpointAddressPart(source), addr, ttl);
+#endif
+        expires = now + ttl;
+
+    } else {
+        expires = 0;
+    }
+    return true;
+}
+
+bool refreshSearchDest(ContextImpl& context, ContextImpl::SearchDest& dest)
+{
+    auto now(currentTime());
+
+    if(!dest.stateful)
+        return false;
+    if(dest.expires && difftime(now, dest.expires) < 0.0)
+        return false;
+
+    SockEndpoint resolved;
+    time_t expires = 0;
+    bool wasResolved = dest.resolved;
+    auto oldDest(dest.dest);
+    auto oldIsUcast(dest.isucast);
+
+    if(!resolveSearchEndpoint(dest.source, context.effective.udp_port,
+                              resolved, expires)) {
+        dest.resolved = false;
+        dest.expires = expires;
+        return wasResolved;
+    }
+
+    dest.dest = resolved;
+    dest.isucast = computeIsUcast(dest.dest, context.searchBcasts);
+    dest.resolved = true;
+    dest.expires = expires;
+    return !wasResolved || oldDest!=dest.dest || oldIsUcast!=dest.isucast;
+}
+
+bool refreshNameServer(ContextImpl& context, ContextImpl::NameServerDest& ns)
+{
+    auto now(currentTime());
+
+    if(!ns.stateful)
+        return false;
+    if(ns.expires && difftime(now, ns.expires) < 0.0)
+        return false;
+
+    SockAddr resolved;
+    time_t expires = 0;
+    bool wasResolved = ns.resolved;
+    auto oldAddr(ns.addr);
+
+    if(!resolveNameServer(ns.source, context.effective.tcp_port,
+                          resolved, expires)) {
+        ns.resolved = false;
+        ns.expires = expires;
+        if(wasResolved && ns.conn) {
+            ns.conn->cleanup();
+            ns.conn.reset();
+        }
+        return wasResolved;
+    }
+
+    ns.addr = resolved;
+    ns.resolved = true;
+    ns.expires = expires;
+    if(!wasResolved || oldAddr!=ns.addr) {
+        if(ns.conn) {
+            ns.conn->cleanup();
+            ns.conn.reset();
+        }
+        return true;
+    }
+    return false;
+}
 
 /* our limit for UDP packet payload.
  * try not to fragment with usual MTU==1500 allowing for some overhead
@@ -544,10 +786,9 @@ ContextImpl::ContextImpl(const Config& conf, const evbase& tcp_loop)
 {
     searchBuckets.resize(nBuckets);
 
-    std::set<SockAddr, SockAddrOnlyLess> bcasts;
     for(auto& addr : searchTx4.broadcasts()) {
         addr.setPort(0u);
-        bcasts.insert(addr);
+        searchBcasts.insert(addr);
     }
 
     searchTx6.ipv6_only();
@@ -577,34 +818,43 @@ ContextImpl::ContextImpl(const Config& conf, const evbase& tcp_loop)
 
     for(auto& addr : effective.addressList) {
         SockEndpoint ep;
-        try {
-            ep = SockEndpoint(addr, effective.udp_port);
-        }catch(std::exception& e){
-            log_warn_printf(setup, "%s  Ignoring malformed address %s\n", e.what(), addr.c_str());
+        time_t expires = 0;
+        bool stateful = endpointUsesHostname(addr);
+
+        if(!resolveSearchEndpoint(addr, effective.udp_port, ep, expires)) {
+            if(stateful) {
+                SearchDest dest(addr, ep, false, true, expires);
+
+                dest.resolved = false;
+                searchDest.push_back(dest);
+            }
             continue;
         }
         assert(ep.addr.family()==AF_INET || ep.addr.family()==AF_INET6);
 
-        // if !bcast and !mcast
-        auto isucast = !ep.addr.isMCast();
-
-        if(isucast && ep.addr.family()==AF_INET && bcasts.find(ep.addr)!=bcasts.end())
-            isucast = false;
+        auto isucast = computeIsUcast(ep, searchBcasts);
 
         log_info_printf(io, "Searching to %s%s\n", std::string(SB()<<ep).c_str(), (isucast?" unicast":""));
-        searchDest.emplace_back(ep, isucast);
+        searchDest.emplace_back(addr, ep, isucast, stateful, expires);
     }
 
     for(auto& addr : effective.nameServers) {
         SockAddr saddr;
-        try {
-            saddr.setAddress(addr.c_str(), effective.tcp_port);
-        }catch(std::runtime_error& e) {
-            log_err_printf(setup, "%s  Ignoring...\n", e.what());
+        time_t expires = 0;
+        bool stateful = endpointUsesHostname(addr);
+
+        if(!resolveNameServer(addr, effective.tcp_port, saddr, expires)) {
+            if(stateful) {
+                NameServerDest dest(addr, saddr, true, expires);
+
+                dest.resolved = false;
+                nameServers.push_back(dest);
+            }
+            continue;
         }
 
         log_info_printf(io, "Searching to TCP %s\n", saddr.tostring().c_str());
-        nameServers.emplace_back(saddr, nullptr);
+        nameServers.emplace_back(addr, saddr, stateful, expires);
     }
 
     if(searchDest.empty() && nameServers.empty())
@@ -656,10 +906,12 @@ void ContextImpl::startNS()
     tcp_loop.call([this]() {
         // start connections to name servers
         for(auto& ns : nameServers) {
-            const auto& serv = ns.first;
-            ns.second = Connection::build(shared_from_this(), serv);
-            ns.second->nameserver = true;
-            log_debug_printf(io, "Connecting to nameserver %s\n", ns.second->peerName.c_str());
+            refreshNameServer(*this, ns);
+            if(!ns.resolved)
+                continue;
+            ns.conn = Connection::build(shared_from_this(), ns.addr);
+            ns.conn->nameserver = true;
+            log_debug_printf(io, "Connecting to nameserver %s\n", ns.conn->peerName.c_str());
         }
 
         if(event_add(nsChecker.get(), &tcpNSCheckInterval))
@@ -1152,6 +1404,10 @@ void ContextImpl::tickSearch(SearchKind kind, bool poked)
             to_wire(H, Header{CMD_SEARCH, 0, uint32_t(consumed-8u)});
         }
         for(auto& pair : searchDest) {
+            refreshSearchDest(*this, pair);
+            if(!pair.resolved)
+                continue;
+
             auto& dest = pair.dest.addr.family()==AF_INET ? searchTx4 : searchTx6;
 
             if(pair.isucast) {
@@ -1196,9 +1452,10 @@ void ContextImpl::tickSearch(SearchKind kind, bool poked)
         pport[0] = pport[1] = 0;
 
         for(auto& pair : nameServers) {
-            auto& serv = pair.second;
+            refreshNameServer(*this, pair);
+            auto& serv = pair.conn;
 
-            if(!serv->ready || !serv->connection())
+            if(!pair.resolved || !serv || !serv->ready || !serv->connection())
                 continue;
 
             auto tx = bufferevent_get_output(serv->connection());
@@ -1295,12 +1552,16 @@ void ContextImpl::tickBeaconCleanS(evutil_socket_t fd, short evt, void *raw)
 void ContextImpl::onNSCheck()
 {
     for(auto& ns : nameServers) {
-        if(ns.second && ns.second->state != ConnBase::Disconnected) // hold-off, connecting, or connected
+        refreshNameServer(*this, ns);
+        if(!ns.resolved)
             continue;
 
-        ns.second = Connection::build(shared_from_this(), ns.first);
-        ns.second->nameserver = true;
-        log_debug_printf(io, "Reconnecting nameserver %s\n", ns.second->peerName.c_str());
+        if(ns.conn && ns.conn->state != ConnBase::Disconnected) // hold-off, connecting, or connected
+            continue;
+
+        ns.conn = Connection::build(shared_from_this(), ns.addr);
+        ns.conn->nameserver = true;
+        log_debug_printf(io, "Reconnecting nameserver %s\n", ns.conn->peerName.c_str());
     }
 }
 
