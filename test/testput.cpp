@@ -512,7 +512,7 @@ struct CancelSource : public server::Source {
         chan->onOp([this](std::unique_ptr<server::ConnectOp>&& op) {
             op->onPut([this](std::unique_ptr<server::ExecOp>&& pop, Value&&) {
                 auto eop(std::move(pop));
-                eop->onCancel([this](){
+                eop->onCancel([this]() noexcept{
                     cancelled = true;
                 });
                 // never complete

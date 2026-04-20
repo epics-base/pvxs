@@ -14,7 +14,7 @@ CONFIG_LOADED=YES
 #if __GNUC__
 /* also true for clang */
 GNUISH=YES
-USR_CXXFLAGS += -std=c++11
+USR_CXXFLAGS += -std=c++17
 #endif
 
 #if __GNUC__ && !__clang__

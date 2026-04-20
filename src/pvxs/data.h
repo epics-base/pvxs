@@ -705,7 +705,7 @@ public:
 
     // Struct/Union access
 private:
-    void traverse(const std::string& expr, bool modify, bool dothrow);
+    void traverse(const char *e, size_t l, bool modify, bool dothrow);
 public:
 
     /** Attempt to access a descendant field.
@@ -725,6 +725,8 @@ public:
      */
     Value operator[](const std::string& name);
     const Value operator[](const std::string& name) const;
+    Value operator[](const char* name);
+    const Value operator[](const char* name) const;
 
     /** Attempt to access a descendant field, or throw exception.
      *
@@ -737,6 +739,8 @@ public:
      */
     Value lookup(const std::string& name);
     const Value lookup(const std::string& name) const;
+    Value lookup(const char* name);
+    const Value lookup(const char* name) const;
 
     //! Number of child fields.
     //! Only Struct, StructA, Union, UnionA return non-zero
