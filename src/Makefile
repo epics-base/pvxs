@@ -110,10 +110,10 @@ LIB_LIBS += $(LIBEVENT_BUNDLE_LIBS)
 endif
 
 LIB_SYS_LIBS += $(LIBEVENT_SYS_LIBS)
-LIB_SYS_LIBS_Darwin += resolv
-LIB_SYS_LIBS_Linux += resolv
-LIB_SYS_LIBS_freebsd += resolv
-LIB_SYS_LIBS_solaris += resolv
+pvxs_SYS_LIBS_Darwin += resolv
+pvxs_SYS_LIBS_Linux += resolv
+pvxs_SYS_LIBS_freebsd += resolv
+pvxs_SYS_LIBS_solaris += resolv
 
 #===========================
 
