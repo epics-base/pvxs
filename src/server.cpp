@@ -430,21 +430,6 @@ Server::Pvt::Pvt(const Config &conf)
             continue; // special case handling below
         }
 
-        if(addr.addr.family()==AF_INET && addr.addr.isAny()) {
-            // if listening on 0.0.0.0, also listen on [::]
-            auto any6(addr);
-            any6.addr = SockAddr::any(AF_INET6);
-
-            listeners.push_back(manager.onSearch(any6, cb));
-
-        } else if(addr.addr.family()==AF_INET6 && addr.addr.isAny()) {
-            // if listening on [::], also listen on 0.0.0.0
-            auto any4(addr);
-            any4.addr = SockAddr::any(AF_INET);
-
-            listeners.push_back(manager.onSearch(any4, cb));
-        }
-
         if(addr.addr.family()==AF_INET && !addr.addr.isAny() && !addr.addr.isMCast()) {
             for(auto bcast : dummy.broadcasts(&addr.addr)) {
                 bcast.setPort(addr.addr.port());
