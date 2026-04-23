@@ -339,6 +339,8 @@ struct PVXS_API IfaceMap {
         // bcast - broadcast -> interface address
         std::map<SockAddr, SockAddr, SockAddrOnlyLess> addrs, bcast;
         Iface(const std::string& name, uint64_t index, bool isLO) :name(name), index(index), isLO(isLO) {}
+        bool operator==(const Iface& o) const;
+        bool operator!=(const Iface& o) const { return !((*this)==o); }
     };
 
     struct Current {
@@ -346,6 +348,8 @@ struct PVXS_API IfaceMap {
         std::map<std::string, Iface*> byName;
         // map address to tuple of interface and broadcast?
         std::multimap<SockAddr, std::pair<Iface*, bool>, SockAddrOnlyLess> byAddr;
+        bool operator==(const Current& o) const;
+        bool operator!=(const Current& o) const { return !((*this)==o); }
     };
     std::shared_ptr<const Current> current;
 

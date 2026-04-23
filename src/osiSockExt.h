@@ -87,14 +87,20 @@ public:
     static SockAddr loopback(int af, unsigned port=0);
 
     inline int compare(const SockAddr& o, bool useport=true) const {
+        if(family()<o.family())
+            return -1;
+        else if(family()>o.family())
+            return 1;
+        if(family()==AF_UNSPEC)
+            return 0;
         return evutil_sockaddr_cmp(&store.sa, &o.store.sa, useport);
     }
 
     inline bool operator<(const SockAddr& o) const {
-        return evutil_sockaddr_cmp(&store.sa, &o.store.sa, true)<0;
+        return compare(o, true)<0;
     }
     inline bool operator==(const SockAddr& o) const {
-        return evutil_sockaddr_cmp(&store.sa, &o.store.sa, true)==0;
+        return compare(o, true)==0;
     }
     inline bool operator!=(const SockAddr& o) const {
         return !(*this==o);

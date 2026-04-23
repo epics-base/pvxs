@@ -765,7 +765,10 @@ struct IfMapDaemon : private epicsThreadRunable {
                     epicsGuardRelease<epicsMutex> U(G);
                     wake.wait(15.0); // arbitrary period...
                     next = IfaceMap::refresh();
+                    if(*latest==*next)
+                        continue;
                 }
+                log_warn_printf(logiface, "NIC configuration change detected %zu\n", next->byIndex.size());
                 latest.swap(next);
 
             } catch(std::exception& e){
@@ -904,6 +907,27 @@ std::set<std::string> IfaceMap::all_external() const
     return ret;
 }
 
+bool IfaceMap::Iface::operator==(const Iface &o) const
+{
+    using P = decltype(addrs)::value_type;
+    auto comp = [](const P& l, const P& r) -> bool {
+        return l.first==r.first && l.second.compare(r.second, false)==0;
+    };
+    return name==o.name
+        && index==o.index
+        && isLO==o.isLO
+        && addrs.size()==o.addrs.size()
+        && std::equal(addrs.begin(), addrs.end(), o.addrs.begin(), comp)
+        && bcast.size()==o.bcast.size()
+        && std::equal(bcast.begin(), bcast.end(), o.bcast.begin(), comp);
+}
+
+bool IfaceMap::Current::operator==(const Current &o) const
+{
+    return byIndex.size()==o.byIndex.size()
+        && std::equal(byIndex.begin(), byIndex.end(), o.byIndex.begin());
+    // assume byName and byAddr indices are consistent
+}
 
 void to_wire(Buffer& buf, const SockAddr& val)
 {
