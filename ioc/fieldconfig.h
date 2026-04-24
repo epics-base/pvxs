@@ -41,6 +41,11 @@ struct MappingInfo {
     Value cval;
 
     void updateNsecMask(dbCommon *prec);
+    
+    #if USER_ALARM_MSG
+    mutable std::string alarmMsg;
+    void updateUserAlarmMsg(dbCommon *prec) const; 
+    #endif
 };
 
 /**

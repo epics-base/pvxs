@@ -24,6 +24,9 @@ Field::Field(const FieldDefinition &def)
     if(!def.channel.empty()) {
         value = Channel(def.channel);
         properties = Channel(def.channel);
+        #if USER_ALARM_MSG
+        info.updateUserAlarmMsg(dbChannelRecord(value));
+        #endif
         info.updateNsecMask(dbChannelRecord(value));
     }
     if (!fieldName.fieldNameComponents.empty()) {

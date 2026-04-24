@@ -26,6 +26,9 @@ struct SingleInfo : public MappingInfo {
 
     explicit SingleInfo(Channel&& chan) :chan(std::move(chan)) {
         updateNsecMask(dbChannelRecord(this->chan));
+        #if USER_ALARM_MSG
+        updateUserAlarmMsg(dbChannelRecord(this->chan));
+        #endif
     }
 };
 
