@@ -516,8 +516,89 @@ Value buildCAMethod()
                    }).create();
 }
 
+std::vector<ContextImpl::SearchDest>
+ContextImpl::buildSearchDest(const Config& conf,
+                             const std::set<SockAddr, SockAddrOnlyLess>& bcasts,
+                             bool announce)
+{
+    std::vector<SearchDest> ret;
+
+    for(auto& addr : conf.addressList) {
+        SockEndpoint ep;
+        try {
+            ep = SockEndpoint(addr, conf.udp_port);
+        }catch(std::exception& e){
+            log_warn_printf(setup, "%s  Ignoring malformed address %s\n", e.what(), addr.c_str());
+            continue;
+        }
+        assert(ep.addr.family()==AF_INET || ep.addr.family()==AF_INET6);
+
+        // if !bcast and !mcast
+        auto isucast = !ep.addr.isMCast();
+
+        if(isucast && ep.addr.family()==AF_INET && bcasts.find(ep.addr)!=bcasts.end())
+            isucast = false;
+
+        if(announce)
+            log_info_printf(io, "Searching to %s%s\n", std::string(SB()<<ep).c_str(), (isucast?" unicast":""));
+
+        ret.emplace_back(ep, isucast);
+    }
+
+    return ret;
+}
+
+bool ContextImpl::searchDestEqual(const std::vector<SearchDest>& lhs,
+                                  const std::vector<SearchDest>& rhs)
+{
+    if(lhs.size()!=rhs.size())
+        return false;
+
+    for(size_t i=0; i<lhs.size(); i++) {
+        if(lhs[i].dest!=rhs[i].dest || lhs[i].isucast!=rhs[i].isucast)
+            return false;
+    }
+
+    return true;
+}
+
+void ContextImpl::reconfigureSearchDestIfNeeded()
+{
+    auto nextGeneration = ifmapGeneration;
+
+    try {
+        const auto ifmap(IfaceMap::instance());
+        nextGeneration = ifmap.revision();
+
+        if(nextGeneration==ifmapGeneration)
+            return;
+
+        Config next(requested);
+        next.expand();
+
+        std::set<SockAddr, SockAddrOnlyLess> bcasts;
+        for(auto& addr : searchTx4.broadcasts()) {
+            addr.setPort(0u);
+            bcasts.insert(addr);
+        }
+
+        auto nextDest(buildSearchDest(next, bcasts, false));
+        if(!searchDestEqual(searchDest, nextDest)) {
+            log_info_printf(setup, "Reconfigured client search destinations after interface change%s", "\n");
+            searchDest.swap(nextDest);
+        }
+
+    }catch(std::exception& e){
+        log_warn_printf(setup, "Unable to reconfigure client search destinations: %s\n", e.what());
+    }
+
+    ifmapGeneration = nextGeneration;
+}
+
 ContextImpl::ContextImpl(const Config& conf, const evbase& tcp_loop)
-    :effective([conf]() -> Config{
+    :requested(conf)
+    ,ifmapGeneration(IfaceMap::instance().revision())
+    ,effective([conf]() -> Config{
         Config eff(conf);
         eff.expand();
         return eff;
@@ -575,25 +656,8 @@ ContextImpl::ContextImpl(const Config& conf, const evbase& tcp_loop)
     searchTx4.enable_SO_RXQ_OVFL();
     searchTx6.enable_SO_RXQ_OVFL();
 
-    for(auto& addr : effective.addressList) {
-        SockEndpoint ep;
-        try {
-            ep = SockEndpoint(addr, effective.udp_port);
-        }catch(std::exception& e){
-            log_warn_printf(setup, "%s  Ignoring malformed address %s\n", e.what(), addr.c_str());
-            continue;
-        }
-        assert(ep.addr.family()==AF_INET || ep.addr.family()==AF_INET6);
-
-        // if !bcast and !mcast
-        auto isucast = !ep.addr.isMCast();
-
-        if(isucast && ep.addr.family()==AF_INET && bcasts.find(ep.addr)!=bcasts.end())
-            isucast = false;
-
-        log_info_printf(io, "Searching to %s%s\n", std::string(SB()<<ep).c_str(), (isucast?" unicast":""));
-        searchDest.emplace_back(ep, isucast);
-    }
+    auto initialDest(buildSearchDest(effective, bcasts, true));
+    searchDest.swap(initialDest);
 
     for(auto& addr : effective.nameServers) {
         SockAddr saddr;
@@ -1014,6 +1078,8 @@ void ContextImpl::onSearchS(evutil_socket_t fd, short evt, void *raw)
 
 void ContextImpl::tickSearch(SearchKind kind, bool poked)
 {
+    reconfigureSearchDestIfNeeded();
+
     // If kind == SearchKind::discover, then this is a discovery ping.
     // these are really empty searches with must-reply set.
     // So if !discover, then we should not be modifying any internal state
