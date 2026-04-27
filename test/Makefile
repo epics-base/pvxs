@@ -59,6 +59,10 @@ TESTPROD_HOST += testconfig
 testconfig_SRCS += testconfig.cpp
 TESTS += testconfig
 
+TESTPROD_HOST += testifacereconfig
+testifacereconfig_SRCS += testifacereconfig.cpp
+TESTS += testifacereconfig
+
 TESTPROD_HOST += testwild
 testwild_SRCS += testwild.cpp
 TESTS += testwild

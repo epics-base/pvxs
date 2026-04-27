@@ -382,8 +382,65 @@ std::ostream& operator<<(std::ostream& strm, const Server& serv)
     return strm;
 }
 
+std::vector<std::pair<SockEndpoint, bool>>
+Server::Pvt::buildBeaconDest(const Config& conf, uint16_t udp_port)
+{
+    std::vector<std::pair<SockEndpoint, bool>> ret;
+
+    for(const auto& addr : conf.beaconDestinations) {
+        ret.emplace_back(std::piecewise_construct,
+                         std::forward_as_tuple(addr.c_str(), udp_port),
+                         std::forward_as_tuple(true));
+    }
+
+    return ret;
+}
+
+bool Server::Pvt::beaconDestEqual(const std::vector<std::pair<SockEndpoint, bool>>& lhs,
+                                  const std::vector<std::pair<SockEndpoint, bool>>& rhs)
+{
+    if(lhs.size()!=rhs.size())
+        return false;
+
+    for(size_t i=0; i<lhs.size(); i++) {
+        if(lhs[i].first!=rhs[i].first)
+            return false;
+    }
+
+    return true;
+}
+
+void Server::Pvt::reconfigureBeaconDestIfNeeded()
+{
+    auto nextGeneration = ifmapGeneration;
+
+    try {
+        const auto ifmap(IfaceMap::instance());
+        nextGeneration = ifmap.revision();
+
+        if(nextGeneration==ifmapGeneration)
+            return;
+
+        Config next(requested);
+        next.expand();
+
+        auto nextDest(buildBeaconDest(next, effective.udp_port));
+        if(!beaconDestEqual(beaconDest, nextDest)) {
+            log_info_printf(serversetup, "Reconfigured server beacon destinations after interface change%s", "\n");
+            beaconDest.swap(nextDest);
+        }
+
+    }catch(std::exception& e){
+        log_warn_printf(serversetup, "Unable to reconfigure server beacon destinations: %s\n", e.what());
+    }
+
+    ifmapGeneration = nextGeneration;
+}
+
 Server::Pvt::Pvt(const Config &conf)
-    :effective(conf)
+    :requested(conf)
+    ,ifmapGeneration(IfaceMap::instance().revision())
+    ,effective(conf)
     ,beaconMsg(128)
     ,acceptor_loop("PVXTCP", epicsThreadPriorityCAServerLow-2)
     ,beaconSender4(AF_INET, SOCK_DGRAM, 0)
@@ -501,12 +558,12 @@ Server::Pvt::Pvt(const Config &conf)
             firstiface = false;
         }
 
-        for(const auto& addr : effective.beaconDestinations) {
-            beaconDest.emplace_back(std::piecewise_construct,
-                                    std::forward_as_tuple(addr.c_str(), effective.udp_port),
-                                    std::forward_as_tuple(true));
+        auto initialDest(buildBeaconDest(effective, effective.udp_port));
+        beaconDest.swap(initialDest);
+
+        for(const auto& dest : beaconDest) {
             log_debug_printf(serversetup, "Will send beacons to %s\n",
-                             std::string(SB()<<beaconDest.back().first).c_str());
+                             std::string(SB()<<dest.first).c_str());
         }
     });
 
@@ -765,6 +822,8 @@ void Server::Pvt::onSearch(const UDPManager::Search& msg)
 
 void Server::Pvt::doBeacons(short evt)
 {
+    reconfigureBeaconDestIfNeeded();
+
     log_debug_printf(serversetup, "Server beacon timer expires\n%s", "");
 
     VectorOutBuf M(true, beaconMsg);

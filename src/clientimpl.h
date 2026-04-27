@@ -7,6 +7,7 @@
 #define CLIENTIMPL_H
 
 #include <list>
+#include <set>
 
 #include <epicsTime.h>
 #include <epicsEvent.h>
@@ -255,6 +256,8 @@ struct ContextImpl : public std::enable_shared_from_this<ContextImpl>
         Stopped,
     } state = Init;
 
+    const Config requested;
+    uint64_t ifmapGeneration = 0u;
     const Config effective;
 
     const Value caMethod;
@@ -297,6 +300,12 @@ struct ContextImpl : public std::enable_shared_from_this<ContextImpl>
     };
 
     std::vector<SearchDest> searchDest;
+    PVXS_API static std::vector<SearchDest> buildSearchDest(const Config& conf,
+                                                            const std::set<SockAddr, SockAddrOnlyLess>& bcasts,
+                                                            bool announce);
+    PVXS_API static bool searchDestEqual(const std::vector<SearchDest>& lhs,
+                                         const std::vector<SearchDest>& rhs);
+    void reconfigureSearchDestIfNeeded();
 
     size_t currentBucket = 0u;
     // Channels where we have yet to send out an initial search request
