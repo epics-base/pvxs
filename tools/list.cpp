@@ -10,6 +10,7 @@
 #include <set>
 #include <list>
 #include <atomic>
+#include <cstring>
 
 #include <epicsVersion.h>
 #include <epicsGetopt.h>
@@ -57,6 +58,42 @@ void usage(const char* argv0)
             "  -w <sec>  Operation timeout in seconds.  Default 5 sec.  '0' disables timeout,\n"
             "            useful in combination with '-v'.\n"
             ;
+}
+
+std::string resolveServer(const char *arg, unsigned short defport)
+{
+    try {
+        return SockAddr(arg, defport).tostring();
+
+    }catch(...) {
+        auto original_error(std::current_exception());
+        const char *firstc = strchr(arg, ':'),
+                   *lastc  = strrchr(arg, ':');
+
+        if(firstc && firstc==lastc) {
+            in_addr addr;
+            std::string host(arg, firstc-arg);
+
+            if(!hostToIPAddr(host.c_str(), &addr)) {
+                SockAddr temp(AF_INET);
+                temp->in.sin_addr = addr;
+                temp.setPort(parseTo<uint64_t>(firstc+1));
+                return temp.tostring();
+            }
+
+        } else if(!firstc) {
+            in_addr addr;
+
+            if(!hostToIPAddr(arg, &addr)) {
+                SockAddr temp(AF_INET);
+                temp->in.sin_addr = addr;
+                temp.setPort(defport);
+                return temp.tostring();
+            }
+        }
+
+        std::rethrow_exception(original_error);
+    }
 }
 
 } // namespace
@@ -156,8 +193,20 @@ int main(int argc, char *argv[])
             std::atomic<int> remaining{argc-optind};
 
             for(auto n : range(optind, argc)) {
+                std::string server;
+                try {
+                    server = resolveServer(argv[n], conf.tcp_port);
+
+                }catch(std::exception& e){
+                    std::cerr<<"From "<<argv[n]<<" : "<<e.what()<<std::endl;
+                    if(0==--remaining) {
+                        done.signal();
+                    }
+                    continue;
+                }
+
                 ops.push_back(ctxt.rpc("server")
-                              .server(argv[n])
+                              .server(server)
                               .arg("op", info ? "info" : "channels")
                               .result([argv, n, info, verbose, &remaining, &done](client::Result&& r)
                       {
