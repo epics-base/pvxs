@@ -383,7 +383,8 @@ std::ostream& operator<<(std::ostream& strm, const Server& serv)
 }
 
 Server::Pvt::Pvt(const Config &conf)
-    :effective(conf)
+    :original(conf)
+    ,effective(conf)
     ,beaconMsg(128)
     ,acceptor_loop("PVXTCP", epicsThreadPriorityCAServerLow-2)
     ,beaconSender4(AF_INET, SOCK_DGRAM, 0)
@@ -545,6 +546,15 @@ Server::Pvt::Pvt(const Config &conf)
         sources[std::make_pair(-1, "__server")] = std::make_shared<ServerSource>(this);
         sources[std::make_pair(-1, "__builtin")] = builtinsrc.source();
     }
+
+    ifChanged = IfaceMap::onChange([this](const IfaceMap::Current& cur) noexcept {
+        // on ifmap daemon thread
+        auto next(original);
+        // don't re-select if original was random
+        next.udp_port = effective.udp_port;
+        next.tcp_port = effective.tcp_port;
+        next.expand();
+    });
 }
 
 Server::Pvt::~Pvt()

@@ -353,6 +353,10 @@ struct PVXS_API IfaceMap {
     };
     std::shared_ptr<const Current> current;
 
+    struct Changer;
+    static
+    std::shared_ptr<Changer> onChange(std::function<void(const IfaceMap::Current&)>&& fn);
+
     IfaceMap() = default;
     IfaceMap(const IfaceMap&) = default;
     IfaceMap(std::shared_ptr<const Current>&& cur) : current(std::move(cur)) {}
