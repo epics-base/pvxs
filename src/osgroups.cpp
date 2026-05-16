@@ -7,6 +7,8 @@
  */
 
 #include <vector>
+#include <map>
+#include <deque>
 
 #if defined(_WIN32)
 #  define USE_LANMAN
@@ -43,15 +45,26 @@ typedef gid_t osi_gid_t;
 #endif
 
 #include <epicsAssert.h>
+#include <epicsTime.h>
+#include <epicsGuard.h>
 
 #include "utilpvt.h"
+
+#if EPICS_VERSION_INT<VERSION_INT(7,0,3,1)
+#  define getMonotonic getCurrent
+#endif
 
 namespace pvxs {
 namespace impl {
 
+// manipulated for test code
+size_t rolesCacheMaxSize = 128u;
+double rolesCacheExpireTime = 60.0; // sec
+
 #if defined(USE_UNIX_GROUPS)
 
-void osdGetRoles(const std::string& account, std::set<std::string>& roles)
+static
+void osdGetRolesImpl(const std::string& account, std::set<std::string>& roles)
 {
     passwd *user = getpwnam(account.c_str());
     if(!user) {
@@ -126,7 +139,8 @@ void osdGetRoles(const std::string& account, std::set<std::string>& roles)
 
 #elif defined(USE_LANMAN)
 
-void osdGetRoles(const std::string& account, std::set<std::string>& roles)
+static
+void osdGetRolesImpl(const std::string& account, std::set<std::string>& roles)
 {
     NET_API_STATUS sts;
     LPLOCALGROUP_USERS_INFO_0 pinfo = NULL;
@@ -182,6 +196,7 @@ void osdGetRoles(const std::string& account, std::set<std::string>& roles)
 
 #else
 
+// nothing to cache
 void osdGetRoles(const std::string& account, std::set<std::string>& roles)
 {
     /* Group list not available (RTEMS, vxWorks)
@@ -190,5 +205,80 @@ void osdGetRoles(const std::string& account, std::set<std::string>& roles)
     roles.insert(account);
 }
 #endif
+
+#if defined(USE_UNIX_GROUPS) || defined(USE_LANMAN)
+
+namespace {
+
+struct rolesCache {
+    epicsMutex lock;
+
+    struct Entry;
+    // both map and dequeue iterators are stable through add/remove of others
+    typedef std::map<std::string, Entry> byAcct_t;
+    typedef std::deque<byAcct_t::iterator> byAge_t;
+
+    struct Entry {
+        std::set<std::string> roles;
+        epicsTime expires;
+        byAge_t::iterator it_age;
+    };
+
+    byAcct_t byAcct;
+    std::deque<byAcct_t::iterator> byAge; // oldest Entry first
+} *rolesC;
+
+void rolesInit() {
+    rolesC = new rolesCache;
+}
+
+} // namespace
+
+void osdGetRoles(const std::string& account, std::set<std::string>& roles)
+{
+    threadOnce<rolesInit>();
+    auto now(epicsTime::getMonotonic());
+    auto& rc = *rolesC;
+    epicsGuard<epicsMutex> G(rc.lock);
+
+    auto it_acct(rc.byAcct.find(account));
+    bool found = it_acct!=rc.byAcct.end();
+
+    if(!found || it_acct->second.expires <= now) {
+        // cache miss, new or expired
+        if(!found) {
+            // new entry, vacuum LRU
+            while(rc.byAge.size() > rolesCacheMaxSize) {
+                auto& it = rc.byAge.front();
+                assert(it->first!=account);
+
+                rc.byAcct.erase(it);
+                rc.byAge.pop_front();
+            }
+
+            auto p(rc.byAcct.emplace(account, rolesCache::Entry{}));
+            assert(p.second);
+            it_acct = std::move(p.first);
+            // cross-index
+            it_acct->second.it_age = rc.byAge.insert(rc.byAge.end(), it_acct);
+        }
+
+        // init/update entry
+
+        it_acct->second.expires = now + rolesCacheExpireTime;
+        try {
+            osdGetRolesImpl(account, it_acct->second.roles);
+        }catch(...){
+            // remove incomplete entry
+            rc.byAge.erase(it_acct->second.it_age);
+            rc.byAcct.erase(it_acct);
+            throw;
+        }
+    }
+
+    roles = it_acct->second.roles;
+}
+
+#endif // caching
 
 }} // namespace pvxs::impl

@@ -174,13 +174,31 @@ void testAccount()
     }
     testOk(!account.empty(), "User: '%s'", account.c_str());
 
-    std::set<std::string> roles;
-    osdGetRoles(account, roles);
+    // to force code coverage of roles cache cases:
+    // 1. new entry
+    // 2. expired entry
+    // 3. cache hit
+    rolesCacheMaxSize = 0;
+    rolesCacheExpireTime = -1.0;
+
+    std::set<std::string> roles, roles2;
+    osdGetRoles(account, roles); // cache miss, adds expired entry
+    rolesCacheExpireTime = 9999.0;
+    osdGetRoles(account, roles2); // cache miss, expired entry
+    osdGetRoles(account, roles2); // cache hit
 
     testNotEq(roles.size(), 0u);
+    testNotEq(roles2.size(), 0u);
     for(auto& role : roles) {
         testDiag(" %s", role.c_str());
     }
+
+    testTrue(roles.size()==roles2.size() && std::equal(roles.begin(), roles.end(), roles2.begin()));
+
+    roles.clear();
+    osdGetRoles("surely_invalid_account_name", roles);
+    testEq(roles.size(), 1u);
+    // new entry evicts 'account'
 }
 
 void testTestEq()
@@ -291,7 +309,7 @@ void testOnce()
 
 MAIN(testutil)
 {
-    testPlan(35);
+    testPlan(38);
     testTrue(version_abi_check())<<" 0x"<<std::hex<<PVXS_VERSION<<" ~= 0x"<<std::hex<<PVXS_ABI_VERSION;
     testServerGUID();
     testFill();

@@ -215,6 +215,12 @@ public:
 #undef RWLOCK_RLOCK
 #undef RWLOCK_RUNLOCK
 
+// for test code
+PVXS_API
+extern size_t rolesCacheMaxSize;
+PVXS_API
+extern double rolesCacheExpireTime; // sec
+
 PVXS_API
 void osdGetRoles(const std::string& account, std::set<std::string>& roles);
 
