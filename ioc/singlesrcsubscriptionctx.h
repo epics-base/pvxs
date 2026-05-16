@@ -16,11 +16,12 @@
 #include "fieldconfig.h"
 #include "subscriptionctx.h"
 #include "utilpvt.h"
+#include "securityclient.h"
 
 namespace pvxs {
 namespace ioc {
 
-struct SingleInfo : public MappingInfo {
+struct SingleInfo : public MappingInfo, public SingleSecurityCache {
     Channel chan;
     INST_COUNTER(SingleInfo);
 
