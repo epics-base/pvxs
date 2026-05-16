@@ -320,6 +320,10 @@ void onOp(const std::shared_ptr<SingleInfo>& sInfo, const Value& valuePrototype,
     // Each time the same client calls put we will reuse the cached security client
     // The security cache will be deleted when the client disconnects from this pv
     auto putOperationCache = std::make_shared<PutOperationCache>();
+    putOperationCache->notify.usrPvt = putOperationCache.get();
+    putOperationCache->notify.chan = sInfo->chan;
+    putOperationCache->notify.putCallback = putCallback;
+    putOperationCache->notify.doneCallback = doneCallback;
 
     // Set up handler for put requests
     channelConnectOperation
@@ -328,30 +332,28 @@ void onOp(const std::shared_ptr<SingleInfo>& sInfo, const Value& valuePrototype,
                     Value&& value) {
                 try {
                     dbChannel* pDbChannel = sInfo->chan;
-                    if (!putOperationCache->done) {
-                        putOperationCache->credentials.reset(new Credentials(*putOperation->credentials()));
-                        putOperationCache->securityClient.update(pDbChannel, *putOperationCache->credentials);
-                        putOperationCache->notify.usrPvt = putOperationCache.get();
-                        putOperationCache->notify.chan = pDbChannel;
-                        putOperationCache->notify.putCallback = putCallback;
-                        putOperationCache->notify.doneCallback = doneCallback;
+                    if (!sInfo->done) {
+                        // initialize credentions on first PUT to this Channel
+                        sInfo->credentials.reset(new Credentials(*putOperation->credentials()));
+                        sInfo->securityClient.update(pDbChannel, *sInfo->credentials);
 
-                        auto& pvRequest = putOperation->pvRequest();
-                        pvRequest["record._options.block"].as<bool>(putOperationCache->doWait);
-                        IOCSource::setForceProcessingFlag(putOperation.get(), pvRequest, putOperationCache);
-                        if (putOperationCache->forceProcessing) {
-                            putOperationCache->doWait = false; // no point in waiting
-                        }
-                        putOperationCache->done = true;
+                        sInfo->done = true;
+                    }
+                    // for each PUT (may have different pvRequest)
+                    auto& pvRequest = putOperation->pvRequest();
+                    pvRequest["record._options.block"].as<bool>(putOperationCache->doWait);
+                    IOCSource::setForceProcessingFlag(putOperation.get(), pvRequest, putOperationCache->forceProcessing);
+                    if (putOperationCache->forceProcessing) {
+                        putOperationCache->doWait = false; // no point in waiting
                     }
 
                     SecurityLogger securityLogger;
 
                     IOCSource::doPreProcessing(pDbChannel,
                             securityLogger,
-                            *putOperationCache->credentials,
-                            putOperationCache->securityClient); // pre-process
-                    IOCSource::doFieldPreProcessing(putOperationCache->securityClient); // pre-process field
+                            *sInfo->credentials,
+                            sInfo->securityClient); // pre-process
+                    IOCSource::doFieldPreProcessing(sInfo->securityClient); // pre-process field
                     if (putOperationCache->doWait) {
                         putOperationCache->valueToSet = value;
                         // TODO prevent concurrent put with callbacks (notifyBusy)

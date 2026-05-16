@@ -35,18 +35,10 @@ public:
  */
 class SecurityControlObject {
 public:
-	bool done = false;
-	TriState forceProcessing{ Unset };
-};
-
-/**
- * group security cache - for storing group security credentials and clients
- */
-class GroupSecurityCache : public SecurityControlObject {
-public:
-	std::vector<SecurityClient> securityClients;
-	std::unique_ptr<Credentials> credentials;
-    INST_COUNTER(GroupSecurityCache);
+    // set by the first PUT to each Channel,
+    // when associated Credentials and SecurityClient(s) are initialized
+    bool done = false;
+    std::unique_ptr<Credentials> credentials;
 };
 
 /**
@@ -54,16 +46,16 @@ public:
  */
 class SingleSecurityCache : public SecurityControlObject {
 public:
-	SecurityClient securityClient;
-	std::unique_ptr<Credentials> credentials;
+    SecurityClient securityClient;
 };
 
 /**
  * The put operation cache for caching information about the current client put connection
  * Includes a single security cache as well as information pertaining to asynchronous put operations
  */
-struct PutOperationCache : public SingleSecurityCache {
+struct PutOperationCache {
 	bool doWait{ false };
+    TriState forceProcessing{ Unset };
 	processNotify notify{};
 	Value valueToSet;
 	std::unique_ptr<server::ExecOp> putOperation;
