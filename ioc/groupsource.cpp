@@ -37,6 +37,19 @@ DEFINE_LOGGER(_logname, "pvxs.ioc.group.source");
 DEFINE_INST_COUNTER(GroupSourceSubscriptionCtx);
 DEFINE_INST_COUNTER(GroupSecurityCache);
 
+static
+void onOp(Group& group,
+          std::unique_ptr<server::ConnectOp>&& channelConnectOperation);
+static
+void onGet(Group& group, const std::unique_ptr<server::ExecOp>& getOperation);
+
+static
+void onPutGroup(Group& group, std::unique_ptr<server::ExecOp>& putOperation, const Value& value,
+                const GroupSecurityCache& groupSecurityCache);
+
+static
+void onStartSubscription(const std::shared_ptr<GroupSourceSubscriptionCtx>& groupSubscriptionCtx);
+
 /**
  * Constructor for GroupSource registrar.
  */
@@ -131,7 +144,8 @@ void GroupSource::show(std::ostream& outputStream) {
  *
  * @param groupSubscriptionCtx the group subscription context
  */
-void GroupSource::onDisableSubscription(const std::shared_ptr<GroupSourceSubscriptionCtx>& groupSubscriptionCtx) {
+static
+void onDisableSubscription(const std::shared_ptr<GroupSourceSubscriptionCtx>& groupSubscriptionCtx) {
     for (auto& fieldSubscriptionCtx: groupSubscriptionCtx->fieldSubscriptionContexts) {
         fieldSubscriptionCtx.pValueEventSubscription.disable();
         fieldSubscriptionCtx.pPropertiesEventSubscription.disable();
@@ -147,7 +161,8 @@ void GroupSource::onDisableSubscription(const std::shared_ptr<GroupSourceSubscri
  * @param group the group to which the get/put operation pertains
  * @param channelConnectOperation the channel connect operation object
  */
-void GroupSource::onOp(Group& group,
+static
+void onOp(Group& group,
         std::unique_ptr<server::ConnectOp>&& channelConnectOperation) {
     // First stage for handling any request is to announce the channel type with a `connect()` call
     // @note The type signalled here must match the eventual type returned by a pvxs get
@@ -155,7 +170,7 @@ void GroupSource::onOp(Group& group,
 
     // register handler for pvxs group get
     channelConnectOperation->onGet([&group](std::unique_ptr<server::ExecOp>&& getOperation) {
-        get(group, getOperation);
+        onGet(group, getOperation);
     });
 
     // Make a security cache for this client's connection to this group
@@ -183,7 +198,7 @@ void GroupSource::onOp(Group& group,
                     securityCache->done = true;
                 }
 
-                putGroup(group, putOperation, value, *securityCache);
+                onPutGroup(group, putOperation, value, *securityCache);
             });
 }
 
@@ -195,7 +210,8 @@ void GroupSource::onOp(Group& group,
  * @param groupSubscriptionCtx the group subscription context
  * @param isStarting true if the client issued a start subscription request, false otherwise
  */
-void GroupSource::onStart(const std::shared_ptr<GroupSourceSubscriptionCtx>& groupSubscriptionCtx, bool isStarting) {
+static
+void onStart(const std::shared_ptr<GroupSourceSubscriptionCtx>& groupSubscriptionCtx, bool isStarting) {
     if (isStarting) {
         onStartSubscription(groupSubscriptionCtx);
     } else {
@@ -242,7 +258,8 @@ void subscriptionPost(GroupSourceSubscriptionCtx *pGroupCtx)
  *
  * @param groupSubscriptionCtx the group subscription context containing the field event subscriptions to start
  */
-void GroupSource::onStartSubscription(const std::shared_ptr<GroupSourceSubscriptionCtx>& groupSubscriptionCtx) {
+static
+void onStartSubscription(const std::shared_ptr<GroupSourceSubscriptionCtx>& groupSubscriptionCtx) {
     groupSubscriptionCtx->eventsEnabled = true;
     for (auto& fieldSubscriptionCtx: groupSubscriptionCtx->fieldSubscriptionContexts) {
         fieldSubscriptionCtx.pValueEventSubscription.enable();
@@ -430,7 +447,8 @@ bool getGroupField(const Field& field, Value valueTarget, const std::string& gro
  * @param group the group to get
  * @param getOperation the current executing operation
  */
-void GroupSource::get(Group& group, const std::unique_ptr<server::ExecOp>& getOperation) {
+static
+void onGet(Group& group, const std::unique_ptr<server::ExecOp>& getOperation) {
     bool atomic = group.atomicPutGet;
     getOperation->pvRequest()["record._options.atomic"].as(atomic);
 
@@ -531,7 +549,8 @@ bool putGroupField(const Value& value,
  * @param value the value being posted
  * @param groupSecurityCache the object that caches the security context of client connections
  */
-void GroupSource::putGroup(Group& group, std::unique_ptr<server::ExecOp>& putOperation, const Value& value,
+static
+void onPutGroup(Group& group, std::unique_ptr<server::ExecOp>& putOperation, const Value& value,
         const GroupSecurityCache& groupSecurityCache) {
     try {
         CurrentOp op(putOperation.get());
