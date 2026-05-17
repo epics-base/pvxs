@@ -12,6 +12,7 @@
 #include <dbDefs.h>
 #include <epicsThread.h>
 #include <epicsGuard.h>
+#include <osiProcess.h>
 
 #include <pvxs/log.h>
 #include <clientimpl.h>
@@ -510,10 +511,32 @@ Value buildCAMethod()
 {
     using namespace pvxs::members;
 
-    return TypeDef(TypeCode::Struct, {
-                       String("user"),
-                       String("host"),
-                   }).create();
+    auto cred(TypeDef(TypeCode::Struct, {
+                                            String("user"),
+                                            String("host"),
+                                        }).create());
+
+    std::vector<char> buffer(256u);
+
+    if(osiGetUserName(&buffer[0], buffer.size()) == osiGetUserNameSuccess) {
+        buffer[buffer.size()-1] = '\0';
+        cred["user"] = buffer.data();
+    } else {
+        cred["user"] = "nobody";
+    }
+
+    if (gethostname(&buffer[0], buffer.size()) == 0) {
+        buffer[buffer.size()-1] = '\0';
+        cred["host"] = buffer.data();
+    } else {
+        cred["host"] = "invalidhost.";
+    }
+
+    log_info_printf(setup, "Will 'ca' auth as %s@%s\n",
+                    cred["user"].as<std::string>().c_str(),
+                    cred["host"].as<std::string>().c_str());
+
+    return cred;
 }
 
 ContextImpl::ContextImpl(const Config& conf, const evbase& tcp_loop)

@@ -4,8 +4,6 @@
  * in file LICENSE that is included with this distribution.
  */
 
-#include <osiProcess.h>
-
 #include <pvxs/log.h>
 #include "clientimpl.h"
 
@@ -262,22 +260,6 @@ void Connection::handle_CONNECTION_VALIDATION()
     Value cred;
     if(selected=="ca") {
         cred = context->caMethod.cloneEmpty();
-
-        std::vector<char> buffer(256u);
-
-        if(osiGetUserName(&buffer[0], buffer.size()) == osiGetUserNameSuccess) {
-            buffer[buffer.size()-1] = '\0';
-            cred["user"] = buffer.data();
-        } else {
-            cred["user"] = "nobody";
-        }
-
-        if (gethostname(&buffer[0], buffer.size()) == 0) {
-            buffer[buffer.size()-1] = '\0';
-            cred["host"] = buffer.data();
-        } else {
-            cred["host"] = "invalidhost.";
-        }
 
         log_info_printf(io, "Server %s 'ca' auth as %s@%s\n", peerName.c_str(),
                         cred["user"].as<std::string>().c_str(),
