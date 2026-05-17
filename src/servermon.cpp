@@ -410,7 +410,7 @@ struct ServerMonitorSetup : public server::MonitorSetupOp
             if(auto oper = op.lock()) {
                 if(oper->state!=ServerOp::Creating)
                     return;
-                oper->type = type;
+                oper->type = std::move(type);
                 oper->pvMask = std::move(mask);
                 ret.reset(new ServerMonitorControl(this, server, _name, oper));
                 MonitorOp::doReply(oper);
