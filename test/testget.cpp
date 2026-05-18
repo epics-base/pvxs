@@ -300,6 +300,7 @@ struct Tester {
         cli.hurryUp();
 
         testOk1(!info->done.wait(2.1));
+        cli.close();
     }
 
     void orphan()

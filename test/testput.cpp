@@ -493,7 +493,7 @@ void testErrorManual(ErrorSource::phase_t phase)
 
 struct CancelSource : public server::Source {
     const Value proto;
-    bool cancelled = false;
+    std::atomic<bool> cancelled{false};
 
     explicit CancelSource()
         :proto(nt::NTScalar{}.create())
