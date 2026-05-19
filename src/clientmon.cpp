@@ -511,11 +511,10 @@ void Connection::handle_MONITOR()
                 if(!info->fl->unused.empty()) {
                     raw = std::move(info->fl->unused.back());
                     info->fl->unused.pop_back();
-
-                } else {
-                    raw = info->prototype.cloneEmpty();
                 }
             }
+            if(!raw)
+                raw = info->prototype.cloneEmpty();
             // Wrap Value for automatic return to our free-list
             {
                 std::weak_ptr<RequestFL> wfl(info->fl);
