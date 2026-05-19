@@ -21,6 +21,12 @@ typedef epicsGuard<epicsMutex> Guard;
 DEFINE_LOGGER(monevt, "pvxs.client.monitor");
 DEFINE_LOGGER(io, "pvxs.client.io");
 
+RequestFL::~RequestFL()
+{
+    Guard G(lock);
+    unused.clear(); // pacify valgrind with free() under lock
+}
+
 namespace {
 struct Entry {
     Value val;

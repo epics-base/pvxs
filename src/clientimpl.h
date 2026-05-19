@@ -69,6 +69,7 @@ struct RequestFL {
     std::vector<Value> unused;
 
     explicit RequestFL(size_t limit) :limit(limit) {}
+    ~RequestFL();
 };
 
 struct RequestInfo {
