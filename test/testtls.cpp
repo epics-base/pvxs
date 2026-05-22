@@ -155,6 +155,76 @@ void testGetNameServer() {
     testEq(reply["value"].as<int32_t>(), 42);
 }
 
+// require-TLS, positive path: with tls_disable_plaintext set the client
+// refuses any plaintext transport yet still connects normally to a TLS server.
+void testRequireTLS() {
+    testShow()<<__func__;
+
+    auto initial(nt::NTScalar{TypeCode::Int32}.create());
+    auto mbox(server::SharedPV::buildReadonly());
+
+    auto serv_conf(server::Config::isolated());
+    serv_conf.tls_keychain_file = "superserver1.p12";
+
+    auto serv(serv_conf.build()
+              .addPV("mailbox", mbox));
+
+    auto cli_conf(serv.clientConfig());
+    cli_conf.tls_keychain_file = "ca.p12";
+    cli_conf.tls_disable_plaintext = true; // refuse any plaintext transport
+
+    auto cli(cli_conf.build());
+
+    mbox.open(initial.update("value", 42));
+    serv.start();
+
+    auto conn(cli.connect("mailbox")
+              .onConnect([](const client::Connected& c){
+        testTrue(c.cred && c.cred->isTLS)<<" require-TLS connected with TLS";
+    })
+              .exec());
+
+    auto reply(cli.get("mailbox").exec()->wait(5.0));
+    testEq(reply["value"].as<int32_t>(), 42);
+}
+
+// require-TLS, downgrade refusal: a plaintext-only server replies "tcp" to
+// every search.  An ordinary client connects to it, but a client with
+// tls_disable_plaintext set refuses the "tcp" reply and never connects, so
+// an attacker cannot strip TLS by offering plaintext.
+void testNoDowngrade() {
+    testShow()<<__func__;
+
+    auto initial(nt::NTScalar{TypeCode::Int32}.create());
+    auto mbox(server::SharedPV::buildReadonly());
+
+    // no keychain -> server has no TLS context, answers "tcp" only
+    auto serv(server::Config::isolated().build()
+              .addPV("mailbox", mbox));
+
+    mbox.open(initial.update("value", 42));
+    serv.start();
+
+    // positive control: an ordinary client reaches the PV over plaintext
+    {
+        auto cli(serv.clientConfig().build());
+        auto reply(cli.get("mailbox").exec()->wait(5.0));
+        testEq(reply["value"].as<int32_t>(), 42);
+    }
+
+    // require-TLS client refuses the plaintext reply, so the get times out
+    {
+        auto cli_conf(serv.clientConfig());
+        cli_conf.tls_keychain_file = "ca.p12";
+        cli_conf.tls_disable_plaintext = true;
+        auto cli(cli_conf.build());
+
+        testThrows<client::Timeout>([&cli]{
+            cli.get("mailbox").exec()->wait(2.0);
+        })<<" require-TLS client must not downgrade to plaintext";
+    }
+}
+
 struct WhoAmI final : public server::Source {
     const Value resultType;
 
@@ -344,13 +414,15 @@ void testServerReconfig() {
 
 MAIN(testtls)
 {
-    testPlan(30);
+    testPlan(34);
     testSetup();
     logger_config_env();
     testCommonName();
     testGetSuper();
     testGetIntermediate();
     testGetNameServer();
+    testRequireTLS();
+    testNoDowngrade();
     testClientReconfig();
      testServerReconfig();
     cleanup_for_valgrind();

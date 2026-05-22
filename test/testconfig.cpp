@@ -168,6 +168,33 @@ void testDefs()
         testEq(defs["EPICS_PVA_TLS_KEYCHAIN"], "/path/to/server.p12");
         testEq(defs["EPICS_PVAS_TLS_KEYCHAIN"], "/path/to/server.p12");
     }
+
+    // EPICS_PVA_TLS_OPTIONS round-trips the require-TLS (disable_plaintext) flag.
+    // Default is false so the option is absent and plaintext stays permitted.
+    {
+        client::Config::defs_t defs;
+        client::Config conf;
+
+        testFalse(conf.tls_disable_plaintext); // default permits plaintext
+        conf.updateDefs(defs);
+        testEq(defs["EPICS_PVA_TLS_OPTIONS"], "");
+
+        conf.tls_disable_plaintext = true;
+        conf.updateDefs(defs);
+        testEq(defs["EPICS_PVA_TLS_OPTIONS"], "disable_plaintext=true");
+    }
+    {
+        client::Config::defs_t defs;
+        client::Config conf;
+
+        defs["EPICS_PVA_TLS_OPTIONS"] = "disable_plaintext=true";
+        conf.applyDefs(defs);
+        testTrue(conf.tls_disable_plaintext);
+
+        defs["EPICS_PVA_TLS_OPTIONS"] = "disable_plaintext=false";
+        conf.applyDefs(defs);
+        testFalse(conf.tls_disable_plaintext);
+    }
 }
 
 void testServerAuto()
@@ -234,7 +261,7 @@ void testDNS()
 
 MAIN(testconfig)
 {
-    testPlan(38);
+    testPlan(43);
     testSetup();
     testDefs();
     logger_config_env();

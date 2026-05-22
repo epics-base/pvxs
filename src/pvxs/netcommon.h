@@ -159,6 +159,18 @@ struct PVXS_API ConfigCommon {
         Require,
     } tls_client_cert = Default;
 
+    /** Refuse a plaintext (non-TLS) transport.
+     *
+     *  When true a TLS-capable client ignores a plaintext "tcp" search reply,
+     *  so an active attacker cannot strip TLS by injecting or racing a "tcp"
+     *  reply (downgrade).  The client still advertises "tcp" alongside "tls"
+     *  in its searches -- a pvxs server only registers a search's PV names
+     *  when "tcp" is offered -- but a "tcp" reply is then discarded rather
+     *  than connected.  Has no effect unless the client has a TLS context.
+     *  @since UNRELEASED
+     */
+    bool tls_disable_plaintext = false;
+
     /** Is TLS support available?
      *  @since UNRELEASED
      */

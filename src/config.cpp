@@ -450,6 +450,14 @@ void parseTLSOptions(ConfigCommon& conf, const std::string& options)
             } else {
                 log_warn_printf(config, "Ignore unknown TLS option value %s.  expected require or optional\n", opt.c_str());
             }
+        } else if(key=="disable_plaintext") {
+            if(val=="true") {
+                conf.tls_disable_plaintext = true;
+            } else if(val=="false") {
+                conf.tls_disable_plaintext = false;
+            } else {
+                log_warn_printf(config, "Ignore unknown TLS option value %s.  expected true or false\n", opt.c_str());
+            }
         } else {
             log_warn_printf(config, "Ignore unknown TLS option key %s\n", opt.c_str());
         }
@@ -464,6 +472,8 @@ std::string printTLSOptions(const ConfigCommon& conf)
     case ConfigCommon::Optional: opts.push_back("client_cert=optional"); break;
     case ConfigCommon::Require: opts.push_back("client_cert=require"); break;
     }
+    if(conf.tls_disable_plaintext)
+        opts.push_back("disable_plaintext=true");
     return join_addr(opts);
 }
 
