@@ -143,6 +143,31 @@ void testDefs()
         testEq(conf.beaconDestinations, std::vector<std::string>({"1.2.1.2:1234", "4.3.2.1:1234"}));
         testEq(conf.interfaces, std::vector<std::string>({"1.1.1.1:5678", "1.2.3.4:5678"}));
     }
+
+    // an inline ";password" keychain suffix must be redacted from the
+    // effective-config defs (printed in cleartext by e.g. pvxinfo -D)
+    {
+        client::Config::defs_t defs;
+        client::Config conf;
+
+        conf.tls_keychain_file = "/path/to/client.p12;s3cret";
+        conf.updateDefs(defs);
+        testEq(defs["EPICS_PVA_TLS_KEYCHAIN"], "/path/to/client.p12");
+
+        conf.tls_keychain_file = "/path/no/pwd.p12"; // plain path passes through
+        conf.updateDefs(defs);
+        testEq(defs["EPICS_PVA_TLS_KEYCHAIN"], "/path/no/pwd.p12");
+    }
+
+    {
+        server::Config::defs_t defs;
+        server::Config conf;
+
+        conf.tls_keychain_file = "/path/to/server.p12;s3cret";
+        conf.updateDefs(defs);
+        testEq(defs["EPICS_PVA_TLS_KEYCHAIN"], "/path/to/server.p12");
+        testEq(defs["EPICS_PVAS_TLS_KEYCHAIN"], "/path/to/server.p12");
+    }
 }
 
 void testServerAuto()
@@ -209,7 +234,7 @@ void testDNS()
 
 MAIN(testconfig)
 {
-    testPlan(34);
+    testPlan(38);
     testSetup();
     testDefs();
     logger_config_env();
