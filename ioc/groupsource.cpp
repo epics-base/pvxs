@@ -587,18 +587,22 @@ void GroupSource::putGroup(Group& group, std::unique_ptr<server::ExecOp>& putOpe
 
             // Loop through all fields
             for (auto& field: group.fields) {
-                dbChannel* pDbChannel = field.value;
-                if(!pDbChannel)
-                    continue;
-                // Lock this field
-                DBLocker F(pDbChannel->addr.precord);
-                // Put the field
-                didSomething |= putGroupField(value, field,
-                                              groupSecurityCache.securityClients[fieldIndex],
-                                              groupSecurityCache,
-                                              *putOperation);
+                if (dbChannel* pDbChannel = field.value) {
+                    // Lock this field
+                    DBLocker F(pDbChannel->addr.precord);
+                    // Put the field
+                    didSomething |= putGroupField(value, field,
+                                                  groupSecurityCache.securityClients[fieldIndex],
+                                                  groupSecurityCache,
+                                                  *putOperation);
+                    // Unlock this field when locker goes out of scope
+                }
+                // fieldIndex addresses the parallel securityClients vector, which
+                // is populated for every group.fields entry (channel-less ones
+                // included).  It must advance for every field, not only the
+                // channel-backed ones, or it drifts after the first channel-less
+                // field and authorises/audits the wrong field.
                 fieldIndex++;
-                // Unlock this field when locker goes out of scope
             }
         }
 
