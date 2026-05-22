@@ -15,6 +15,8 @@
 #include <dbChannel.h>
 #include <dbNotify.h>
 
+#include <pvxs/iochooks.h>
+
 #include "credentials.h"
 #include "typeutils.h"
 #include "utilpvt.h"
@@ -25,7 +27,9 @@ namespace ioc {
 class SecurityClient {
 public:
 	std::vector<ASCLIENTPVT> cli;
+	PVXS_IOC_API
 	~SecurityClient();
+	PVXS_IOC_API
 	void update(dbChannel* ch, Credentials& cred);
 	bool canWrite() const;
 };

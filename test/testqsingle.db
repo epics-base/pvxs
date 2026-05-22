@@ -65,3 +65,7 @@ record(longin, "test:nsec") {
     field(VAL , "100")
     info(Q:time:tag, "nsec:lsb:8")
 }
+
+# Dedicated record providing a dbChannel for the SecurityLogger
+# addr.pfield restore unit test (testSecurityLoggerPfield).
+record(longout, "test:pfield") {}

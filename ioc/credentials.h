@@ -13,6 +13,7 @@
 #include <vector>
 #include <string>
 
+#include <pvxs/iochooks.h>
 #include <pvxs/source.h>
 
 namespace pvxs {
@@ -28,6 +29,7 @@ class Credentials {
 public:
     std::vector<std::string> cred;
     std::string host;
+    PVXS_IOC_API
     explicit Credentials(const server::ClientCredentials& clientCredentials);
     Credentials(const Credentials&) = delete;
     Credentials(Credentials&&) = default;

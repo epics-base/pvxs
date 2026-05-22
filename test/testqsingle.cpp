@@ -23,6 +23,9 @@
 #include "dblocker.h"
 #include "testioc.h"
 #include "utilpvt.h"
+#include "securitylogger.h"
+#include "securityclient.h"
+#include "credentials.h"
 
 #include "capturestd.h"
 
@@ -633,6 +636,57 @@ void testPutLog()
               "host:user test:log Something -> Something\n");
 }
 
+// SecurityLogger must restore dbChannel addr.pfield over its lifetime.
+// The data-carrying constructor saved pfield and registered the asTrapWrite
+// hooks, but never assigned pchan -- so its restore (after the constructor's
+// asTrapWriteWithData) and the destructor's restore were both dead code.
+//
+// On this Base, asTrapWriteBeforeWithData/asTrapWriteAfterWrite already restore
+// pfield around each listener callback, so the defect cannot be observed
+// through an end-to-end put.  SecurityLogger's restore additionally guards the
+// rest of the put window (and older Base predating that asTrapWrite fix).  This
+// unit test clobbers pfield within the logger's lifetime and asserts the
+// destructor restores it -- which happens only once pchan is assigned.
+void testSecurityLoggerPfield()
+{
+    testDiag("%s", __func__);
+
+    dbChannel *chan = dbChannelCreate("test:pfield");
+    if(!chan || dbChannelOpen(chan)) {
+        testFail("could not open dbChannel test:pfield");
+        testSkip(1, "no channel");
+        if(chan)
+            dbChannelDelete(chan);
+        return;
+    }
+
+    server::ClientCredentials cc;
+    cc.peer = "127.0.0.1:0";
+    cc.iface = "127.0.0.1:0";
+    cc.method = "ca";
+    cc.account = "anonymous";
+
+    ioc::Credentials cred(cc);
+    ioc::SecurityClient sc;
+    sc.update(chan, cred);
+
+    void* const correct = chan->addr.pfield;
+
+    {
+        ioc::SecurityLogger sl(chan, cred, sc);
+        // Clobber pfield within the logger's lifetime -- the window asTrapWrite's
+        // own before/after restore does not cover.
+        chan->addr.pfield = (void*)&chan->addr.precord->proc;
+        testTrue(chan->addr.pfield != correct)<<" clobber applied";
+    } // SecurityLogger destructor must restore pfield here
+
+    testTrue(chan->addr.pfield == correct)
+        <<" SecurityLogger must restore addr.pfield, got "
+        <<chan->addr.pfield<<" want "<<correct;
+
+    dbChannelDelete(chan);
+}
+
 void testPutBlock()
 {
 #if EPICS_VERSION_INT >= VERSION_INT(3, 16, 0, 1)
@@ -1002,7 +1056,7 @@ void testiocsh(TestClient& ctxt)
 
 MAIN(testqsingle)
 {
-    testPlan(113);
+    testPlan(115);
     testSetup();
     pvxs::logger_config_env();
     generalTimeRegisterCurrentProvider("test", 1, &testTimeCurrent);
@@ -1040,6 +1094,7 @@ MAIN(testqsingle)
         testGetPut64();
         testPutProc();
         testPutLog();
+        testSecurityLoggerPfield();
         {
             TestClient mctxt;
             testMonitorAI(mctxt);
