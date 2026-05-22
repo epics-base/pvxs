@@ -464,17 +464,28 @@ void GroupSource::get(Group& group, const std::unique_ptr<server::ExecOp>& getOp
 
         // Loop through all fields
         for (auto& field: group.fields) {
-            dbChannel* pDbChannel = field.value;
+            // Read every non-Proc/Structure field, exactly as the atomic branch
+            // does.  Channel-backed fields are locked for the duration of their
+            // read; channel-less readable fields (e.g. MappingInfo::Const, which
+            // carry a constant value rather than a dbChannel) have no lock but
+            // must still be populated, otherwise a non-atomic get silently drops
+            // them while the atomic get and monitor paths return them.
+            if(field.info.type == MappingInfo::Proc || field.info.type==MappingInfo::Structure)
+                continue;
 
             // find the leaf node in which to set the value
             auto leafNode = field.findIn(returnValue);
 
-            if (pDbChannel && leafNode) {
+            bool ok;
+            if (dbChannel* pDbChannel = field.value) {
                 // Lock this field
                 DBLocker F(pDbChannel->addr.precord);
-                if (!getGroupField(field, leafNode, group.name, getOperation)) {
-                    return;
-                }
+                ok = getGroupField(field, leafNode, group.name, getOperation);
+            } else {
+                ok = getGroupField(field, leafNode, group.name, getOperation);
+            }
+            if (!ok) {
+                return;
             }
         }
     }

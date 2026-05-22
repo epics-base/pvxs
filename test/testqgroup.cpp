@@ -717,6 +717,22 @@ void testConst()
               );
 }
 
+void testConstNonAtomicGet()
+{
+    testDiag("%s", __func__);
+    TestClient ctxt;
+
+    // A non-atomic group get must populate Const fields, identically to
+    // the atomic get / monitor paths exercised by testConst().  Before the fix
+    // the non-atomic get branch only read channel-backed fields, leaving the
+    // channel-less Const fields (s.i/s.d/s.s, which carry a constant value and
+    // have no dbChannel) at their cloneEmpty() defaults (0 / 0.0 / "").
+    auto val(ctxt.get("tst:const").record("atomic", false).exec()->wait(5.0));
+    testEq(val["s.i"].as<int64_t>(), int64_t(14));
+    testEq(val["s.d"].as<double>(), 1.5);
+    testStrEq(val["s.s"].as<std::string>(), "hello");
+}
+
 void testBatch()
 {
     testDiag("%s", __func__);
@@ -789,7 +805,7 @@ void testDbLoadGroup()
 
 MAIN(testqgroup)
 {
-    testPlan(43);
+    testPlan(46);
     testSetup();
     {
         generalTimeRegisterCurrentProvider("test", 1, &testTimeCurrent);
@@ -813,6 +829,7 @@ MAIN(testqgroup)
         testImage();
         testIQ();
         testConst();
+        testConstNonAtomicGet();
         testBatch();
         testGroupPutSecIndex();
         testDbLoadGroup();
