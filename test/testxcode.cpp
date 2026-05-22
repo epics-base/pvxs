@@ -1176,6 +1176,25 @@ void testRegressBadBitMask()
     }
 }
 
+// A run of TypeCode::Any (0x82) leaf bytes encodes an Any value whose content is
+// itself an Any, repeated.  The value decoder must be bounded by its depth guard
+// and fault, instead of recursing once per byte (from_wire_field -> from_wire_full
+// -> from_wire_field -> ...) and exhausting the thread stack.  Reaching the
+// assertion at all is the regression: without the bound this overflows the stack
+// and crashes the process (SIGSEGV is not a std::exception, so it is uncatchable).
+void testRegressDeepAny()
+{
+    testDiag("%s", __func__);
+
+    std::vector<uint8_t> msg(1000000u, 0x82u); // 0x82 == TypeCode::Any
+
+    TypeStore ctxt;
+    Value val;
+    FixedBuf buf(false, msg);
+    from_wire_type_value(buf, ctxt, val);
+    testFalse(buf.good())<<" deeply-nested Any must fault, not recurse without bound";
+}
+
 // test the common case for a pvRequest of caching an empty Struct
 void testEmptyRequest()
 {
@@ -1256,7 +1275,7 @@ void testPartialXCode()
 
 MAIN(testxcode)
 {
-    testPlan(150);
+    testPlan(151);
     testSetup();
     testDeserializeString();
     testSerialize1();
@@ -1272,6 +1291,7 @@ MAIN(testxcode)
     testRegressRedundantBitMask();
     testRegressCNEN();
     testRegressBadBitMask();
+    testRegressDeepAny();
     testBadFieldName();
     testEmptyRequest();
     testPartialXCode();
