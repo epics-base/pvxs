@@ -10,6 +10,7 @@
 #include <dbLock.h>
 #include <dbLink.h>
 #include <recGbl.h>
+#include <epicsTime.h>
 #include <dbUnitTest.h>
 #include <aiRecord.h>
 #include <aaoRecord.h>
@@ -480,6 +481,82 @@ namespace {
 #endif
     }
 
+    // A fixed field link (field:"x") whose remote sub-field flips from a
+    // timestamped struct to a bare scalar must not retain the struct's
+    // timeStamp.  onTypeChange()'s struct branch sets fld_seconds; the
+    // non-struct branch only sets fld_value.  Before the fix, fld_seconds was
+    // missing from the clear-list, so after the re-type it kept aliasing the
+    // previous struct's seconds and the link reported a stale timestamp.
+    void testTypeChange()
+    {
+        testDiag("==== %s ====", __func__);
+        using namespace pvxs::members;
+
+        const epicsUInt32 epicsSec = 0x12345678u; // expected EPICS-epoch seconds
+
+        auto serv(ioc::server());
+
+        // open #1: sub-field "x" is a timestamped, NTScalar-shaped struct.
+        Value asStruct(TypeDef(TypeCode::Struct, {
+            Struct("x", {
+                Float64("value"),
+                Struct("timeStamp", {
+                    Int64("secondsPastEpoch"),
+                    UInt32("nanoseconds"),
+                    UInt32("userTag"),
+                }),
+            }),
+        }).create());
+        asStruct["x.value"] = 12.0;
+        asStruct["x.timeStamp.secondsPastEpoch"] = uint64_t(epicsSec) + POSIX_TIME_AT_EPICS_EPOCH;
+
+        auto src(server::SharedPV::buildReadonly());
+        src.open(asStruct);
+        serv.addPV("tc:src", src);
+
+        testqsrvWaitForLinkConnected("tc:inp.INP");
+
+        auto inp = (aiRecord*)testdbRecordPtr("tc:inp");
+        long ret;
+        double val;
+        epicsTimeStamp time;
+
+        dbScanLock((dbCommon*)inp);
+        // struct branch: fld_value=x.value, fld_seconds=x.timeStamp.secondsPastEpoch
+        testTrue((ret=dbGetLink(&inp->inp, DBR_DOUBLE, &val, nullptr, nullptr))==0
+                 && val==12.0)<<" struct link value ret="<<ret<<" val="<<val;
+        testTrue((ret=dbGetTimeStamp(&inp->inp, &time))==0
+                 && time.secPastEpoch==epicsSec)
+                <<" struct branch latched seconds ret="<<ret<<" sec="<<time.secPastEpoch;
+        dbScanUnlock((dbCommon*)inp);
+
+        // Re-type: sub-field "x" becomes a bare scalar (the non-struct branch).
+        src.close();
+        testqsrvWaitForLinkConnected("tc:inp.INP", false);
+
+        Value asScalar(TypeDef(TypeCode::Struct, {
+            Float64("x"),
+        }).create());
+        asScalar["x"] = 34.0;
+        src.open(asScalar);
+        testqsrvWaitForLinkConnected("tc:inp.INP");
+
+        dbScanLock((dbCommon*)inp);
+        // non-struct branch: fld_value=root (the scalar x)
+        testTrue((ret=dbGetLink(&inp->inp, DBR_DOUBLE, &val, nullptr, nullptr))==0
+                 && val==34.0)<<" scalar link value ret="<<ret<<" val="<<val;
+        // fld_seconds must be cleared on the non-struct re-type, so the
+        // link reports no timestamp (0) rather than the stale struct seconds.
+        testTrue((ret=dbGetTimeStamp(&inp->inp, &time))==0
+                 && time.secPastEpoch==0u)
+                <<" stale struct seconds must not survive re-type ret="<<ret
+                <<" sec="<<time.secPastEpoch;
+        dbScanUnlock((dbCommon*)inp);
+
+        serv.removePV("tc:src");
+        src.close();
+    }
+
     long setAMSG(dbCommon *prec)
     {
         (void)recGblSetSevrMsg(prec, READ_ALARM, MAJOR_ALARM, "%s", __func__);
@@ -678,7 +755,7 @@ extern "C" void testioc_registerRecordDeviceDriver(struct dbBase *);
 
 MAIN(testpvalink)
 {
-    testPlan(108);
+    testPlan(112);
     testSetup();
     pvxs::logger_config_env();
 
@@ -706,6 +783,7 @@ MAIN(testpvalink)
         testDisconnect();
         testMeta();
         testMetaTag();
+        testTypeChange();
         testMetaMS();
         testFwd();
         testAtomic();

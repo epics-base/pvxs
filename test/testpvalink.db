@@ -224,3 +224,10 @@ record(aai, "target:ntndarray_inp") {
     field(NELM, "5")
     field(FTVL, "FLOAT")
 }
+
+# Regression: a fixed field link whose remote sub-field "x" flips
+# from a (timestamped) struct to a bare scalar across a re-type.  The
+# struct connection sets fld_seconds; the scalar reconnect must clear it.
+record(ai, "tc:inp") {
+    field(INP, {pva:{pv:"tc:src", field:"x"}})
+}
