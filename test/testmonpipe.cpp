@@ -97,6 +97,85 @@ struct Spammer : public server::Source {
     }
 };
 
+// Source which, on subscribe, fills the queue past its limit using post()
+// (which squashes when full) before the subscription is started, then captures
+// the server-side MonitorStat for inspection.  Used to regression test that
+// stats() reports the queue depth in nQueue and the squash count in nSquash,
+// rather than overwriting nQueue with the squash count.
+struct StatSquash : public server::Source {
+    const Value prototype;
+    const uint32_t nPost;
+
+    epicsEvent captured;
+    server::MonitorStat stat{};
+    std::shared_ptr<server::MonitorControlOp> keepalive;
+
+    explicit StatSquash(uint32_t nPost)
+        :prototype(nt::NTScalar{TypeCode::UInt32}.create())
+        ,nPost(nPost)
+    {}
+
+    virtual void onSearch(Search &op) override final {
+        for(auto& pv : op) {
+            if(strcmp(pv.name(), "sq")==0)
+                pv.claim();
+        }
+    }
+
+    virtual void onCreate(std::unique_ptr<server::ChannelControl> &&rop) override final {
+        if(rop->name()!="sq")
+            return;
+        auto op(std::move(rop));
+        auto ptype(prototype);
+        op->onSubscribe([this, ptype](std::unique_ptr<server::MonitorSetupOp>&& mop) {
+            // The subscription is created stopped, so nothing is sent and the
+            // queue is never drained while this callback runs (START is
+            // processed only after we return on the same acceptor loop).
+            std::shared_ptr<server::MonitorControlOp> ctrl(mop->connect(ptype));
+            for(uint32_t i=0; i<nPost; i++) {
+                auto next(ptype.cloneEmpty());
+                next["value"] = i; // distinct value each time so the update is "real"
+                ctrl->post(next);
+            }
+            ctrl->stats(stat);
+            keepalive = ctrl; // keep the subscription alive past this callback
+            captured.signal();
+        });
+    }
+};
+
+void testStatsSquash()
+{
+    testShow()<<__func__;
+
+    // queueSize 4, post 10 -> first 4 fill the queue, remaining 6 squash.
+    auto src(std::make_shared<StatSquash>(10u));
+
+    auto srv(server::Config::isolated().build()
+            .addSource("dut", src)
+            .start());
+
+    auto cli(srv.clientConfig().build());
+
+    auto mon(cli.monitor("sq")
+                 .record("queueSize", 4u)
+                 .maskConnected(true)
+                 .maskDisconnected(true)
+                 .event([](client::Subscription&){})
+                 .exec());
+
+    if(!src->captured.wait(5.0)) {
+        testFail("server onSubscribe never ran");
+        testSkip(3, "no stats captured");
+        return;
+    }
+
+    testEq(src->stat.limitQueue, 4u)<<" negotiated queueSize";
+    testEq(src->stat.nQueue, 4u)<<" nQueue must be the queue depth, not the squash count";
+    testEq(src->stat.nSquash, 6u)<<" nSquash must carry the squash count";
+    testEq(src->stat.maxQueue, 4u)<<" high-water queue depth";
+}
+
 void testSpam(uint32_t nQueue, uint32_t highMark, uint16_t lastVal,
               const std::string& ackAny="")
 {
@@ -152,9 +231,10 @@ void testSpam(uint32_t nQueue, uint32_t highMark, uint16_t lastVal,
 
 MAIN(testmonpipe)
 {
-    testPlan(111);
+    testPlan(115);
     testSetup();
     logger_config_env();
+    testStatsSquash();
     testSpam(3u, 0u, 7u);
     testSpam(2u, 0u, 5u);
     testSpam(4u, 0u, 9u);

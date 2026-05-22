@@ -312,7 +312,7 @@ struct ServerMonitorControl : public server::MonitorControlOp
         stat.maxQueue = mon->maxQueue;
         stat.limitQueue = mon->limit;
         stat.window = mon->window;
-        stat.nQueue = mon->nSquash;
+        stat.nSquash = mon->nSquash;
 
         if(reset)
             mon->maxQueue = mon->nSquash = 0u;
