@@ -22,10 +22,43 @@
 #include <pvxs/nt.h>
 
 #include "utilpvt.h"
+#include "ossl.h"
 
 using namespace pvxs;
 
 namespace {
+
+// SSLContext::commonName() must reject a CN containing an embedded NUL rather
+// than silently truncating it (NUL-prefix identity confusion, cf. CVE-2009-2408).
+void testCommonName() {
+    testShow()<<__func__;
+
+    std::string out;
+    typedef std::unique_ptr<X509_NAME, void(*)(X509_NAME*)> Name;
+
+    // a normal CN round-trips unchanged
+    {
+        Name nm(X509_NAME_new(), X509_NAME_free);
+        testOk1(!!nm.get());
+        testOk1(1==X509_NAME_add_entry_by_NID(nm.get(), NID_commonName, V_ASN1_UTF8STRING,
+                                              (const unsigned char*)"ioc1", 4, -1, 0));
+        out = "sentinel";
+        testOk1(ossl::SSLContext::commonName(nm.get(), out));
+        testEq(out, "ioc1");
+    }
+
+    // a CN with an embedded NUL is rejected, not truncated to "admin"
+    {
+        Name nm(X509_NAME_new(), X509_NAME_free);
+        testOk1(!!nm.get());
+        const unsigned char cn[] = {'a','d','m','i','n','\0','.','e','v','i','l'}; // 11 bytes
+        testOk1(1==X509_NAME_add_entry_by_NID(nm.get(), NID_commonName, V_ASN1_UTF8STRING,
+                                              cn, sizeof(cn), -1, 0));
+        out = "sentinel";
+        testOk1(!ossl::SSLContext::commonName(nm.get(), out));
+        testEq(out, "sentinel"); // untouched: not the truncated "admin"
+    }
+}
 
 void testGetSuper() {
     testShow()<<__func__;
@@ -311,9 +344,10 @@ void testServerReconfig() {
 
 MAIN(testtls)
 {
-    testPlan(22);
+    testPlan(30);
     testSetup();
     logger_config_env();
+    testCommonName();
     testGetSuper();
     testGetIntermediate();
     testGetNameServer();

@@ -96,6 +96,15 @@ struct SSLContext {
     bool have_certificate() const;
     const X509* certificate0() const;
 
+    // Extract a certificate's NID_commonName as a UTF-8 std::string.
+    // Returns false when the CN is absent, empty, or contains an embedded NUL.
+    // Rejecting embedded NULs is required so a CN such as "admin\0.evil" cannot
+    // be silently truncated to "admin" when mapped to an identity (the
+    // NUL-prefix identity-confusion class, cf. CVE-2009-2408).
+    PVXS_API
+    static
+    bool commonName(X509_NAME *name, std::string& out);
+
     static
     bool fill_credentials(PeerCredentials& cred, const SSL *ctx);
 };
