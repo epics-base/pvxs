@@ -435,6 +435,51 @@ namespace {
         dbScanUnlock((dbCommon*)inp);
     }
 
+    void testMetaTag()
+    {
+        testDiag("==== %s ====", __func__);
+
+#if EPICS_VERSION_INT >= VERSION_INT(7,0,6,0)
+        testqsrvWaitForLinkConnected("meta:inp.INP");
+
+        {
+            auto src = (aiRecord*)testdbRecordPtr("meta:src");
+            QSrvWaitForLinkUpdate U("meta:inp.INP");
+            dbScanLock((dbCommon*)src);
+            src->tse = epicsTimeEventDeviceTime;
+            src->time.secPastEpoch = 0x12345678;
+            src->time.nsec = 0x10203040;
+            src->utag = 0x0badf00du; // NT timeStamp.userTag is 32-bit
+            src->val = 5;            // within meta:src DRVL/DRVH [-10, 10]
+            dbProcess((dbCommon*)src);
+            dbScanUnlock((dbCommon*)src);
+        }
+        auto inp = (aiRecord*)testdbRecordPtr("meta:inp");
+
+        long ret;
+        double val;
+        epicsTimeStamp time;
+        epicsUTag tag = 0u;
+
+        dbScanLock((dbCommon*)inp);
+
+        // dbGetLink latches the meta-data captured from the remote update.
+        testTrue((ret=dbGetLink(&inp->inp, DBR_DOUBLE, &val, nullptr, nullptr))==0
+                 && val==5.0)<<" ret="<<ret<<" val="<<val;
+
+        // The remote timeStamp.userTag must be carried through to the link's
+        // getTimeStampTag, not left at the initial 0.
+        testTrue((ret=dbGetTimeStampTag(&inp->inp, &time, &tag))==0
+                 && time.secPastEpoch==0x12345678
+                 && tag==0x0badf00du)
+                <<" ret="<<ret<<" sec="<<time.secPastEpoch<<" tag="<<tag;
+
+        dbScanUnlock((dbCommon*)inp);
+#else
+        testSkip(2, "No userTag / getTimeStampTag before 7.0.6");
+#endif
+    }
+
     long setAMSG(dbCommon *prec)
     {
         (void)recGblSetSevrMsg(prec, READ_ALARM, MAJOR_ALARM, "%s", __func__);
@@ -633,7 +678,7 @@ extern "C" void testioc_registerRecordDeviceDriver(struct dbBase *);
 
 MAIN(testpvalink)
 {
-    testPlan(106);
+    testPlan(108);
     testSetup();
     pvxs::logger_config_env();
 
@@ -660,6 +705,7 @@ MAIN(testpvalink)
         testPutAsync();
         testDisconnect();
         testMeta();
+        testMetaTag();
         testMetaMS();
         testFwd();
         testAtomic();
