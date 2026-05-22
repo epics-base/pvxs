@@ -500,7 +500,42 @@ void Connection::handle_MONITOR()
                        peerName.c_str(), unsigned(ioid));
             return;
         }
+    }
 
+    // Validate the message against operation state before decoding payload.
+
+    std::shared_ptr<OperationBase> op;
+    SubscriptionImpl* mon = nullptr;
+    if(M.good() && info) {
+        op = info->handle.lock();
+        if(!op) {
+            // assume op has already sent CMD_DESTROY_REQUEST
+            log_debug_printf(io, "Server %s ignoring stale cmd%02x ioid %u\n",
+                             peerName.c_str(), CMD_MONITOR, unsigned(ioid));
+            return;
+        }
+
+        if(uint8_t(op->op)!=CMD_MONITOR) {
+            // peer mixes up IOID and operation type
+            M.fault(__FILE__, __LINE__);
+
+        } else {
+            mon = static_cast<SubscriptionImpl*>(op.get());
+
+            // check that subcmd is as expected based on operation state
+            if((mon->state==SubscriptionImpl::Creating) && init) {
+
+            } else if((mon->state==SubscriptionImpl::Idle) && !init) {
+
+            } else if((mon->state==SubscriptionImpl::Running) && !init) {
+
+            } else {
+                M.fault(__FILE__, __LINE__);
+            }
+        }
+    }
+
+    if(M.good()) {
         if(!sts.isSuccess()) {
 
         } else if(init) {
@@ -508,6 +543,8 @@ void Connection::handle_MONITOR()
             // initialize info->fl later, with access to queueSize
 
         } else if(!final || !M.empty()) {
+            if(!info->fl)
+                throw std::logic_error("clientmon after INIT w/o FL");
 
             // Take from free-list of pre-allocated Value
             Value raw;
@@ -561,39 +598,6 @@ void Connection::handle_MONITOR()
                     servSquash = true;
                     break;
                 }
-            }
-        }
-    }
-
-    // validate received message against operation state
-
-    std::shared_ptr<OperationBase> op;
-    SubscriptionImpl* mon = nullptr;
-    if(M.good() && info) {
-        op = info->handle.lock();
-        if(!op) {
-            // assume op has already sent CMD_DESTROY_REQUEST
-            log_debug_printf(io, "Server %s ignoring stale cmd%02x ioid %u\n",
-                             peerName.c_str(), CMD_MONITOR, unsigned(ioid));
-            return;
-        }
-
-        if(uint8_t(op->op)!=CMD_MONITOR) {
-            // peer mixes up IOID and operation type
-            M.fault(__FILE__, __LINE__);
-
-        } else {
-            mon = static_cast<SubscriptionImpl*>(op.get());
-
-            // check that subcmd is as expected based on operation state
-            if((mon->state==SubscriptionImpl::Creating) && init) {
-
-            } else if((mon->state==SubscriptionImpl::Idle) && !init) {
-
-            } else if((mon->state==SubscriptionImpl::Running) && !init) {
-
-            } else {
-                M.fault(__FILE__, __LINE__);
             }
         }
     }
