@@ -9,6 +9,8 @@
 
 #include <string>
 
+#include <event2/buffer.h>
+
 #include <pvxs/util.h>
 #include <pvxs/unittest.h>
 #include <pvxs/nt.h>
@@ -1195,6 +1197,79 @@ void testRegressDeepAny()
     testFalse(buf.good())<<" deeply-nested Any must fault, not recurse without bound";
 }
 
+// An array length is a 32-bit count the peer fully controls.  The decoder must
+// not size an allocation from it before the matching bytes are read: every
+// element costs at least one wire byte, so a count larger than the remaining
+// body is malformed.  Without the bound the array is pre-sized to the bogus
+// count (default-constructing every element -- megabytes to many GiB) and that
+// oversized array is what the field is left holding after the short read is
+// finally noticed.  The fix faults before allocating, so the field stays empty.
+// A small count keeps the unbounded path cheap enough to observe its result
+// directly: the field length must be 0, not the claimed count.
+void testRegressHugeCount()
+{
+    testDiag("%s", __func__);
+
+    {
+        // Struct{ value: Int32A } whose value claims 1000 elements but carries
+        // only one (four payload bytes).
+        std::vector<uint8_t> msg{0x80, 0x00, 0x01, 0x05, 'v','a','l','u','e', 0x2a,
+                                 0xfe, 0xe8, 0x03, 0x00, 0x00,
+                                 0x01, 0x02, 0x03, 0x04};
+        TypeStore ctxt;
+        Value val;
+        FixedBuf buf(false, msg);
+        from_wire_type_value(buf, ctxt, val);
+        testEq(val["value"].as<shared_array<const void>>().size(), 0u)
+                <<" Int32A claiming 1000 elements over a 1-element body must not be allocated";
+    }
+
+    {
+        // Struct{ value: StructA-of-empty-Struct } whose value claims 1000
+        // elements but carries none.
+        std::vector<uint8_t> msg{0x80, 0x00, 0x01, 0x05, 'v','a','l','u','e',
+                                 0x88, 0x80, 0x00, 0x00,
+                                 0xfe, 0xe8, 0x03, 0x00, 0x00};
+        TypeStore ctxt;
+        Value val;
+        FixedBuf buf(false, msg);
+        from_wire_type_value(buf, ctxt, val);
+        testEq(val["value"].as<shared_array<const void>>().size(), 0u)
+                <<" StructA claiming 1000 elements over an empty body must not be allocated";
+    }
+}
+
+// The decode bound above is computed from Buffer::maxAvail().  For a segmented
+// EvInBuf that is *not* the same as size(): size() is only the currently
+// pulled-up window, while maxAvail() must report the whole remaining body still
+// in backing.  Otherwise a legitimate large array delivered across segments
+// would be falsely rejected.  Force two physical segments (the first larger than
+// the pull-up minimum so it is the whole window) and check maxAvail() spans both.
+void testRegressMaxAvail()
+{
+    testDiag("%s", __func__);
+
+    std::vector<uint8_t> seg1(8192u, 0u), seg2(256u, 0u);
+
+    evbuffer *evb = evbuffer_new();
+    // add_reference keeps seg1 a distinct chunk so the window stops at its end.
+    evbuffer_add_reference(evb, seg1.data(), seg1.size(), nullptr, nullptr);
+    evbuffer_add(evb, seg2.data(), seg2.size());
+
+    {
+        EvInBuf M(true, evb, 16);
+        testTrue(M.good())<<" segmented buffer usable";
+        testEq(M.maxAvail(), seg1.size()+seg2.size())<<" maxAvail counts the whole body";
+        testTrue(M.size() < M.maxAvail())<<" window is only the first segment";
+
+        uint32_t v = 0;
+        from_wire(M, v); // consume four bytes
+        testEq(M.maxAvail(), seg1.size()+seg2.size()-4u)<<" maxAvail tracks bytes consumed";
+    }
+
+    evbuffer_free(evb);
+}
+
 // test the common case for a pvRequest of caching an empty Struct
 void testEmptyRequest()
 {
@@ -1275,7 +1350,7 @@ void testPartialXCode()
 
 MAIN(testxcode)
 {
-    testPlan(151);
+    testPlan(157);
     testSetup();
     testDeserializeString();
     testSerialize1();
@@ -1292,6 +1367,8 @@ MAIN(testxcode)
     testRegressCNEN();
     testRegressBadBitMask();
     testRegressDeepAny();
+    testRegressHugeCount();
+    testRegressMaxAvail();
     testBadFieldName();
     testEmptyRequest();
     testPartialXCode();

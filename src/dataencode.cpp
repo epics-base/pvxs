@@ -9,6 +9,7 @@
 
 #include <cassert>
 
+#include <algorithm>
 #include <stdexcept>
 #include <functional>
 #include <ostream>
@@ -154,7 +155,10 @@ void from_wire(Buffer& buf, std::vector<FieldDesc>& descs, TypeStore& cache, uns
             {
                 auto& fld = descs.back();
 
-                fld.miter.reserve(nfld.size);
+                // Clamp the speculative reserve to the bytes that could remain:
+                // each child costs at least one wire byte, so a larger nfld is
+                // malformed and the child loop below will fault on it.
+                fld.miter.reserve(std::min(size_t(nfld.size), buf.maxAvail()));
             }
 
             auto& cdescs = code.code==TypeCode::Struct ? descs : descs.back().members;
@@ -625,6 +629,10 @@ void from_wire_field(Buffer& buf, TypeStore& ctxt,  const FieldDesc* desc, const
         case TypeCode::StructA:{
             Size alen{};
             from_wire(buf, alen);
+            if(alen.size > buf.maxAvail()) { // each element needs >=1 validity byte
+                buf.fault(__FILE__, __LINE__);
+                return;
+            }
             shared_array<Value> arr(alen.size);
             std::shared_ptr<const FieldDesc> etype(store->top->desc,
                                                    &desc->members[0]); // alias
@@ -642,6 +650,10 @@ void from_wire_field(Buffer& buf, TypeStore& ctxt,  const FieldDesc* desc, const
         case TypeCode::UnionA: {
             Size alen{};
             from_wire(buf, alen);
+            if(alen.size > buf.maxAvail()) { // each element needs >=1 validity byte
+                buf.fault(__FILE__, __LINE__);
+                return;
+            }
             shared_array<Value> arr(alen.size);
             auto cdesc = &desc->members[0];
 
@@ -674,6 +686,10 @@ void from_wire_field(Buffer& buf, TypeStore& ctxt,  const FieldDesc* desc, const
         case TypeCode::AnyA:{
             Size alen{};
             from_wire(buf, alen);
+            if(alen.size > buf.maxAvail()) { // each element needs >=1 validity byte
+                buf.fault(__FILE__, __LINE__);
+                return;
+            }
             shared_array<Value> arr(alen.size);
 
             for(auto& elem : arr) {

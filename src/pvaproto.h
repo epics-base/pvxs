@@ -86,6 +86,14 @@ public:
     EPICS_ALWAYS_INLINE bool empty() const { return limit==pos; }
     EPICS_ALWAYS_INLINE size_t size() const { return limit-pos; }
 
+    // Upper bound on the number of bytes which could still be decoded from this
+    // buffer.  Unlike size() (only the current contiguous window), this also
+    // counts bytes not yet pulled into the window.  Used to bound an allocation
+    // sized from an untrusted wire count before the matching bytes are read:
+    // every element/child costs at least one wire byte, so a count exceeding
+    // maxAvail() cannot be substantiated by the remaining body.
+    virtual size_t maxAvail() const { return size(); }
+
     // the following assume good()==true && !empty()
     EPICS_ALWAYS_INLINE uint8_t& operator[](size_t i) const { return pos[i]; }
     EPICS_ALWAYS_INLINE void push(uint8_t v) { *pos++ = v; }
@@ -162,6 +170,7 @@ public:
     virtual ~EvInBuf();
 
     virtual bool refill(size_t more) override final;
+    virtual size_t maxAvail() const override final;
 };
 
 // assumes prior buf.ensure(M) where M>=N
@@ -526,6 +535,14 @@ void from_wire(Buffer& buf, shared_array<const void>& varr)
 {
     Size slen{};
     from_wire(buf, slen);
+    // Reject a count the remaining body cannot substantiate before allocating:
+    // a fixed-size POD element needs sizeof(C) wire bytes, a variable element
+    // (string) at least one.
+    const size_t minElemBytes = std::is_pod<C>::value ? sizeof(C) : 1u;
+    if(slen.size > buf.maxAvail()/minElemBytes) {
+        buf.fault(__FILE__, __LINE__);
+        return;
+    }
     shared_array<E> arr(slen.size);
 
     if(std::is_pod<C>::value) {
