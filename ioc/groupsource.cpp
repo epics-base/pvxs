@@ -510,17 +510,20 @@ void onGet(Group& group, const std::unique_ptr<server::ExecOp>& getOperation) {
 
         // Loop through all fields
         for (auto& field: group.fields) {
-            dbChannel* pDbChannel = field.value;
+            if(field.info.type == MappingInfo::Proc || field.info.type==MappingInfo::Structure)
+                continue;
 
             // find the leaf node in which to set the value
             auto leafNode = field.findIn(returnValue);
 
-            if (pDbChannel && leafNode) {
+            if (dbChannel* pDbChannel = field.value) {
                 // Lock this field
                 DBLocker F(pDbChannel->addr.precord);
-                if (!getGroupField(field, leafNode, group.name, getOperation)) {
+                if(!getGroupField(field, leafNode, group.name, getOperation))
                     return;
-                }
+            } else {
+                if(!getGroupField(field, leafNode, group.name, getOperation))
+                    return;
             }
         }
     }
