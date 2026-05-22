@@ -403,6 +403,12 @@ long pvaGetValue(DBLINK *plink, short dbrType, void *pbuffer, long *pnRequest) n
             self->snap_time.nsec = 0u;
         }
 
+        if(self->fld_usertag) {
+            self->snap_tag = self->fld_usertag.as<epicsUTag>();
+        } else {
+            self->snap_tag = 0;
+        }
+
         if(self->fld_severity) {
             self->snap_severity = self->fld_severity.as<uint16_t>();
         } else {
