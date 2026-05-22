@@ -179,7 +179,7 @@ void from_wire_type(Buffer& buf, TypeStore& ctxt, Value& val);
 
 //! deserialize full Value
 PVXS_API
-void from_wire_full(Buffer& buf, TypeStore& ctxt, Value& val);
+void from_wire_full(Buffer& buf, TypeStore& ctxt, Value& val, unsigned depth=0);
 
 //! deserialize BitMask and partial Value
 PVXS_API
