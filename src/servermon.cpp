@@ -561,7 +561,7 @@ void ServerConn::handle_MONITOR()
                     if(sval.size()>1 && sval.back()=='%') {
                         try {
                             auto percent = parseTo<double>(sval.substr(0, sval.size()-1u));
-                            op->ackAt = std::max(0.0, std::min(percent, 100.0)) * op->limit;
+                            op->ackAt = std::max(0.0, std::min(percent, 100.0)) / 100.0 * op->limit;
                         }catch(std::exception& e){
                             logRemote(ioid, Level::Crit,
                                       SB()<<"Unable to parse% "<<pvRequest.nameOf(ackAny)<<" : "<<sval<<" : "<<e.what());

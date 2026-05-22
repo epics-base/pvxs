@@ -176,6 +176,86 @@ void testStatsSquash()
     testEq(src->stat.maxQueue, 4u)<<" high-water queue depth";
 }
 
+// Source: an ackAny percentage must be interpreted as a fraction of
+// the queue size, so ackAny="50%" with queueSize=4 yields ackAt=2.  The client
+// schedules an ack to the server only after it has pop()'d ackAt updates, and
+// the server reports a client ack by invoking onHighMark (here with a high
+// watermark of 0, so any ack fires it).  This source posts exactly 2 updates;
+// with the correct ackAt=2 the client acks and onHighMark fires, while the
+// buggy ackAt (percent*queueSize, clamped to queueSize=4) never reaches its
+// threshold after only 2 updates, so no ack is sent.
+struct AckPercent : public server::Source {
+    const Value prototype;
+
+    epicsEvent gotAck;
+    std::shared_ptr<server::MonitorControlOp> keepalive;
+
+    AckPercent()
+        :prototype(nt::NTScalar{TypeCode::UInt32}.create())
+    {}
+
+    virtual void onSearch(Search &op) override final {
+        for(auto& pv : op) {
+            if(strcmp(pv.name(), "ackpc")==0)
+                pv.claim();
+        }
+    }
+
+    virtual void onCreate(std::unique_ptr<server::ChannelControl> &&rop) override final {
+        if(rop->name()!="ackpc")
+            return;
+        auto op(std::move(rop));
+        auto ptype(prototype);
+        op->onSubscribe([this, ptype](std::unique_ptr<server::MonitorSetupOp>&& mop) {
+            std::shared_ptr<server::MonitorControlOp> ctrl(mop->connect(ptype));
+            ctrl->setWatermarks(0u, 0u); // onHighMark on any client ack
+            ctrl->onHighMark([this](){ gotAck.signal(); });
+            for(uint32_t i=0; i<2u; i++) {
+                auto next(ptype.cloneEmpty());
+                next["value"] = i;
+                ctrl->post(next);
+            }
+            keepalive = ctrl; // keep the subscription alive past this callback
+        });
+    }
+};
+
+void testAckPercent()
+{
+    testShow()<<__func__;
+
+    auto src(std::make_shared<AckPercent>());
+
+    auto srv(server::Config::isolated().build()
+            .addSource("dut", src)
+            .start());
+
+    auto cli(srv.clientConfig().build());
+
+    epicsEvent evt;
+    auto mon(cli.monitor("ackpc")
+                 .record("queueSize", 4u)
+                 .record("pipeline", true)
+                 .record("ackAny", "50%")
+                 .maskConnected(true)
+                 .maskDisconnected(true)
+                 .event([&evt](client::Subscription&){ evt.signal(); })
+                 .exec());
+
+    // Consume both updates so they count toward the client's ackAt threshold.
+    unsigned got = 0u;
+    while(got < 2u) {
+        if(mon->pop()) {
+            got++;
+        } else if(!evt.wait(5.0)) {
+            break;
+        }
+    }
+    testEq(got, 2u)<<" client received both updates";
+    testTrue(src->gotAck.wait(5.0))
+        <<" client must ack after ackAt=round(50% of queueSize 4)=2 updates";
+}
+
 void testSpam(uint32_t nQueue, uint32_t highMark, uint16_t lastVal,
               const std::string& ackAny="")
 {
@@ -231,10 +311,11 @@ void testSpam(uint32_t nQueue, uint32_t highMark, uint16_t lastVal,
 
 MAIN(testmonpipe)
 {
-    testPlan(115);
+    testPlan(117);
     testSetup();
     logger_config_env();
     testStatsSquash();
+    testAckPercent();
     testSpam(3u, 0u, 7u);
     testSpam(2u, 0u, 5u);
     testSpam(4u, 0u, 9u);
