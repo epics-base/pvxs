@@ -21,8 +21,8 @@ namespace pvxs {
 namespace ioc {
 
 class SecurityLogger {
-    void* pfieldsave = nullptr;
-    dbChannel *pchan = nullptr;
+    void* pfieldsave;
+    dbChannel *pchan;
     void* pvt;
 public:
     ~SecurityLogger() {
@@ -39,12 +39,15 @@ public:
     }
 
     SecurityLogger()
-            :pvt(nullptr) {
-    }
+        :pfieldsave(nullptr)
+        ,pchan(nullptr)
+        ,pvt(nullptr)
+    {}
     SecurityLogger(dbChannel* pDbChannel,
                    const Credentials& credentials,
                    const SecurityClient& securityClient)
         :pfieldsave(pDbChannel->addr.pfield)
+        ,pchan(pDbChannel)
         ,pvt(asTrapWriteWithData((securityClient.cli)[0], // The user is the first element
                          credentials.cred[0].c_str(),     // The user is the first element
                          credentials.host.c_str(),
