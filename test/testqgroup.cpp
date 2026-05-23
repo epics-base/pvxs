@@ -679,18 +679,22 @@ void testIQ()
     sub.testEmpty();
 }
 
-void testConst()
+void testConst(bool atomic)
 {
-    testDiag("%s", __func__);
+    auto isatom = atomic ? "true": "false";
+    testDiag("%s(%s)", __func__, isatom);
     TestClient ctxt;
 
-    auto val(ctxt.get("tst:const").exec()->wait(5.0));
+    auto val(ctxt.get("tst:const")
+                 .record("atomic", atomic)
+                 .exec()->wait(5.0));
     testStrEq(std::string(SB()<<val.format()),
+              std::string(SB()<<
               "struct {\n"
               "    struct {\n"
               "        struct {\n"
               "            int32_t queueSize = 0\n"
-              "            bool atomic = true\n"
+              "            bool atomic = "<<isatom<<"\n"
               "        } _options\n"
               "    } record\n"
               "    struct {\n"
@@ -698,13 +702,14 @@ void testConst()
               "        int64_t i = 14\n"
               "        string s = \"hello\"\n"
               "    } s\n"
-              "}\n");
+              "}\n"));
     testStrEq(std::string(SB()<<val.format().delta()),
-              "record._options.atomic bool = true\n"
+              std::string(SB()<<
+              "record._options.atomic bool = "<<isatom<<"\n"
               "s.d double = 1.5\n"
               "s.i int64_t = 14\n"
               "s.s string = \"hello\"\n"
-              );
+              ));
 
     TestSubscription sub(ctxt.monitor("tst:const"));
     val = sub.waitForUpdate();
@@ -767,7 +772,7 @@ void testDbLoadGroup()
 
 MAIN(testqgroup)
 {
-    testPlan(41);
+    testPlan(44);
     testSetup();
     {
         generalTimeRegisterCurrentProvider("test", 1, &testTimeCurrent);
@@ -789,7 +794,8 @@ MAIN(testqgroup)
         testEnum();
         testImage();
         testIQ();
-        testConst();
+        testConst(true);
+        testConst(false);
         testBatch();
         testDbLoadGroup();
         testiocsh();
