@@ -637,6 +637,7 @@ void onPutGroup(Group& group, bool atomic, TriState forceProcessing,
 
             // Loop through all fields
             for (auto& field: group.fields) {
+                auto fidx = fieldIndex++;
                 dbChannel* pDbChannel = field.value;
                 if(!pDbChannel)
                     continue;
@@ -644,10 +645,10 @@ void onPutGroup(Group& group, bool atomic, TriState forceProcessing,
                 DBLocker F(pDbChannel->addr.precord);
                 // Put the field
                 didSomething |= putGroupField(value, field, forceProcessing,
-                                              groupSecurityCache.securityClients[fieldIndex],
+                                              groupSecurityCache.securityClients[fidx],
                                               groupSecurityCache,
                                               *putOperation);
-                fieldIndex++;
+
                 // Unlock this field when locker goes out of scope
             }
         }
