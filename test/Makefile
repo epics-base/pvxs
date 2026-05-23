@@ -160,6 +160,7 @@ TESTFILES += ../iq.db
 TESTFILES += ../ntenum.db
 TESTFILES += ../const.db
 TESTFILES += ../batch.db
+TESTFILES += ../secidxgroup.db
 TESTFILES += ../qgroup.cmd
 TESTFILES += ../qgroup.json
 TESTS += testqgroup

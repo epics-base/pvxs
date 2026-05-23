@@ -750,6 +750,23 @@ void testiocsh()
     }
 }
 
+// tst:SECIDX's first put-order-sorted field is a channel-less Structure,
+// and value.x is the channel-backed puttable field after it.  A non-atomic
+// group put of value.x must authorise against value.x's own security client.
+void testGroupPutSecIndex()
+{
+    testDiag("%s", __func__);
+    TestClient ctxt;
+
+    try {
+        ctxt.put("tst:SECIDX").record("atomic", false).set("value.x", 5).exec()->wait(5.0);
+        testPass("non-atomic group put authorised against the field's own security client");
+    } catch (client::RemoteError& e) {
+        testFail("non-atomic group put failed: %s", e.what());
+    }
+    testdbGetFieldEqual("tst:secidx", DBR_LONG, 5);
+}
+
 void testDbLoadGroup()
 {
     testDiag("%s", __func__);
@@ -772,7 +789,7 @@ void testDbLoadGroup()
 
 MAIN(testqgroup)
 {
-    testPlan(44);
+    testPlan(46);
     testSetup();
     {
         generalTimeRegisterCurrentProvider("test", 1, &testTimeCurrent);
@@ -787,6 +804,7 @@ MAIN(testqgroup)
         testdbReadDatabase("ntenum.db", nullptr, "P=enm");
         testdbReadDatabase("iq.db", nullptr, "N=iq:");
         testdbReadDatabase("const.db", nullptr, "P=tst:");
+        testdbReadDatabase("secidxgroup.db", nullptr, "P=tst:");
         testdbReadDatabase("batch.db", nullptr, "P=tst:b:");
         iocsh("../qgroup.cmd");
         ioc.init();
@@ -797,6 +815,7 @@ MAIN(testqgroup)
         testConst(true);
         testConst(false);
         testBatch();
+        testGroupPutSecIndex();
         testDbLoadGroup();
         testiocsh();
     }
