@@ -6,7 +6,16 @@ Release Notes
 1.5.2 (UNRELEASED)
 ------------------
 
+* interpret monitor ackAny percentage as a fraction (Sang Woo Kim)
+* client: query user/host name once on Context creation.
+  Previously, user/host name was queried each time a new TCP connection was opened.
+* server: report monitor squash count in MonitorStat::nSquash (Sang Woo Kim)
 * ioc: promote DBE_ALARM only to also fetch value.
+* ioc: Fix const field in non-atomic group get (Sang Woo Kim)
+* ioc: put fix permissions with non-atomic group (Sang Woo Kim)
+* ioc: SecurityLogger must restore dbChannel addr.pfield (Sang Woo Kim)
+* ioc: pvalink propagate userTag (Sang Woo Kim)
+* ioc: fix single PUT with 'record[block=true, process=true]'
 
 1.5.1 (Feb 2026)
 ----------------
