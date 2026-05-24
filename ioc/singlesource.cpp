@@ -347,7 +347,7 @@ void onOp(const std::shared_ptr<SingleInfo>& sInfo, const Value& valuePrototype,
                     auto& pvRequest = putOperation->pvRequest();
                     pvRequest["record._options.block"].as<bool>(putOperationCache->doWait);
                     IOCSource::setForceProcessingFlag(putOperation.get(), pvRequest, putOperationCache->forceProcessing);
-                    if (putOperationCache->forceProcessing) {
+                    if (putOperationCache->forceProcessing == TriState::False) {
                         putOperationCache->doWait = false; // no point in waiting
                     }
 
