@@ -10,6 +10,7 @@
 #include <dbLock.h>
 #include <dbLink.h>
 #include <recGbl.h>
+#include <dbAccess.h>
 #include <dbUnitTest.h>
 #include <aiRecord.h>
 #include <aaoRecord.h>
@@ -342,6 +343,9 @@ namespace {
             src->tse = epicsTimeEventDeviceTime;
             src->time.secPastEpoch = 0x12345678;
             src->time.nsec = 0x10203040;
+#ifdef dbGetTimeStampTag
+            src->utag = 0x00010002;
+#endif
             src->val = 7;
 #ifdef HAS_ALARM_MESSAGE
             strcpy(src->amsg, "Test");
@@ -353,7 +357,6 @@ namespace {
 
         long ret, nelem;
         epicsEnum16 stat, sevr;
-        epicsTimeStamp time;
         char egu[10] = "";
         short prec;
         double val, lolo, low, high, hihi;
@@ -384,9 +387,29 @@ namespace {
         testSkip(1, "No AMSG");
 #endif
 
-        testTrue((ret=dbGetTimeStamp(&inp->inp, &time))==0
-                 && time.secPastEpoch==0 && time.nsec==0)
-                <<" ret="<<ret<<" sec="<<time.secPastEpoch<<" ns="<<time.nsec;
+        auto checkTime = [](DBLINK *plink,
+                            epicsUInt32 sec, epicsUInt32 ns,
+                            epicsUTag utag)
+        {
+            epicsTimeStamp actualT;
+            long ret;
+
+#ifdef dbGetTimeStampTag
+            epicsUTag actualU;
+            testTrue((ret=dbGetTimeStampTag(plink, &actualT, &actualU))==0
+                     && actualT.secPastEpoch==sec
+                     && actualT.nsec==ns
+                     && actualU==utag)
+                <<" ret="<<ret<<" sec="<<actualT.secPastEpoch<<" ns="<<actualT.nsec<<" utag="<<actualU;
+#else
+            testTrue((ret=dbGetTimeStamp(plink, &actualT))==0
+                     && actualT.secPastEpoch==sec
+                     && actualT.nsec==ns)
+                <<" ret="<<ret<<" sec="<<actualT.secPastEpoch<<" ns="<<actualT.nsec;
+#endif
+        };
+
+        checkTime(&inp->inp, 0, 0, 0);
 
         testTrue((ret=dbGetLink(&inp->inp, DBR_DOUBLE, &val, nullptr, nullptr))==0
                  && val==7.0)<<" ret="<<ret<<" val="<<val;
@@ -409,9 +432,7 @@ namespace {
         testSkip(1, "No AMSG");
 #endif
 
-        testTrue((ret=dbGetTimeStamp(&inp->inp, &time))==0
-                 && time.secPastEpoch==0x12345678 && time.nsec==0x10203040)
-                <<" ret="<<ret<<" sec="<<time.secPastEpoch<<" ns="<<time.nsec;
+        checkTime(&inp->inp, 0x12345678, 0x10203040, 0x00010002);
 
         testTrue((ret=dbGetGraphicLimits(&inp->inp, &low, &high))==0 && low==-9 && high==9)
                 <<" ret="<<ret<<" low="<<low<<" high="<<high;
