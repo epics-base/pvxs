@@ -782,7 +782,7 @@ std::shared_ptr<Subscription> MonitorBuilder::exec()
             try {
                 auto percent = parseTo<double>(sval.substr(0, sval.size()-1u));
                 if(percent>0.0 && percent<=100.0) {
-                    op->ackAt = uint32_t(percent * op->queueSize);
+                    op->ackAt = uint32_t(percent / 100.0 * op->queueSize);
                 } else {
                     throw std::invalid_argument("not in range (0%, 100%]");
                 }
