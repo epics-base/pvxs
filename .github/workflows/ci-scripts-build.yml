@@ -123,14 +123,6 @@ jobs:
             base: "3.15"
             extra: "CMD_CPPFLAGS=\"-U_FORTIFY_SOURCE\""
 
-          - name: Native Linux with 3.14
-            os: ubuntu-latest
-            cmp: gcc
-            configuration: default
-            set: "nofortify"
-            base: "3.14"
-            extra: "CMD_CPPFLAGS=\"-U_FORTIFY_SOURCE\""
-
           - name: OSX
             os: macos-latest
             cmp: clang
