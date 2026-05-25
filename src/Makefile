@@ -8,6 +8,16 @@ include $(TOP)/configure/CONFIG
 USR_CPPFLAGS += -DPVXS_API_BUILDING
 USR_CPPFLAGS += -DPVXS_ENABLE_EXPERT_API
 
+ifeq (YES,$(EVENT2_HAS_OPENSSL))
+USR_CPPFLAGS += -DPVXS_ENABLE_OPENSSL
+endif
+
+# set to NO to disable handling of $SSLKEYLOGFILE
+PVXS_ENABLE_SSLKEYLOGFILE ?= YES
+
+PVXS_ENABLE_SSLKEYLOGFILE_YES = -DPVXS_ENABLE_SSLKEYLOGFILE
+USR_CPPFLAGS += $(PVXS_ENABLE_SSLKEYLOGFILE_$(PVXS_ENABLE_SSLKEYLOGFILE))
+
 ifdef T_A
 ifneq ($(CONFIG_LOADED),YES)
 $(warning Toolchain inspection failed $(MAKEFILE_LIST))
@@ -99,6 +109,10 @@ LIB_SRCS += clientintrospect.cpp
 LIB_SRCS += clientget.cpp
 LIB_SRCS += clientmon.cpp
 LIB_SRCS += clientdiscover.cpp
+
+ifeq (YES,$(EVENT2_HAS_OPENSSL))
+LIB_SRCS += ossl.cpp
+endif
 
 LIB_LIBS += Com
 
