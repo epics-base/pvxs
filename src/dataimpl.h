@@ -70,7 +70,7 @@ struct FieldDesc {
     // "fld.sub.leaf" -> rel index
     // For Struct, relative to this (always >=1)
     // For Union, offset in members array (one entry will always be zero)
-    std::map<std::string, size_t> mlookup;
+    std::map<std::string, size_t, std::less<>> mlookup;
 
     // child iteration.  child# -> ("sub", rel index in enclosing vector<FieldDesc>)
     std::vector<std::pair<std::string, size_t>> miter;

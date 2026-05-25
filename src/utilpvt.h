@@ -22,6 +22,7 @@
 #include <memory>
 #include <set>
 #include <string>
+#include <string_view>
 #include <sstream>
 #include <type_traits>
 #include <limits>
@@ -148,17 +149,17 @@ template<typename I>
 constexpr idetail::Range<I> range(I begin, I end) { return idetail::Range<I>{begin, end}; }
 
 template<typename T>
-T parseTo(const std::string& s); // not implemented
+T parseTo(const std::string_view& s); // not implemented
 
 template<>
 PVXS_API
-double parseTo<double>(const std::string& s);
+double parseTo<double>(const std::string_view& s);
 template<>
 PVXS_API
-uint64_t parseTo<uint64_t>(const std::string& s);
+uint64_t parseTo<uint64_t>(const std::string_view& s);
 template<>
 PVXS_API
-int64_t parseTo<int64_t>(const std::string& s);
+int64_t parseTo<int64_t>(const std::string_view& s);
 
 #ifdef _WIN32
 #  define RWLOCK_TYPE SRWLOCK

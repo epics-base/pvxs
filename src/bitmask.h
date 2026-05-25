@@ -8,7 +8,7 @@
 
 #include <ostream>
 #include <stdexcept>
-#include <vector>
+#include <array>
 #include <algorithm>
 #include <cstdint>
 
@@ -92,7 +92,7 @@ class BitMask : public detail::BitBase<BitMask> {
     // bit  0 - lsb of word 0
     // bit 63 - msb of word 0
     // bit 64 - lsb of word 1
-    std::vector<uint64_t> _words;
+    std::array<uint64_t, 4> _words{};
     // actual size in bits
     // _words.size()*64u >= _size
     uint16_t _size=0u;
@@ -124,7 +124,7 @@ public:
     inline bool empty() const { return _size==0u; }
 
     //! number of storage words
-    inline size_t wsize() const { return _words.size(); }
+    inline size_t wsize() const { return _size ? 1+(_size/64u) : 0; }
     //! storage word
     inline uint64_t& word(size_t i) { return _words[i]; }
     inline const uint64_t& word(size_t i) const { return _words[i]; }

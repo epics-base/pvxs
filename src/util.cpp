@@ -21,6 +21,7 @@
 #include <sstream>
 #include <stdexcept>
 #include <atomic>
+#include <charconv>
 
 #include <ctype.h>
 
@@ -766,53 +767,47 @@ void threadOnce_(threadOnceInfo *info)
 }
 
 template<>
-double parseTo<double>(const std::string& s) {
-    size_t idx=0, L=s.size();
-    double ret;
-    try {
-        ret = std::stod(s, &idx);
-    }catch(std::invalid_argument& e) {
-        throw NoConvert(SB()<<"Invalid input : \""<<escape(s)<<"\" : "<<e.what());
-    }catch(std::out_of_range& e) {
-        throw NoConvert(SB()<<"Out of range : \""<<escape(s)<<"\" : "<<e.what());
+double parseTo<double>(const std::string_view &s) {
+    auto S = s.data(), E = s.data()+s.size();
+    double ret{};
+    auto [remainder, ec] = std::from_chars(S, E, ret);
+    if(ec!=std::errc()) {
+        throw NoConvert(SB()<<"Not double : "<<std::quoted(s)<<" : "<<std::make_error_code(ec).message());
+    } else if(remainder!=E) {
+        for(; isspace(*remainder); remainder++) {}
+        if(remainder!=E)
+            throw NoConvert(SB()<<"Extraneous characters after double: "<<std::quoted(s)<<"");
     }
-    for(; idx<L && isspace(s[idx]); idx++) {}
-    if(idx<L)
-        throw NoConvert(SB()<<"Extraneous characters after double: \""<<escape(s)<<"\"");
     return ret;
 }
 
 template<>
-uint64_t parseTo<uint64_t>(const std::string& s) {
-    size_t idx=0, L=s.size();
-    unsigned long long ret;
-    try {
-        ret = std::stoull(s, &idx, 0);
-    }catch(std::invalid_argument& e) {
-        throw NoConvert(SB()<<"Invalid input : \""<<escape(s)<<"\"");
-    }catch(std::out_of_range& e) {
-        throw NoConvert(SB()<<"Out of range : \""<<escape(s)<<"\"");
+uint64_t parseTo<uint64_t>(const std::string_view &s) {
+    auto S = s.data(), E = s.data()+s.size();
+    uint64_t ret{};
+    auto [remainder, ec] = std::from_chars(S, E, ret);
+    if(ec!=std::errc()) {
+        throw NoConvert(SB()<<"Not uint64 : "<<std::quoted(s)<<" : "<<std::make_error_code(ec).message());
+    } else if(remainder!=E) {
+        for(; isspace(*remainder); remainder++) {}
+        if(remainder!=E)
+            throw NoConvert(SB()<<"Extraneous characters after uint64: "<<std::quoted(s)<<"");
     }
-    for(; idx<L && isspace(s[idx]); idx++) {}
-    if(idx<L)
-        throw NoConvert(SB()<<"Extraneous characters after integer: \""<<escape(s)<<"\"");
     return ret;
 }
 
 template<>
-int64_t parseTo<int64_t>(const std::string& s) {
-    size_t idx=0, L=s.size();
-    long long ret;
-    try {
-        ret = std::stoll(s, &idx, 0);
-    }catch(std::invalid_argument& e) {
-        throw NoConvert(SB()<<"Invalid input : \""<<escape(s)<<"\"");
-    }catch(std::out_of_range& e) {
-        throw NoConvert(SB()<<"Out of range : \""<<escape(s)<<"\"");
+int64_t parseTo<int64_t>(const std::string_view& s) {
+    auto S = s.data(), E = s.data()+s.size();
+    int64_t ret{};
+    auto [remainder, ec] = std::from_chars(S, E, ret);
+    if(ec!=std::errc()) {
+        throw NoConvert(SB()<<"Not int64 : "<<std::quoted(s)<<" : "<<std::make_error_code(ec).message());
+    } else if(remainder!=E) {
+        for(; isspace(*remainder); remainder++) {}
+        if(remainder!=E)
+            throw NoConvert(SB()<<"Extraneous characters after int64: "<<std::quoted(s)<<"");
     }
-    for(; idx<L && isspace(s[idx]); idx++) {}
-    if(idx<L)
-        throw NoConvert(SB()<<"Extraneous characters after unsigned: \""<<escape(s)<<"\"");
     return ret;
 }
 

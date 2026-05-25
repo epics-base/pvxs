@@ -604,8 +604,8 @@ def define_DSOS(self):
     cxx11_flags = []
     if probe.try_compile('int probefn() { auto x=1; return x; }',
                          language='c++',
-                         extra_preargs=['-std=c++11']):
-        cxx11_flags += ['-std=c++11']
+                         extra_preargs=['-std=c++17']):
+        cxx11_flags += ['-std=c++17']
 
     pvxs_abi = '%(PVXS_MAJOR_VERSION)s.%(PVXS_MINOR_VERSION)s'%pvxsversion
     event_abi = '%(EVENT_VERSION_MAJOR)s.%(EVENT_VERSION_MINOR)s.%(EVENT_VERSION_PATCH)s'%eventversion
