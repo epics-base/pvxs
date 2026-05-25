@@ -111,6 +111,10 @@ endif
 
 LIB_SYS_LIBS += $(LIBEVENT_SYS_LIBS)
 
+ifeq ($(USE_BUNDLE),YES)
+BIN_INSTALLS_WIN32 += $(wildcard $(LIBEVENT_PREFIX)/lib/*.dll)
+endif
+
 #===========================
 
 include $(TOP)/configure/RULES
