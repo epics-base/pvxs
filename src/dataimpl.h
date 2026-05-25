@@ -178,12 +178,14 @@ PVXS_API
 void from_wire_type(Buffer& buf, TypeStore& ctxt, Value& val);
 
 //! deserialize full Value
+//! depth bounds value-decode recursion (nested Any/Union/array-of-compound),
+//! mirroring the type-description builder's depth guard in from_wire(.., depth).
 PVXS_API
-void from_wire_full(Buffer& buf, TypeStore& ctxt, Value& val);
+void from_wire_full(Buffer& buf, TypeStore& ctxt, Value& val, unsigned depth=0);
 
 //! deserialize BitMask and partial Value
 PVXS_API
-void from_wire_valid(Buffer& buf, TypeStore& ctxt, Value& val);
+void from_wire_valid(Buffer& buf, TypeStore& ctxt, Value& val, unsigned depth=0);
 
 //! deserialize type description and full value (a la. pvRequest)
 PVXS_API

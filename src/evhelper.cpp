@@ -991,6 +991,15 @@ bool EvOutBuf::refill(size_t more)
 
 EvInBuf::~EvInBuf() { refill(0); }
 
+size_t EvInBuf::maxAvail() const
+{
+    // size() is only the current pulled-up window; the remainder of the
+    // (already fully accumulated) message body stays in backing until the
+    // next refill() drains the bytes consumed so far (pos-base).
+    size_t consumed = base ? size_t(pos - base) : 0u;
+    return evbuffer_get_length(backing) - consumed;
+}
+
 bool EvInBuf::refill(size_t needed)
 {
     if(err) return false;

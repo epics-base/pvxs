@@ -9,6 +9,7 @@
 
 #include <cassert>
 
+#include <algorithm>
 #include <stdexcept>
 #include <functional>
 #include <ostream>
@@ -66,9 +67,17 @@ void to_wire(Buffer& buf, const FieldDesc* cur)
     }
 }
 
+// Maximum structural nesting depth accepted by the (de)serializer.  One global
+// bound shared by the type-description builder and the value decoder: nested
+// Any/Union/array-of-compound each cost one level, and depth flows across the Any
+// boundary (the inner type is read at depth+1), so "total nesting <= this" holds by
+// construction and bounds both the recursion stack and per-message node allocation.
+// PVA structures in practice are only a few levels deep.
+static constexpr unsigned maxNestingDepth = 20u;
+
 void from_wire(Buffer& buf, std::vector<FieldDesc>& descs, TypeStore& cache, unsigned depth)
 {
-    if(!buf.good() || depth>20) {
+    if(!buf.good() || depth>maxNestingDepth) {
         buf.fault(__FILE__, __LINE__);
         return;
     }
@@ -146,7 +155,10 @@ void from_wire(Buffer& buf, std::vector<FieldDesc>& descs, TypeStore& cache, uns
             {
                 auto& fld = descs.back();
 
-                fld.miter.reserve(nfld.size);
+                // Clamp the speculative reserve to the bytes that could remain:
+                // each child costs at least one wire byte, so a larger nfld is
+                // malformed and the child loop below will fault on it.
+                fld.miter.reserve(std::min(size_t(nfld.size), buf.maxAvail()));
             }
 
             auto& cdescs = code.code==TypeCode::Struct ? descs : descs.back().members;
@@ -448,8 +460,18 @@ T from_wire_as(Buffer& buf)
 }
 
 static
-void from_wire_field(Buffer& buf, TypeStore& ctxt,  const FieldDesc* desc, const std::shared_ptr<FieldStorage>& store)
+void from_wire_field(Buffer& buf, TypeStore& ctxt,  const FieldDesc* desc, const std::shared_ptr<FieldStorage>& store, unsigned depth)
 {
+    // Enforce the shared nesting bound on the value-decode call chain (this funnels
+    // every recursive descent: Union/Any/array-of-compound re-enter via
+    // from_wire_full -> from_wire_field).  Without it a chain of Any *values* (each a
+    // single 0x82 byte) recurses once per byte and exhausts the thread stack
+    // (SIGSEGV, uncatchable).  depth flows across the Any boundary into the inner
+    // type read below, so type and value nesting share one global count.
+    if(depth>maxNestingDepth) {
+        buf.fault(__FILE__, __LINE__);
+        return;
+    }
     switch(store->code) {
     case StoreType::Null:
         switch(desc->code.code) {
@@ -459,7 +481,7 @@ void from_wire_field(Buffer& buf, TypeStore& ctxt,  const FieldDesc* desc, const
                 auto cdesc = desc + off;
                 std::shared_ptr<FieldStorage> cstore(store, store.get()+off); // TODO avoid shared_ptr/aliasing here
                 if(cdesc->code!=TypeCode::Struct) {
-                    from_wire_field(buf, ctxt, cdesc, cstore);
+                    from_wire_field(buf, ctxt, cdesc, cstore, depth);
                     cstore->valid = true;
                 }
             }
@@ -530,7 +552,7 @@ void from_wire_field(Buffer& buf, TypeStore& ctxt,  const FieldDesc* desc, const
                                                        &desc->members[desc->miter[select.index()].second]); // alias
                 fld = Value::Helper::build(stype, store, desc);
 
-                from_wire_full(buf, ctxt, fld);
+                from_wire_full(buf, ctxt, fld, depth+1);
                 return;
 
             } else { // invalid selection
@@ -542,7 +564,7 @@ void from_wire_field(Buffer& buf, TypeStore& ctxt,  const FieldDesc* desc, const
         case TypeCode::Any: {
             auto descs(std::make_shared<std::vector<FieldDesc>>());
 
-            from_wire(buf, *descs, ctxt);
+            from_wire(buf, *descs, ctxt, depth+1);
             if(!buf.good())
                 return;
 
@@ -554,7 +576,7 @@ void from_wire_field(Buffer& buf, TypeStore& ctxt,  const FieldDesc* desc, const
                 std::shared_ptr<const FieldDesc> stype(descs, descs->data()); // alias
                 fld = Value::Helper::build(stype);
 
-                from_wire_full(buf, ctxt, fld);
+                from_wire_full(buf, ctxt, fld, depth+1);
                 return;
 
             }
@@ -607,6 +629,10 @@ void from_wire_field(Buffer& buf, TypeStore& ctxt,  const FieldDesc* desc, const
         case TypeCode::StructA:{
             Size alen{};
             from_wire(buf, alen);
+            if(alen.size > buf.maxAvail()) { // each element needs >=1 validity byte
+                buf.fault(__FILE__, __LINE__);
+                return;
+            }
             shared_array<Value> arr(alen.size);
             std::shared_ptr<const FieldDesc> etype(store->top->desc,
                                                    &desc->members[0]); // alias
@@ -614,7 +640,7 @@ void from_wire_field(Buffer& buf, TypeStore& ctxt,  const FieldDesc* desc, const
                 if(from_wire_as<uint8_t>(buf)!=0) { // strictly 1 or 0
                     elem = Value::Helper::build(etype, store, desc);
 
-                    from_wire_full(buf, ctxt, elem);
+                    from_wire_full(buf, ctxt, elem, depth+1);
                 }
             }
 
@@ -624,6 +650,10 @@ void from_wire_field(Buffer& buf, TypeStore& ctxt,  const FieldDesc* desc, const
         case TypeCode::UnionA: {
             Size alen{};
             from_wire(buf, alen);
+            if(alen.size > buf.maxAvail()) { // each element needs >=1 validity byte
+                buf.fault(__FILE__, __LINE__);
+                return;
+            }
             shared_array<Value> arr(alen.size);
             auto cdesc = &desc->members[0];
 
@@ -640,7 +670,7 @@ void from_wire_field(Buffer& buf, TypeStore& ctxt,  const FieldDesc* desc, const
                                                                &cdesc->members[cdesc->miter[select.index()].second]); // alias
                         elem = Value::Helper::build(stype, store, desc);
 
-                        from_wire_full(buf, ctxt, elem);
+                        from_wire_full(buf, ctxt, elem, depth+1);
 
                     } else {
                         // invalid selector
@@ -656,13 +686,17 @@ void from_wire_field(Buffer& buf, TypeStore& ctxt,  const FieldDesc* desc, const
         case TypeCode::AnyA:{
             Size alen{};
             from_wire(buf, alen);
+            if(alen.size > buf.maxAvail()) { // each element needs >=1 validity byte
+                buf.fault(__FILE__, __LINE__);
+                return;
+            }
             shared_array<Value> arr(alen.size);
 
             for(auto& elem : arr) {
                 if(from_wire_as<uint8_t>(buf)!=0) { // strictly 1 or 0
                     auto descs(std::make_shared<std::vector<FieldDesc>>());
 
-                    from_wire(buf, *descs, ctxt);
+                    from_wire(buf, *descs, ctxt, depth+1);
                     if(!buf.good())
                         return;
 
@@ -671,7 +705,7 @@ void from_wire_field(Buffer& buf, TypeStore& ctxt,  const FieldDesc* desc, const
                         std::shared_ptr<const FieldDesc> stype(descs, descs->data()); // alias
                         elem = Value::Helper::build(stype, store, desc);
 
-                        from_wire_full(buf, ctxt, elem);
+                        from_wire_full(buf, ctxt, elem, depth+1);
                     }
                 }
             }
@@ -689,14 +723,14 @@ void from_wire_field(Buffer& buf, TypeStore& ctxt,  const FieldDesc* desc, const
     buf.fault(__FILE__, __LINE__);
 }
 
-void from_wire_full(Buffer& buf, TypeStore& ctxt, Value& val)
+void from_wire_full(Buffer& buf, TypeStore& ctxt, Value& val, unsigned depth)
 {
     assert(!!val);
 
-    from_wire_field(buf, ctxt, Value::Helper::desc(val), Value::Helper::store(val));
+    from_wire_field(buf, ctxt, Value::Helper::desc(val), Value::Helper::store(val), depth);
 }
 
-void from_wire_valid(Buffer& buf, TypeStore& ctxt, Value& val)
+void from_wire_valid(Buffer& buf, TypeStore& ctxt, Value& val, unsigned depth)
 {
     auto desc = Value::Helper::desc(val);
     auto store = Value::Helper::store(val);
@@ -720,7 +754,7 @@ void from_wire_valid(Buffer& buf, TypeStore& ctxt, Value& val)
     {
         std::shared_ptr<FieldStorage> cstore(store, store.get()+bit);
         auto cdesc = desc + bit;
-        from_wire_field(buf, ctxt, cdesc, cstore);
+        from_wire_field(buf, ctxt, cdesc, cstore, depth);
         cstore->valid = true;
         bit = valid.findSet(bit + cdesc->size());
     }

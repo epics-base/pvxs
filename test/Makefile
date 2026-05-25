@@ -83,6 +83,10 @@ TESTPROD_HOST += testmonpipe
 testmonpipe_SRCS += testmonpipe.cpp
 TESTS += testmonpipe
 
+TESTPROD_HOST += testclientconn
+testclientconn_SRCS += testclientconn.cpp
+TESTS += testclientconn
+
 TESTPROD_HOST += testput
 testput_SRCS += testput.cpp
 TESTS += testput
