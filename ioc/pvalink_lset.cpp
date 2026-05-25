@@ -267,6 +267,9 @@ long pvaGetValue(DBLINK *plink, short dbrType, void *pbuffer, long *pnRequest) n
                                    self->pfieldname);
             if(self->time) {
                 plink->precord->time = self->snap_time;
+#ifdef DBR_UTAG
+                plink->precord->utag = self->snap_tag;
+#endif
             }
             log_debug_printf(_logger, "%s: %s not valid\n", __func__, self->channelName.c_str());
             return -1;
@@ -432,6 +435,9 @@ long pvaGetValue(DBLINK *plink, short dbrType, void *pbuffer, long *pnRequest) n
 
         if(self->time) {
             plink->precord->time = self->snap_time;
+#ifdef DBR_UTAG
+            plink->precord->utag = self->snap_tag;
+#endif
         }
 
         log_debug_printf(_logger, "%s: %s %s snapalrm=%d,\"%s\" OK\n", __func__, plink->precord->name,
@@ -653,7 +659,7 @@ long pvaPutValueX(DBLINK *plink, short dbrType,
         if(!self->defer) self->lchan->put();
 
         log_debug_printf(_logger, "%s: %s %s %s\n", __func__, plink->precord->name, self->channelName.c_str(), self->lchan->root.valid() ? "valid": "not valid");
-        
+
         return 0;
     }CATCH()
     return -1;

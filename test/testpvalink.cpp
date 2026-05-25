@@ -90,7 +90,7 @@ namespace {
         testdbPutArrFieldOk("src:i1.INP$", DBF_CHAR, pv_name.length()+1, pv_name.c_str());
 
         testqsrvWaitForLinkConnected(&i1->inp);
-        
+
         testdbGetFieldEqual("src:i1.VAL", DBF_LONG, 4L); // changing link doesn't automatically process
 
         testdbPutFieldOk("src:i1.PROC", DBF_LONG, 1L);
@@ -98,7 +98,7 @@ namespace {
         testdbGetFieldEqual("src:i1.VAL", DBF_LONG, 2L); // changing link doesn't automatically process
 
     }
-    
+
     void testProc()
     {
 
@@ -646,6 +646,28 @@ namespace {
             testStrMatch(".*\'pva\': testToFromString:str1.*", cap.out());
         }
     }
+
+    // TODO:
+    // void testUTagCopy()
+    // {
+    //     testDiag("==== %s ====", __func__);
+    //     auto serv(ioc::server());
+
+    //     auto source_utag_pv(server::SharedPV::buildReadonly());
+    //     auto top = nt::NTScalar{TypeCode::Int32}.create();
+    //     top["value"] = 42;
+
+    //     // provide a timestamp and a tag value
+    //     Value ts_field(top["timeStamp"]);
+    //     ts_field["secondsPastEpoch"] = 1647059100 + POSIX_TIME_AT_EPICS_EPOCH;
+    //     ts_field["nanoseconds"] = 1;
+    //     ts_field["userTag"] = 1703812500;
+
+    //     source_utag_pv.open(top);
+    //     serv.addPV("source:utag", source_utag_pv);
+
+    //     testqsrvWaitForLinkConnected("target:utag.INP");
+    // }
 
 
 } // namespace
