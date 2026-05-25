@@ -45,7 +45,7 @@ OUTDIR="$PWD"/coverage
 install -d "$OUTDIR"
 
 # pre-process for each directory, correcting "file" relative to repo root
-for dir in src ioc
+for dir in src ioc tools
 do
     ( cd "$TDIR"/$dir/O.linux-* \
     && gcovr --gcov-ignore-parse-errors -v -r .. --json \
@@ -57,6 +57,7 @@ done
 gcovr \
  --add-tracefile "$TDIR"/src.json \
  --add-tracefile "$TDIR"/ioc.json \
+ --add-tracefile "$TDIR"/tools.json \
  --html --html-details -o "$OUTDIR"/coverage.html
 
 cd "$OUTDIR"
