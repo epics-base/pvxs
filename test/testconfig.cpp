@@ -143,6 +143,58 @@ void testDefs()
         testEq(conf.beaconDestinations, std::vector<std::string>({"1.2.1.2:1234", "4.3.2.1:1234"}));
         testEq(conf.interfaces, std::vector<std::string>({"1.1.1.1:5678", "1.2.3.4:5678"}));
     }
+
+    // an inline ";password" keychain suffix must be redacted from the
+    // effective-config defs (printed in cleartext by e.g. pvxinfo -D)
+    {
+        client::Config::defs_t defs;
+        client::Config conf;
+
+        conf.tls_keychain_file = "/path/to/client.p12;s3cret";
+        conf.updateDefs(defs);
+        testEq(defs["EPICS_PVA_TLS_KEYCHAIN"], "/path/to/client.p12");
+
+        conf.tls_keychain_file = "/path/no/pwd.p12"; // plain path passes through
+        conf.updateDefs(defs);
+        testEq(defs["EPICS_PVA_TLS_KEYCHAIN"], "/path/no/pwd.p12");
+    }
+
+    {
+        server::Config::defs_t defs;
+        server::Config conf;
+
+        conf.tls_keychain_file = "/path/to/server.p12;s3cret";
+        conf.updateDefs(defs);
+        testEq(defs["EPICS_PVA_TLS_KEYCHAIN"], "/path/to/server.p12");
+        testEq(defs["EPICS_PVAS_TLS_KEYCHAIN"], "/path/to/server.p12");
+    }
+
+    // EPICS_PVA_TLS_OPTIONS round-trips the require-TLS (disable_plaintext) flag.
+    // Default is false so the option is absent and plaintext stays permitted.
+    {
+        client::Config::defs_t defs;
+        client::Config conf;
+
+        testFalse(conf.tls_disable_plaintext); // default permits plaintext
+        conf.updateDefs(defs);
+        testEq(defs["EPICS_PVA_TLS_OPTIONS"], "");
+
+        conf.tls_disable_plaintext = true;
+        conf.updateDefs(defs);
+        testEq(defs["EPICS_PVA_TLS_OPTIONS"], "disable_plaintext=true");
+    }
+    {
+        client::Config::defs_t defs;
+        client::Config conf;
+
+        defs["EPICS_PVA_TLS_OPTIONS"] = "disable_plaintext=true";
+        conf.applyDefs(defs);
+        testTrue(conf.tls_disable_plaintext);
+
+        defs["EPICS_PVA_TLS_OPTIONS"] = "disable_plaintext=false";
+        conf.applyDefs(defs);
+        testFalse(conf.tls_disable_plaintext);
+    }
 }
 
 void testServerAuto()
@@ -209,7 +261,7 @@ void testDNS()
 
 MAIN(testconfig)
 {
-    testPlan(34);
+    testPlan(43);
     testSetup();
     testDefs();
     logger_config_env();

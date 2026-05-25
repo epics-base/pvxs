@@ -7,6 +7,8 @@
 #include <stdexcept>
 #include <fstream>
 
+#include <string.h>
+
 #include "ossl.h"
 #include <openssl/conf.h>
 #include <openssl/pkcs12.h>
@@ -382,6 +384,28 @@ const X509* SSLContext::certificate0() const
     return car->cert.get();
 }
 
+bool SSLContext::commonName(X509_NAME *name, std::string& out)
+{
+    if(!name)
+        return false;
+
+    char buf[64];
+    // X509_NAME_get_text_by_NID() copies the raw ASN1_STRING bytes of the entry
+    // and reports their length (always <= buffer-1, NUL terminated).  Treating
+    // that buffer as a C string would stop at the first embedded NUL, silently
+    // truncating e.g. "admin\0.evil" to "admin" -- the NUL-prefix identity-
+    // confusion class (cf. CVE-2009-2408).  So use the reported length and
+    // reject any value that does not round-trip through strlen().
+    int len = X509_NAME_get_text_by_NID(name, NID_commonName, buf, sizeof(buf)-1);
+    if(len <= 0)
+        return false; // absent or empty CN
+    if(size_t(len) != strlen(buf))
+        return false; // embedded NUL
+
+    out.assign(buf, size_t(len));
+    return true;
+}
+
 bool SSLContext::fill_credentials(PeerCredentials& C, const SSL *ctx)
 {
     if(!ctx)
@@ -389,26 +413,23 @@ bool SSLContext::fill_credentials(PeerCredentials& C, const SSL *ctx)
 
     if(auto cert = SSL_get0_peer_certificate(ctx)) {
         PeerCredentials temp(C); // copy current as initial (don't overwrite isTLS)
-        auto subj = X509_get_subject_name(cert);
-        char name[64];
-        if(subj && X509_NAME_get_text_by_NID(subj, NID_commonName, name, sizeof(name)-1)) {
-            name[sizeof(name)-1] = '\0';
-            log_debug_printf(_io, "Peer CN=%s\n", name);
+        std::string cn;
+        if(commonName(X509_get_subject_name(cert), cn)) {
+            log_debug_printf(_io, "Peer CN=%s\n", cn.c_str());
             temp.method = "x509";
-            temp.account = name;
+            temp.account = cn;
 
             // try to use root CA name to qualify authority
             if(auto chain = SSL_get0_verified_chain(ctx)) {
                 auto N = sk_X509_num(chain);
                 X509 *root;
-                X509_NAME *rootName;
+                std::string rootcn;
                 // last cert should be root CA
                 if(N && !!(root = sk_X509_value(chain, N-1))
-                        && !!(rootName=X509_get_subject_name(root))
-                        && X509_NAME_get_text_by_NID(rootName, NID_commonName, name, sizeof(name)-1))
+                        && commonName(X509_get_subject_name(root), rootcn))
                 {
                     if(X509_check_ca(root) && (X509_get_extension_flags(root)&EXFLAG_SS)) {
-                        temp.authority = name;
+                        temp.authority = rootcn;
 
                     } else {
                         log_warn_printf(_io, "Last cert in peer chain is not root CA?!? %s\n",

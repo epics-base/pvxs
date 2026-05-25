@@ -941,6 +941,8 @@ void procSearchReply(ContextImpl& self, const SockAddr& src, uint8_t peerVersion
     bool isTLS = proto=="tls";
     if(!self.tls_context && isTLS)
         return;
+    if(isTCP && self.effective.tls_disable_plaintext)
+        return; // require-TLS: refuse a plaintext server reply (anti-downgrade)
 #else
     const bool isTLS = false;
 #endif
@@ -1138,6 +1140,12 @@ void ContextImpl::tickSearch(SearchKind kind, bool poked)
 
 #ifdef PVXS_ENABLE_OPENSSL
         } else if(tls_context) {
+            // Always advertise "tcp" alongside "tls": a pvxs server only
+            // registers a search's PV names when "tcp" is offered (it gates
+            // name collection on protoTCP), so a tls-only search would never
+            // be answered.  A require-TLS client instead refuses a plaintext
+            // "tcp" *reply* in procSearchReply -- that is where downgrade is
+            // blocked, not in what we advertise.
             to_wire(M, uint8_t(2u));
             to_wire(M, "tls");
             to_wire(M, "tcp");

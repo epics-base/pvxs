@@ -450,6 +450,14 @@ void parseTLSOptions(ConfigCommon& conf, const std::string& options)
             } else {
                 log_warn_printf(config, "Ignore unknown TLS option value %s.  expected require or optional\n", opt.c_str());
             }
+        } else if(key=="disable_plaintext") {
+            if(val=="true") {
+                conf.tls_disable_plaintext = true;
+            } else if(val=="false") {
+                conf.tls_disable_plaintext = false;
+            } else {
+                log_warn_printf(config, "Ignore unknown TLS option value %s.  expected true or false\n", opt.c_str());
+            }
         } else {
             log_warn_printf(config, "Ignore unknown TLS option key %s\n", opt.c_str());
         }
@@ -464,7 +472,17 @@ std::string printTLSOptions(const ConfigCommon& conf)
     case ConfigCommon::Optional: opts.push_back("client_cert=optional"); break;
     case ConfigCommon::Require: opts.push_back("client_cert=require"); break;
     }
+    if(conf.tls_disable_plaintext)
+        opts.push_back("disable_plaintext=true");
     return join_addr(opts);
+}
+
+// The keychain spec may carry an inline ";password" suffix that decrypts the
+// PKCS12 private key.  That secret must never reach the effective-config defs,
+// which are dumped in cleartext (e.g. by `pvxinfo -D`), so emit only the path.
+std::string redactKeychain(const std::string& keychain)
+{
+    return keychain.substr(0, keychain.find_first_of(';'));
 }
 
 } // namespace
@@ -569,7 +587,7 @@ Config& Config::applyDefs(const std::map<std::string, std::string>& defs)
 
 void Config::updateDefs(defs_t& defs) const
 {
-    defs["EPICS_PVAS_TLS_KEYCHAIN"] = defs["EPICS_PVA_TLS_KEYCHAIN"] = SB()<<tls_keychain_file;
+    defs["EPICS_PVAS_TLS_KEYCHAIN"] = defs["EPICS_PVA_TLS_KEYCHAIN"] = redactKeychain(tls_keychain_file);
     defs["EPICS_PVAS_TLS_OPTIONS"]  = defs["EPICS_PVA_TLS_OPTIONS"] = printTLSOptions(*this);
     defs["EPICS_PVA_BROADCAST_PORT"] = defs["EPICS_PVAS_BROADCAST_PORT"] = SB()<<udp_port;
     defs["EPICS_PVA_SERVER_PORT"]    = defs["EPICS_PVAS_SERVER_PORT"]    = SB()<<tcp_port;
@@ -721,7 +739,7 @@ Config& Config::applyDefs(const std::map<std::string, std::string>& defs)
 
 void Config::updateDefs(defs_t& defs) const
 {
-    defs["EPICS_PVA_TLS_KEYCHAIN"] = SB()<<tls_keychain_file;
+    defs["EPICS_PVA_TLS_KEYCHAIN"] = redactKeychain(tls_keychain_file);
     defs["EPICS_PVA_TLS_OPTIONS"] = printTLSOptions(*this);
     defs["EPICS_PVA_BROADCAST_PORT"] = SB()<<udp_port;
     defs["EPICS_PVA_SERVER_PORT"] = SB()<<tcp_port;
