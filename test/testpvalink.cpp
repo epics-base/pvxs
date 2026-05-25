@@ -4,6 +4,7 @@
  * in file LICENSE that is included with this distribution.
  */
 
+#include "epicsTime.h"
 #include <testMain.h>
 #include <epicsExit.h>
 #include <iocsh.h>
@@ -36,6 +37,7 @@
 #include "qsrvpvt.h"
 #include "pvalink.h"
 #include "capturestd.h"
+#include "testioc.h"
 
 using namespace pvxs::ioc;
 using namespace pvxs;
@@ -647,6 +649,62 @@ namespace {
         }
     }
 
+    void testUserTag()
+    {
+        testDiag("==== %s ====", __func__);
+        auto serv(ioc::server());
+        TestClient ctxt;
+
+        // create SharedPV to manipulate userTag
+        auto srcutag_shpv(server::SharedPV::buildReadonly());
+        auto top = nt::NTScalar{TypeCode::Int32}.create();
+        top["value"] = 0;
+        top["timeStamp.secondsPastEpoch"] = 0;
+        top["timeStamp.nanoseconds"] = 0;
+        top["timeStamp.userTag"] = 0;
+        srcutag_shpv.open(top);
+        serv.addPV("source:utag", srcutag_shpv);
+
+        // routine check if link is connected
+        testqsrvWaitForLinkConnected("target:utag.INP");
+
+        // publish update to be reflected in target:utag
+        {
+            auto update = top.cloneEmpty();
+            update["value"] = 42;
+            update["timeStamp.secondsPastEpoch"] = 0x12345678;
+            update["timeStamp.nanoseconds"] = 0x10203040;
+            update["timeStamp.userTag"] = 0x90010002;
+            QSrvWaitForLinkUpdate A("target:utag.INP");
+            srcutag_shpv.post(update);
+        }
+
+        // Check if record was updated with timeStamp + userTag from link
+        auto prec(testdbRecordPtr("target:utag"));
+        {
+            ioc::DBLocker L(prec);
+            testEq(prec->time.secPastEpoch, (0x12345678u-POSIX_TIME_AT_EPICS_EPOCH));
+            testEq(prec->time.nsec, 0x10203040u);
+#if DBR_UTAG
+            testEq(prec->utag, 0x90010002u);
+#else
+            testSkip(1, "No UTAG");
+#endif
+        }
+
+        // get PV from target:utag and verify if timeStamp is the same from source:utag
+        auto val(ctxt.get("target:utag").exec()->wait(5.0));
+        testEq(val["value"].as<int32_t>(), 42);
+        testEq(val["timeStamp.secondsPastEpoch"].as<int64_t>(), 0x12345678);
+        testEq(val["timeStamp.nanoseconds"].as<int32_t>(), 0x10203040);
+#if DBR_UTAG
+        testEq(val["timeStamp.userTag"].as<int32_t>(), (int32_t)0x90010002);
+#else
+        testSkip(1, "No UTAG");
+#endif
+        ctxt.close();
+    }
+
 
 } // namespace
 
@@ -654,7 +712,7 @@ extern "C" void testioc_registerRecordDeviceDriver(struct dbBase *);
 
 MAIN(testpvalink)
 {
-    testPlan(106);
+    testPlan(113);
     testSetup();
     pvxs::logger_config_env();
 
@@ -687,6 +745,7 @@ MAIN(testpvalink)
         testEnum();
         testNTNDArray();
         testiocsh();
+        testUserTag();
     }
     catch (std::exception &e)
     {

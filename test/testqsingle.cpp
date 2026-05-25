@@ -56,7 +56,7 @@ void forceUTAG(const char *rec)
 {
     dbCommon *prec = testdbRecordPtr(rec);
     dbScanLock(prec);
-#ifdef DBR_UTAG
+#if DBR_UTAG
     prec->utag = 42;
 #endif
     dbScanUnlock(prec);
@@ -64,7 +64,7 @@ void forceUTAG(const char *rec)
 
 void checkUTAG(Value& v, int32_t expect=42)
 {
-#ifdef DBR_UTAG
+#if DBR_UTAG
     auto utag = v["timeStamp.userTag"];
     if(!utag.isMarked() || utag.as<int32_t>()!=expect)
         testFail("userTag not set");
@@ -278,7 +278,7 @@ void testGetScalar()
     forceUTAG("test:nsec"); // forced value should be ignored
 
     val = ctxt.get("test:nsec").exec()->wait(5.0);
-#ifdef DBR_UTAG
+#if DBR_UTAG
     testFldEq(val, "timeStamp.userTag", 142);
     val["timeStamp.userTag"].unmark();
 #else

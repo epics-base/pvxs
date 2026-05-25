@@ -4,6 +4,7 @@
  * in file LICENSE that is included with this distribution.
  */
 
+#include <cstdint>
 #include <epicsString.h>
 #include <alarm.h>
 #include <recGbl.h>
@@ -267,6 +268,9 @@ long pvaGetValue(DBLINK *plink, short dbrType, void *pbuffer, long *pnRequest) n
                                    self->pfieldname);
             if(self->time) {
                 plink->precord->time = self->snap_time;
+#if DBR_UTAG
+                plink->precord->utag = self->snap_tag;
+#endif
             }
             log_debug_printf(_logger, "%s: %s not valid\n", __func__, self->channelName.c_str());
             return -1;
@@ -404,7 +408,8 @@ long pvaGetValue(DBLINK *plink, short dbrType, void *pbuffer, long *pnRequest) n
         }
 
         if(self->fld_usertag) {
-            self->snap_tag = self->fld_usertag.as<epicsUTag>();
+            // convert to uint32_t to avoid sign extension (Normative Types defines userTag as 32 bits)
+            self->snap_tag = self->fld_usertag.as<uint32_t>();
         } else {
             self->snap_tag = 0;
         }
@@ -432,6 +437,9 @@ long pvaGetValue(DBLINK *plink, short dbrType, void *pbuffer, long *pnRequest) n
 
         if(self->time) {
             plink->precord->time = self->snap_time;
+#if DBR_UTAG
+            plink->precord->utag = self->snap_tag;
+#endif
         }
 
         log_debug_printf(_logger, "%s: %s %s snapalrm=%d,\"%s\" OK\n", __func__, plink->precord->name,
