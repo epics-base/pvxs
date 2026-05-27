@@ -224,3 +224,8 @@ record(aai, "target:ntndarray_inp") {
     field(NELM, "5")
     field(FTVL, "FLOAT")
 }
+
+record(longin, "target:utag") {
+    field(INP, {pva:{pv:"source:utag", time:true, proc:"CP"}})
+    field(TSE, "-2")
+}
