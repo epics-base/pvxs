@@ -267,7 +267,7 @@ long pvaGetValue(DBLINK *plink, short dbrType, void *pbuffer, long *pnRequest) n
                                    self->pfieldname);
             if(self->time) {
                 plink->precord->time = self->snap_time;
-#ifdef DBR_UTAG
+#if DBR_UTAG
                 plink->precord->utag = self->snap_tag;
 #endif
             }
@@ -435,7 +435,7 @@ long pvaGetValue(DBLINK *plink, short dbrType, void *pbuffer, long *pnRequest) n
 
         if(self->time) {
             plink->precord->time = self->snap_time;
-#ifdef DBR_UTAG
+#if DBR_UTAG
             plink->precord->utag = self->snap_tag;
 #endif
         }

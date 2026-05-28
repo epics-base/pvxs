@@ -685,7 +685,7 @@ namespace {
             ioc::DBLocker L(prec);
             testEq(prec->time.secPastEpoch, (0x12345678-POSIX_TIME_AT_EPICS_EPOCH));
             testEq(prec->time.nsec, 0x10203040);
-#ifdef DBR_UTAG
+#if DBR_UTAG
             testEq(prec->utag, 0x00010002);
 #else
             testSkip(1, "No UTAG");
@@ -697,7 +697,7 @@ namespace {
         testEq(val["value"].as<int32_t>(), 42);
         testEq(val["timeStamp.secondsPastEpoch"].as<int64_t>(), 0x12345678);
         testEq(val["timeStamp.nanoseconds"].as<int32_t>(), 0x10203040);
-#ifdef DBR_UTAG
+#if DBR_UTAG
         testEq(val["timeStamp.userTag"].as<int32_t>(), 0x00010002);
 #else
         testSkip(1, "No UTAG");

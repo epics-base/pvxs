@@ -40,7 +40,7 @@ int testTimeCurrent(epicsTimeStamp *pDest)
 
 void checkUTAG(Value& v, int32_t expect, const char *fld="timeStamp.userTag")
 {
-#ifdef DBR_UTAG
+#if DBR_UTAG
     auto utag = v[fld];
     int32_t tag = -1;
     if(!utag.isMarked() || (tag = utag.as<int32_t>())!=expect)
