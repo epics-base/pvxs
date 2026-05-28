@@ -674,7 +674,7 @@ namespace {
             update["value"] = 42;
             update["timeStamp.secondsPastEpoch"] = 0x12345678;
             update["timeStamp.nanoseconds"] = 0x10203040;
-            update["timeStamp.userTag"] = 0x00010002;
+            update["timeStamp.userTag"] = 0x90010002;
             srcutag_shpv.post(update);
             QSrvWaitForLinkUpdate A("target:utag.INP");
         }
@@ -686,7 +686,7 @@ namespace {
             testEq(prec->time.secPastEpoch, (0x12345678-POSIX_TIME_AT_EPICS_EPOCH));
             testEq(prec->time.nsec, 0x10203040);
 #if DBR_UTAG
-            testEq(prec->utag, 0x00010002);
+            testEq(prec->utag, 0x90010002);
 #else
             testSkip(1, "No UTAG");
 #endif
@@ -698,7 +698,7 @@ namespace {
         testEq(val["timeStamp.secondsPastEpoch"].as<int64_t>(), 0x12345678);
         testEq(val["timeStamp.nanoseconds"].as<int32_t>(), 0x10203040);
 #if DBR_UTAG
-        testEq(val["timeStamp.userTag"].as<int32_t>(), 0x00010002);
+        testEq(val["timeStamp.userTag"].as<int32_t>(), 0x90010002);
 #else
         testSkip(1, "No UTAG");
 #endif
