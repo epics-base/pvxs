@@ -562,7 +562,7 @@ void test_cache_sync()
 
 MAIN(testdata)
 {
-    testPlan(193);
+    testPlan(195);
     testSetup();
     testTraverse();
     testAssign();
@@ -610,6 +610,7 @@ MAIN(testdata)
 #endif
     testConvertScalar2<int32_t, uint64_t, int64_t>(-2147483648, 0x80000000, -2147483648);
     testTodoEnd();
+    testConvertScalar2<int32_t, int32_t, uint64_t>(-2147483648, -2147483648, 0xffffffff80000000llu);
     testConvertScalar2<int32_t, uint64_t, int64_t>(0, 0x100000000llu, -0);
     testTodoBegin("UB");
     // test non-finite -> integer casts
