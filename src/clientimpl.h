@@ -107,6 +107,8 @@ struct Connection final : public ConnBase, public std::enable_shared_from_this<C
 
     uint32_t nextIOID = 0x10002000u;
 
+    epicsTime connTime;
+
     INST_COUNTER(Connection);
 
     Connection(const std::shared_ptr<ContextImpl>& context,
@@ -162,8 +164,8 @@ struct ConnectImpl final : public Connect
     std::shared_ptr<Channel> chan;
     const std::string _name;
     std::atomic<bool> _connected;
-    std::function<void()> _onConn;
-    std::function<void()> _onDis;
+    std::function<void(const Connected&)> _onConn;
+    std::function<void(const Disconnect&)> _onDis;
 
     ConnectImpl(const evbase& loop, const std::string& name)
         :loop(loop)
@@ -174,6 +176,7 @@ struct ConnectImpl final : public Connect
 
     virtual const std::string &name() const override final;
     virtual bool connected() const override final;
+    virtual std::string peerName() const override final;
 };
 
 struct Channel {

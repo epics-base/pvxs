@@ -143,6 +143,7 @@ void Connection::bevEvent(short events)
 
     if(bev && (events&BEV_EVENT_CONNECTED)) {
         log_debug_printf(io, "Connected to %s\n", peerName.c_str());
+        connTime = epicsTime::getCurrent();
 
         {
             // after async connect() to avoid winsock specific race.
@@ -398,9 +399,10 @@ void Connection::handle_CREATE_CHANNEL()
 
         auto conns(chan->connectors); // copy list
 
+        struct Connected connEvt(peerName, connTime);
         for(auto& conn : conns) {
             if(!conn->_connected.exchange(true, std::memory_order_relaxed) && conn->_onConn)
-                conn->_onConn();
+                conn->_onConn(connEvt);
         }
     }
 }
