@@ -88,10 +88,15 @@ RemoteError::~RemoteError() {}
 
 Finished::~Finished() {}
 
-Connected::Connected(const std::string& peerName)
+Connected::Connected(const std::string &peerName)
+    :Connected(peerName, epicsTime::getCurrent()) // legacy
+{}
+
+Connected::Connected(const std::string& peerName,
+                     const epicsTime& time)
     :std::runtime_error("Connected")
     ,peerName(peerName)
-    ,time(epicsTime::getCurrent())
+    ,time(time)
 {}
 
 Connected::~Connected() {}
@@ -190,9 +195,10 @@ void Channel::disconnect(const std::shared_ptr<Channel>& self)
 
     auto conns(connectors); // copy list
 
+    Disconnect evt;
     for(auto& interested : conns) {
         if(interested->_connected.exchange(false, std::memory_order_relaxed) && interested->_onDis)
-            interested->_onDis();
+            interested->_onDis(evt);
     }
 
     auto ops(std::move(opByIOID));
@@ -239,6 +245,15 @@ bool ConnectImpl::connected() const
 {
     return _connected.load(std::memory_order_relaxed);
 }
+std::string ConnectImpl::peerName() const
+{
+    std::string ret;
+    loop.call([this, &ret](){
+        if(chan && chan->conn && chan->conn->state==ConnBase::Connected)
+            ret = chan->conn->peerName;
+    });
+    return ret;
+}
 
 std::shared_ptr<Connect> ConnectBuilder::exec()
 {
@@ -274,10 +289,13 @@ std::shared_ptr<Connect> ConnectBuilder::exec()
         op->chan = Channel::build(context, op->_name, server);
 
         bool cur = op->_connected = op->chan->state==Channel::Active;
-        if(cur && op->_onConn)
-            op->_onConn();
-        else if(!cur && op->_onDis)
-            op->_onDis();
+        if(cur && op->_onConn) {
+            auto& conn = op->chan->conn;
+            Connected evt(conn->peerName, conn->connTime);
+            op->_onConn(evt);
+        } else if(!cur && op->_onDis) {
+            op->_onDis(Disconnect());
+        }
 
         op->chan->connectors.push_back(op.get());
     });

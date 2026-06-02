@@ -54,13 +54,17 @@ struct PVXS_API Finished : public Disconnect
     virtual ~Finished();
 };
 
-//! For monitor only.  Subscription has (re)connected.
+//! Indication of connection to a server
 struct PVXS_API Connected : public std::runtime_error
 {
     Connected(const std::string& peerName);
+    Connected(const std::string& peerName,
+              const epicsTime& time);
     virtual ~Connected();
 
+    //! Server IP address
     const std::string peerName;
+    //! Local time of connection
     const epicsTime time;
 };
 
@@ -276,6 +280,13 @@ struct PVXS_API Connect {
     virtual const std::string& name() const =0;
     //! Poll (momentary) connection status
     virtual bool connected() const =0;
+    /** Poll (momentary) peer name
+     *
+     * @returns An empty string when not connected,
+     *          or the rendered numeric address (IP4 or 6).
+     * @since UNRELEASED
+     */
+    virtual std::string peerName() const =0;
 };
 
 class GetBuilder;
@@ -925,8 +936,8 @@ class ConnectBuilder
     std::shared_ptr<Context::Pvt> ctx;
     std::string _pvname;
     std::string _server;
-    std::function<void()> _onConn;
-    std::function<void()> _onDis;
+    std::function<void(const Connected&)> _onConn;
+    std::function<void(const Disconnect&)> _onDis;
     bool _syncCancel = true;
 public:
     ConnectBuilder() {}
@@ -936,9 +947,24 @@ public:
     {}
 
     //! Handler to be invoked when channel becomes connected.
-    ConnectBuilder& onConnect(std::function<void()>&& cb) { _onConn = std::move(cb); return *this; }
+    //! @since UNRELEASED
+    ConnectBuilder& onConnect(std::function<void(const Connected&)>&& cb)
+    { _onConn = std::move(cb); return *this; }
+    //! Handler to be invoked when channel becomes connected.
+    //! @since UNRELEASED Prefer void(const Connected&) in new code.
+    ConnectBuilder& onConnect(std::function<void()>&& cb)
+    {
+        _onConn = [cb](const Connected&) { cb(); };
+        return *this;
+    }
     //! Handler to be invoked when channel becomes disconnected.
-    ConnectBuilder& onDisconnect(std::function<void()>&& cb) { _onDis = std::move(cb); return *this; }
+    ConnectBuilder& onDisconnect(std::function<void(const Disconnect&)>&& cb)
+    { _onDis = std::move(cb); return *this; }
+    ConnectBuilder& onDisconnect(std::function<void()>&& cb)
+    {
+        _onDis = [cb](const Disconnect&) { cb(); };
+        return *this;
+    }
 
     /** Controls whether Connect::~Connect() synchronizes.
      *
