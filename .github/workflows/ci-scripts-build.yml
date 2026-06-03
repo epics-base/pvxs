@@ -152,7 +152,7 @@ jobs:
             extra: "CMD_CXXFLAGS=-analyze"
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
       with:
         submodules: true
     - name: "apt-get install"
@@ -209,7 +209,7 @@ jobs:
       run: grep . cfg/*
     - name: Upload tapfiles Artifact
       if: ${{ always() }}
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: tapfiles ${{ matrix.name }}
         path: '**/O.*/*.tap'
@@ -243,7 +243,7 @@ jobs:
             base: "7.0"
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v6
       with:
         submodules: true
 

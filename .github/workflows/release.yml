@@ -15,7 +15,7 @@ jobs:
       PVXS_LOG: pvxs.*=WARN
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
       with:
         fetch-depth: "0"
         submodules: true
@@ -33,7 +33,7 @@ jobs:
       run: python .ci/cue.py exec ./coverage.sh
 
     - name: Upload Coverage
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         retention-days: 7
         name: coverage
@@ -44,7 +44,7 @@ jobs:
 
     - name: Upload ABI
       if: ${{ always() }}
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         retention-days: 7
         name: abi-diff
