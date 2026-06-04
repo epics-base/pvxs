@@ -14,7 +14,7 @@ Release Notes
 * ioc: Fix const field in non-atomic group get (Sang Woo Kim)
 * ioc: put fix permissions with non-atomic group (Sang Woo Kim)
 * ioc: SecurityLogger must restore dbChannel addr.pfield (Sang Woo Kim)
-* ioc: pvalink propagate userTag (Sang Woo Kim)
+* ioc: pvalink propagate userTag (Joao Paulo Martins, Sang Woo Kim)
 * ioc: fix single PUT with 'record[block=true, process=true]'
 
 1.5.1 (Feb 2026)
