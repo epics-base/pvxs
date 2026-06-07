@@ -257,7 +257,7 @@ struct PVXS_API evsocket
     SockAddr sockname() const;
 
     // test validity
-    inline operator bool() const { return sock!=-1; }
+    inline operator bool() const { return sock!=EVUTIL_INVALID_SOCKET; }
 
     void bind(const SockAddr& addr) const;
     void bind(SockAddr& addr) const;
