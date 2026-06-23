@@ -21,7 +21,7 @@ Discovery::Discovery(const std::shared_ptr<ContextImpl> &context, const std::str
 {}
 
 Discovery::~Discovery() {
-    if(loop.assertInRunningLoop())
+    if(onWorker && loop.assertInRunningLoop())
         _cancel(true);
 }
 
@@ -81,6 +81,8 @@ std::shared_ptr<Operation> DiscoverBuilder::exec()
     // setup timer to send discovery
 
     context->tcp_loop.dispatch([op, context, ping]() {
+        // on worker
+        op->onWorker = true;
 
         if(context->state!=ContextImpl::Running)
             throw std::logic_error("Context close()d");

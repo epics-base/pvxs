@@ -138,7 +138,7 @@ struct GPROp : public OperationBase
         :OperationBase (op, loop, name)
     {}
     ~GPROp() {
-        if(loop.assertInRunningLoop())
+        if(onWorker && loop.assertInRunningLoop())
             _cancel(true);
     }
 
@@ -605,6 +605,7 @@ std::shared_ptr<Operation> gpr_setup(const std::shared_ptr<ContextImpl>& context
 
     context->tcp_loop.dispatch([internal, context, name, server]() {
         // on worker
+        internal->onWorker = true;
 
         try {
             internal->chan = Channel::build(context, name, server);

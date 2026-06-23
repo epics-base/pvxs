@@ -84,7 +84,7 @@ struct SubscriptionImpl final : public OperationBase, public Subscription
                  event_new(loop.base, -1, EV_TIMEOUT, &tickAckS, this))
     {}
     virtual ~SubscriptionImpl() {
-        if(loop.assertInRunningLoop())
+        if(onWorker && loop.assertInRunningLoop())
             _cancel(true);
     }
 
@@ -830,6 +830,7 @@ std::shared_ptr<Subscription> MonitorBuilder::exec()
     auto server(std::move(_server));
     context->tcp_loop.dispatch([op, context, server]() {
         // on worker
+        op->onWorker = true;
 
         try {
             op->chan = Channel::build(context, op->channelName, server);
