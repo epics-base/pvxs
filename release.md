@@ -1,5 +1,6 @@
 # Preparation
 
+1. Check https://www.githubstatus.com/
 1. Check that candidate revision passes all GHA jobs.
 1. Review ABI change report from previous release tag to latest commit.
    Ensure `PVXS_MINOR_VERSION` incrementes if not 100% (or if other ABI change
