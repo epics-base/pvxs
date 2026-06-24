@@ -3,8 +3,8 @@
 Release Notes
 =============
 
-1.5.2 (UNRELEASED)
-------------------
+1.5.2 (Jun 2026)
+----------------
 
 * interpret monitor ackAny percentage as a fraction (Sang Woo Kim)
 * client: query user/host name once on Context creation.
