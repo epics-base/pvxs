@@ -10,7 +10,7 @@ jobs:
       SET: defaults
       CMP: gcc
       BCFG: default
-      BASE: "R7.0.10"
+      BASE: "7.0"
       _PVXS_ABORT_ON_CRIT: 1
       PVXS_LOG: pvxs.*=WARN
 
