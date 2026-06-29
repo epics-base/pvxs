@@ -40,8 +40,8 @@ std::ostream& operator<<(std::ostream& strm, const PeerCredentials& cred)
         strm<<"TLS ";
     strm<<cred.method;
     if(!cred.authority.empty())
-        strm<<":"<<cred.authority;
-    strm<<"/"<<cred.account<<"@"<<cred.peer;
+        strm<<":"<<maybeQuote(cred.authority);
+    strm<<"/"<<maybeQuote(cred.account)<<"@"<<cred.peer;
     return strm;
 }
 
