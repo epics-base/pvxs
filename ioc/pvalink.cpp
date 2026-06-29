@@ -175,9 +175,9 @@ QSrvWaitForLinkUpdate::~QSrvWaitForLinkUpdate()
             ok = lchan->update_evt.wait(5.0);
         }
         if(!ok)
-            testAbort("%s(\"%s\") timeout at %u", __func__, plink->precord->name, seq);
+            testAbort("%s(\"%s\") timeout at %u", __func__, plink->precord->name, lchan->update_seq);
         errlogFlush();
-        testDiag("%s(\"%s\") wake at %u", __func__, plink->precord->name, seq);
+        testDiag("%s(\"%s\") wake at %u", __func__, plink->precord->name, lchan->update_seq);
     }
 }
 
