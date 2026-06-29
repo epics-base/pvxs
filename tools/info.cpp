@@ -76,7 +76,7 @@ int main(int argc, char *argv[])
         auto ctxt(client::Context::fromEnv());
 
         if(verbose)
-            std::cout<<"Effective config\n"<<ctxt.config();
+            std::cerr<<"Effective config\n"<<ctxt.config();
 
         std::list<std::shared_ptr<client::Operation>> ops;
 
@@ -92,8 +92,9 @@ int main(int argc, char *argv[])
                                   std::cout<<" from "<<result.peerName()<<"\n"<<result()
                                              .format()
                                              .showValue(false);
+                                  std::cout.flush();
                               }catch(std::exception& e){
-                                  std::cout<<" Error: "<<e.what()<<"\n";
+                                  std::cout<<" Error: "<<e.what()<<std::endl;
                               }
 
                               if(remaining.fetch_sub(1)==1)

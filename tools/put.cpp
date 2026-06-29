@@ -113,7 +113,7 @@ int REALMAIN(int argc, char *argv[])
         auto ctxt(client::Context::fromEnv());
 
         if(verbose)
-            std::cout<<"Effective config\n"<<ctxt.config();
+            std::cerr<<"Effective config\n"<<ctxt.config();
 
         epicsEvent done;
         int ret=0;
@@ -143,7 +143,7 @@ int REALMAIN(int argc, char *argv[])
                     if(verbose) {
                         std::cout<<"Writing fields:\n";
                         Indented I(std::cout);
-                        std::cout<<val.format().delta()<<"\n";
+                        std::cout<<val.format().delta()<<std::endl;
                     }
                     return val;
                 })

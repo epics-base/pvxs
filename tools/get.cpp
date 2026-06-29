@@ -97,7 +97,7 @@ int main(int argc, char *argv[])
         auto ctxt(client::Context::fromEnv());
 
         if(verbose)
-            std::cout<<"Effective config\n"<<ctxt.config();
+            std::cerr<<"Effective config\n"<<ctxt.config();
 
         std::list<std::shared_ptr<client::Operation>> ops;
 
@@ -115,6 +115,7 @@ int main(int argc, char *argv[])
                                          .format()
                                          .format(format)
                                          .arrayLimit(arrLimit);
+                              std::cout.flush();
 
                               if(remaining.fetch_sub(1)==1)
                                   done.signal();

@@ -108,7 +108,7 @@ int main(int argc, char *argv[])
         auto ctxt(client::Context::fromEnv());
 
         if(verbose)
-            std::cout<<"Effective config\n"<<ctxt.config();
+            std::cerr<<"Effective config\n"<<ctxt.config();
 
         // space for every subscription and one more for SigInt
         MPMCFIFO<std::shared_ptr<client::Subscription>> workqueue(argc-optind+1);
@@ -157,6 +157,7 @@ int main(int argc, char *argv[])
                 std::cout<<update.format()
                            .format(format)
                            .arrayLimit(arrLimit);
+                std::cout.flush();
 
             }catch(client::Finished& conn) {
                 log_info_printf(app, "%s POP Finished\n", name.c_str());

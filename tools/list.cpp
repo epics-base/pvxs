@@ -173,7 +173,7 @@ int main(int argc, char *argv[])
                                   if(top["implLang"].as(temp)) {
                                       std::cout<<" lang=\""<<escape(temp)<<"\"";
                                   };
-                                  std::cout<<"\n";
+                                  std::cout<<std::endl;
 
                               } else { // channels
                                   if(verbose)

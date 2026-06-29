@@ -120,7 +120,7 @@ int main(int argc, char *argv[])
         auto ctxt(client::Context::fromEnv());
 
         if(verbose)
-            std::cout<<"Effective config\n"<<ctxt.config();
+            std::cerr<<"Effective config\n"<<ctxt.config();
 
         epicsEvent done;
         int ret=2;
@@ -131,6 +131,7 @@ int main(int argc, char *argv[])
                 auto val = result();
                 if(val)
                     std::cout<<val;
+                std::cout.flush();
                 ret=0;
             }catch(std::exception& e){
                 std::cerr<<ERL_ERROR " "<<typeid(e).name()<<" : "<<e.what()<<"\n";
