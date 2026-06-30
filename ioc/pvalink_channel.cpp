@@ -412,10 +412,6 @@ void pvaLinkChannel::run()
 
             links_changed = false;
         }
-
-        update_seq++;
-        update_evt.signal();
-        log_debug_printf(_logger, "%s Sequence point %u\n", key.first.c_str(), update_seq);
     }
     // unlock link
 
@@ -429,6 +425,13 @@ void pvaLinkChannel::run()
     for(auto& trac : nonatomic_records) {
         ioc::DBLocker L(trac.prec);
         trac.scan();
+    }
+
+    {
+        Guard G(lock);
+        update_seq++;
+        update_evt.signal();
+        log_debug_printf(_logger, "%s Sequence point %u\n", key.first.c_str(), update_seq);
     }
 
     log_debug_printf(_logger, "Requeueing %s\n", key.first.c_str());
