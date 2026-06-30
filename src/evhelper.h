@@ -309,6 +309,8 @@ struct PVXS_API IfaceMap {
     static
     void cleanup();
 
+    uint64_t revision() const { return generation; }
+
     // return true if ifindex is valid, and addr an interface address assigned to it.
     bool has_address(uint64_t ifindex, const SockAddr& addr) const;
     // lookup interface name by index
@@ -345,12 +347,17 @@ struct PVXS_API IfaceMap {
         std::map<std::string, Iface*> byName;
         // map address to tuple of interface and broadcast?
         std::multimap<SockAddr, std::pair<Iface*, bool>, SockAddrOnlyLess> byAddr;
+
+        bool same(const Current& o) const;
     };
     std::shared_ptr<const Current> current;
+    uint64_t generation = 0u;
 
     IfaceMap() = default;
     IfaceMap(const IfaceMap&) = default;
     IfaceMap(std::shared_ptr<const Current>&& cur) : current(std::move(cur)) {}
+    IfaceMap(std::shared_ptr<const Current>&& cur, uint64_t generation)
+        : current(std::move(cur)), generation(generation) {}
     static
     std::shared_ptr<const Current> refresh();
 private:
