@@ -117,13 +117,13 @@ int main(int argc, char *argv[])
             query[pair.first] = pair.second;
         }
 
+        epicsEvent done;
+        int ret=2;
+
         auto ctxt(client::Context::fromEnv());
 
         if(verbose)
             std::cerr<<"Effective config\n"<<ctxt.config();
-
-        epicsEvent done;
-        int ret=2;
 
         auto op =ctxt.rpc(pvname, arg)
                      .result([&ret, &done](client::Result&& result) {

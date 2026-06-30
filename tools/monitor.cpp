@@ -105,13 +105,14 @@ int main(int argc, char *argv[])
             }
         }
 
+        // space for every subscription and one more for SigInt
+        MPMCFIFO<std::shared_ptr<client::Subscription>> workqueue(argc-optind+1);
+
         auto ctxt(client::Context::fromEnv());
 
         if(verbose)
             std::cerr<<"Effective config\n"<<ctxt.config();
 
-        // space for every subscription and one more for SigInt
-        MPMCFIFO<std::shared_ptr<client::Subscription>> workqueue(argc-optind+1);
         std::list<decltype (workqueue)::value_type> ops;
 
         int remaining = argc-optind;
@@ -125,6 +126,9 @@ int main(int argc, char *argv[])
                           .maskDisconnected(false)
                           .event([&workqueue](client::Subscription& mon)
                             {
+                                // shared_from_this() references will
+                                // not prevent cancellation when "ops"
+                                // goes out of scope.
                                 workqueue.push(mon.shared_from_this());
                             })
                           .exec());

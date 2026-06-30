@@ -73,15 +73,15 @@ int main(int argc, char *argv[])
             }
         }
 
+        std::atomic<int> remaining{argc-optind};
+        epicsEvent done;
+
         auto ctxt(client::Context::fromEnv());
 
         if(verbose)
             std::cerr<<"Effective config\n"<<ctxt.config();
 
         std::list<std::shared_ptr<client::Operation>> ops;
-
-        std::atomic<int> remaining{argc-optind};
-        epicsEvent done;
 
         for(auto n : range(optind, argc)) {
 

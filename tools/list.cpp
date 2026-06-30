@@ -112,10 +112,12 @@ int main(int argc, char *argv[])
             return 1;
         }
 
+        epicsEvent done;
+        std::atomic<int> remaining{argc-optind}; // query mode only
+
         auto ctxt(client::Context::fromEnv());
         auto conf = ctxt.config();
 
-        epicsEvent done;
         SigInt H([&done]() {
             done.signal();
         });
@@ -152,8 +154,6 @@ int main(int argc, char *argv[])
                           .exec());
 
         } else { // query mode, fetch info from specific servers
-
-            std::atomic<int> remaining{argc-optind};
 
             for(auto n : range(optind, argc)) {
                 ops.push_back(ctxt.rpc("server")

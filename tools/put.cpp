@@ -109,14 +109,13 @@ int REALMAIN(int argc, char *argv[])
             }
         }
 
+        epicsEvent done;
+        int ret=0;
 
         auto ctxt(client::Context::fromEnv());
 
         if(verbose)
             std::cerr<<"Effective config\n"<<ctxt.config();
-
-        epicsEvent done;
-        int ret=0;
 
         auto op =ctxt.put(pvname)
                 .pvRequest(request)
