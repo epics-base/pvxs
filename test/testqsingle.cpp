@@ -273,36 +273,6 @@ void testGetScalar()
 
     testFldEq<std::string>(ctxt.get("test:src.INP$").exec()->wait(5.0),
                            "value", "test:this:is:a:really:really:long:record:name NPP NMS");
-
-    testdbPutFieldOk("test:nsec.PROC", DBF_LONG, 0);
-    forceUTAG("test:nsec"); // forced value should be ignored
-
-    val = ctxt.get("test:nsec").exec()->wait(5.0);
-#if DBR_UTAG
-    testFldEq(val, "timeStamp.userTag", 142);
-    val["timeStamp.userTag"].unmark();
-#else
-    testSkip(1, "not UTAG");
-#endif
-    testStrEq(std::string(SB()<<val.format().delta()),
-              "value int32_t = 100\n"
-              "alarm.severity int32_t = 0\n"
-              "alarm.status int32_t = 0\n"
-              "alarm.message string = \"\"\n"
-              "timeStamp.secondsPastEpoch int64_t = 643497678\n"
-              "timeStamp.nanoseconds int32_t = 101888\n"
-              "display.limitLow int32_t = 0\n"
-              "display.limitHigh int32_t = 0\n"
-              "display.description string = \"\"\n"
-              "display.units string = \"\"\n"
-              "display.form.index int32_t = 0\n"
-              "display.form.choices string[] = {7}[\"Default\", \"String\", \"Binary\", \"Decimal\", \"Hex\", \"Exponential\", \"Engineering\"]\n"
-              "control.limitLow int32_t = 0\n"
-              "control.limitHigh int32_t = 0\n"
-              "valueAlarm.lowAlarmLimit int32_t = 0\n"
-              "valueAlarm.lowWarningLimit int32_t = 0\n"
-              "valueAlarm.highWarningLimit int32_t = 0\n"
-              "valueAlarm.highAlarmLimit int32_t = 0\n");
 }
 
 void testLongString()
@@ -967,7 +937,7 @@ void testiocsh(TestClient& ctxt)
         testStrEq(cap.err(), "");
         testStrMatch(".*EPICS_PVAS_AUTO_BEACON_ADDR_LIST=NO.*", cap.out());
         testStrMatch(".*Source: __server.*", cap.out());
-        testStrMatch(".*test:nsec.*", cap.out());
+        testStrMatch(".*test:ai.*", cap.out());
         testStrMatch(".*State: Running TCP_Port:.*", cap.out());
         testStrMatch(".*test:ai TX=.*", cap.out());
     }
@@ -1002,7 +972,7 @@ void testiocsh(TestClient& ctxt)
 
 MAIN(testqsingle)
 {
-    testPlan(113);
+    testPlan(110);
     testSetup();
     pvxs::logger_config_env();
     generalTimeRegisterCurrentProvider("test", 1, &testTimeCurrent);

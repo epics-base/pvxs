@@ -7,14 +7,8 @@
  *
  */
 
-#include <string.h>
-
 #include <pvxs/source.h>
 
-#include <dbStaticLib.h>
-#include <epicsStdlib.h>
-
-#include "dbentry.h"
 #include "fielddefinition.h"
 #include "typeutils.h"
 
@@ -76,17 +70,6 @@ const char *MappingInfo::name(type_t t)
     return "<invalid>";
 }
 
-void MappingInfo::updateNsecMask(dbCommon *prec)
-{
-    assert(prec);
-    DBEntry ent(prec);
-    if(auto val = ent.info("Q:time:tag")) {
-        epicsInt32 dig = 0;
-        if(strncmp(val, "nsec:lsb:", 9)==0 && !epicsParseInt32(&val[9], &dig, 10, nullptr)) {
-            nsecMask = (uint64_t(1u)<<dig)-1u;
-        }
-    }
-}
 } // namespace ioc
 
 } // namespace pvxs
