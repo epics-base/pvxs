@@ -82,8 +82,13 @@ int main(int argc, char *argv[])
             std::cerr<<"Effective config\n"<<ctxt.config();
 
         std::list<std::shared_ptr<client::Operation>> ops;
+        std::list<std::shared_ptr<client::Connect>> conns;
 
         for(auto n : range(optind, argc)) {
+            if(verbose)
+                conns.push_back(ctxt.connect(argv[n]).onConnect([](const client::Connected& cb) {
+                    std::cerr<<"# "<<(*cb.cred)<<std::endl;
+                }).exec());
 
             ops.push_back(ctxt.info(argv[n])
                           .result([&argv, n, &remaining, &done](client::Result&& result) {
