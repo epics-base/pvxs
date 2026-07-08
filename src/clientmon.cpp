@@ -46,6 +46,8 @@ struct SubscriptionImpl final : public OperationBase, public Subscription
     std::function<void (Subscription&, const Value&)> onInit;
     std::function<void(Subscription&)> event;
     Value pvRequest;
+    bool event_busy = false;
+    bool onInit_busy = false;
     bool pipeline = false;
     bool autostart = true;
     bool maskConn = false, maskDiscon = true;
@@ -109,12 +111,14 @@ struct SubscriptionImpl final : public OperationBase, public Subscription
     void doNotify()
     {
         if(event) {
+            event_busy = true;
             try {
                 event(*this);
             }catch(std::exception& e){
                 log_exc_printf(io, "Unhandled user exception in Monitor %s %s : %s\n",
                                 __func__, typeid (e).name(), e.what());
             }
+            event_busy = false;
         }
     }
 
@@ -276,6 +280,8 @@ struct SubscriptionImpl final : public OperationBase, public Subscription
     virtual void _onEvent(std::function<void(Subscription&)>&& fn) override final {
         decltype (event) junk;
         loop.call([this, &junk, &fn]() {
+            if(event_busy)
+                throw std::logic_error("Must not replace Subscription::onEvent() while callback in progress");
             junk = std::move(event);
             this->event = std::move(fn);
         });
@@ -283,10 +289,14 @@ struct SubscriptionImpl final : public OperationBase, public Subscription
 
     virtual bool cancel() override final {
         decltype (event) junk;
+        decltype (onInit) junkI;
         bool ret = false;
-        (void)loop.tryCall([this, &junk, &ret](){
+        (void)loop.tryCall([this, &junk, &junkI, &ret](){
             ret = _cancel(false);
-            junk = std::move(event);
+            if(!event_busy)
+                junk = std::move(event); // trash when cancelled from app. worker
+            if(!onInit_busy)
+                junkI = std::move(onInit);
             // leave opByIOID for GC
         });
         return ret;
@@ -297,10 +307,12 @@ struct SubscriptionImpl final : public OperationBase, public Subscription
             log_info_printf(io, "Server %s channel %s monitor implied cancel\n",
                             chan->conn ? chan->conn->peerName.c_str() : "<disconnected>",
                             chan->name.c_str());
+
+        } else {
+            log_info_printf(io, "Server %s channel %s monitor cancel\n",
+                            chan->conn ? chan->conn->peerName.c_str() : "<disconnected>",
+                            chan->name.c_str());
         }
-        log_info_printf(io, "Server %s channel %s monitor cancel\n",
-                        chan->conn ? chan->conn->peerName.c_str() : "<disconnected>",
-                        chan->name.c_str());
 
         if(state==Idle || state==Running) {
             chan->conn->sendDestroyRequest(chan->sid, ioid);
@@ -624,6 +636,7 @@ void Connection::handle_MONITOR()
 
         mon->state = SubscriptionImpl::Idle;
 
+        mon->onInit_busy = true;
         try {
             if(mon->onInit)
                 mon->onInit(*mon, info->prototype);
@@ -634,6 +647,7 @@ void Connection::handle_MONITOR()
                             peerName.c_str(),
                             mon->chan->name.c_str(), e.what());
         }
+        mon->onInit_busy = false;
 
         if(mon->autostart && mon->state == SubscriptionImpl::Idle)
             mon->resume();
