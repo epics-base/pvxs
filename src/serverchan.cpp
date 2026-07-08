@@ -319,7 +319,7 @@ void ServerConn::handle_CREATE_CHANNEL()
                     if(msg)
                         break;
                 }catch(std::exception& e){
-                    log_exc_printf(serversearch, "Client %s Unhandled error in onCreate %s,%d %s : %s\n", peerName.c_str(),
+                    log_err_printf(serversearch, "Client %s in onCreate %s,%d %s : %s\n", peerName.c_str(),
                                pair.first.second.c_str(), pair.first.first,
                                typeid(&e).name(), e.what());
                 }
