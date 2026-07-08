@@ -373,8 +373,15 @@ void Connection::handle_CREATE_CHANNEL()
             log_warn_printf(io, "Server %s refuses channel to '%s' : %s\n", peerName.c_str(),
                             chan->name.c_str(), sts.msg.c_str());
 
+            // add to the far future bucket to slow down a re-try loop
+            auto laterBucket = context->currentBucket;
+            if(laterBucket)
+                laterBucket--;
+            else
+                laterBucket = context->searchBuckets.size()-1u;
+
             chan->state = Channel::Searching;
-            context->searchBuckets[context->currentBucket].push_back(chan);
+            context->searchBuckets[laterBucket].push_back(chan);
 
         } else {
             // server refused after we bypassed search, so can't use usual retry method.
