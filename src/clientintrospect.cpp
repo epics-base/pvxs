@@ -36,7 +36,7 @@ struct InfoOp : public OperationBase
 
     virtual ~InfoOp()
     {
-        if(loop.assertInRunningLoop())
+        if(onWorker && loop.assertInRunningLoop())
             _cancel(true);
     }
 
@@ -219,6 +219,7 @@ std::shared_ptr<Operation> GetBuilder::_exec_info()
     auto server(std::move(_server));
     context->tcp_loop.dispatch([op, context, name, server]() {
         // on worker
+        op->onWorker = true;
 
         try {
             op->chan = Channel::build(context, name, server);
