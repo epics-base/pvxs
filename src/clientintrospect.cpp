@@ -21,6 +21,7 @@ struct InfoOp : public OperationBase
 {
     std::function<void(Result&&)> done;
     Value result;
+    bool done_busy = false;
 
     enum state_t {
         Connecting, // waiting for an active Channel
@@ -45,7 +46,8 @@ struct InfoOp : public OperationBase
         bool ret = false;
         (void)loop.tryCall([this, &junk, &ret](){
             ret = _cancel(false);
-            junk = std::move(done);
+            if(!done_busy)
+                junk = std::move(done);
             // leave opByIOID for GC
         });
         return ret;
@@ -160,18 +162,19 @@ void Connection::handle_GET_FIELD()
     info->state = InfoOp::Done;
 
     if(info->done) {
-        auto done = std::move(info->done);
         Result res;
         if(sts.isSuccess()) {
             res = Result(std::move(prototype), peerName);
         } else {
             res = Result(std::make_exception_ptr(RemoteError(sts.msg)));
         }
+        info->done_busy = true;
         try {
-            done(std::move(res));
+            info->done(std::move(res));
         }catch(std::exception& e){
             log_exc_printf(setup, "Unhandled exception %s in Info result() callback: %s\n", typeid (e).name(), e.what());
         }
+        info->done_busy = false;
 
     } else {
         info->result = prototype;
