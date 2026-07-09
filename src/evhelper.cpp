@@ -718,6 +718,7 @@ struct IfMapDaemon : private epicsThreadRunable {
     epicsMutex lock;
     epicsEvent wake;
     std::shared_ptr<const IfaceMap::Current> latest;
+    uint64_t generation = 1u;
     bool stop = false;
     epicsThread worker;
     IfMapDaemon()
@@ -749,7 +750,10 @@ struct IfMapDaemon : private epicsThreadRunable {
                     wake.wait(15.0); // arbitrary period...
                     next = IfaceMap::refresh();
                 }
-                latest.swap(next);
+                if(!latest || !latest->same(*next)) {
+                    latest.swap(next);
+                    generation++;
+                }
 
             } catch(std::exception& e){
                 log_crit_printf(logiface, "While updating IfaceMap : %s\n", e.what());
@@ -770,9 +774,10 @@ IfaceMap IfaceMap::instance()
     assert(ifmapper);
     Guard G(ifmapper->lock);
     auto ret(ifmapper->latest);
+    auto generation(ifmapper->generation);
     if(!ret)
         throw std::logic_error("No IfaceMap");
-    return IfaceMap(std::move(ret));
+    return IfaceMap(std::move(ret), generation);
 }
 
 void IfaceMap::cleanup()
@@ -799,6 +804,28 @@ std::shared_ptr<const IfaceMap::Current> IfaceMap::refresh()
         }
     }
     return next;
+}
+
+bool IfaceMap::Current::same(const Current& o) const
+{
+    if(byIndex.size()!=o.byIndex.size())
+        return false;
+
+    auto oit(o.byIndex.begin());
+    for(auto it(byIndex.begin()), end(byIndex.end()); it!=end; ++it, ++oit) {
+        if(it->first!=oit->first)
+            return false;
+
+        const auto& a = it->second;
+        const auto& b = oit->second;
+
+        if(a.name!=b.name || a.index!=b.index || a.isLO!=b.isLO)
+            return false;
+        if(a.addrs!=b.addrs || a.bcast!=b.bcast)
+            return false;
+    }
+
+    return true;
 }
 
 bool IfaceMap::has_address(uint64_t ifindex, const SockAddr &addr) const
