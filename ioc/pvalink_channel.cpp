@@ -117,7 +117,7 @@ void pvaLinkChannel::open()
         try {
             linkGlobal->queue.push(shared_from_this());
         }catch(std::bad_weak_ptr&){
-            log_err_printf(_logger, "channel '%s' open during dtor?", key.first.c_str());
+            log_err_printf(_logger, "channel '%s' open during dtor?\n", key.first.c_str());
         }
     })
             .exec();
