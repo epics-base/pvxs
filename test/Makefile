@@ -160,6 +160,7 @@ testqgroup_SRCS += capturestd.cpp
 testqgroup_SRCS += testioc_registerRecordDeviceDriver.cpp
 testqgroup_LIBS = pvxsIoc pvxs $(EPICS_BASE_IOC_LIBS)
 TESTFILES += ../table.db
+TESTFILES += ../tableorder.db
 TESTFILES += ../image.db
 TESTFILES += ../image.json
 TESTFILES += ../iq.db
