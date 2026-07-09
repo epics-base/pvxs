@@ -15,6 +15,27 @@ DEFINE_LOGGER(io, "pvxs.client.io");
 namespace pvxs {
 namespace client {
 
+struct Discovery final : public OperationBase
+{
+    const std::shared_ptr<ContextImpl> context;
+    std::function<void(const Discovered &)> notify;
+    bool notify_busy = false;
+    bool running = false;
+
+    Discovery(const std::shared_ptr<ContextImpl>& context, const std::string& name);
+    ~Discovery();
+
+    virtual bool cancel() override final;
+private:
+    bool _cancel(bool implicit);
+
+    // unused for this special case
+    virtual void _reExecGet(std::function<void (Result &&)> &&resultcb) override final;
+    virtual void _reExecPut(const Value &arg, std::function<void (Result &&)> &&resultcb) override final;
+    virtual void createOp() override final;
+    virtual void disconnected(const std::shared_ptr<OperationBase> &self) override final;
+};
+
 Discovery::Discovery(const std::shared_ptr<ContextImpl> &context, const std::string& name)
     :OperationBase (Operation::Discover, context->tcp_loop, name)
     ,context(context)
@@ -31,7 +52,8 @@ bool Discovery::cancel()
     bool ret;
     loop.call([this, &junk, &ret](){
         ret = _cancel(false);
-        junk = std::move(notify);
+        if(!notify_busy)
+            junk = std::move(notify);
         // leave opByIOID for GC
     });
     return ret;
@@ -106,11 +128,13 @@ void ContextImpl::serverEvent(const Discovered &evt)
 {
     for(auto& pair : discoverers) {
         if(auto dis = pair.second.lock()) {
+            dis->notify_busy = true;
             try {
                 dis->notify(evt);
             } catch(std::exception& e) {
                 log_exc_printf(io, "Unhandled exception during Discovery callback : %s\n", e.what());
             }
+            dis->notify_busy = false;
         }
     }
 }

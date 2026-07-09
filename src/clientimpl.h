@@ -25,6 +25,7 @@ namespace client {
 
 struct Channel;
 struct ContextImpl;
+struct Discovery;
 
 struct ResultWaiter {
     epicsMutex lock;
@@ -226,26 +227,6 @@ struct Channel {
     std::shared_ptr<Channel> build(const std::shared_ptr<ContextImpl>& context,
                                    const std::string& name,
                                    const std::string& server);
-};
-
-struct Discovery final : public OperationBase
-{
-    const std::shared_ptr<ContextImpl> context;
-    std::function<void(const Discovered &)> notify;
-    bool running = false;
-
-    Discovery(const std::shared_ptr<ContextImpl>& context, const std::string& name);
-    ~Discovery();
-
-    virtual bool cancel() override final;
-private:
-    bool _cancel(bool implicit);
-
-    // unused for this special case
-    virtual void _reExecGet(std::function<void (Result &&)> &&resultcb) override final;
-    virtual void _reExecPut(const Value &arg, std::function<void (Result &&)> &&resultcb) override final;
-    virtual void createOp() override final;
-    virtual void disconnected(const std::shared_ptr<OperationBase> &self) override final;
 };
 
 struct ContextImpl : public std::enable_shared_from_this<ContextImpl>
