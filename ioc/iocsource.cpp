@@ -233,6 +233,12 @@ void getTimeAlarm(dbChannel* pChannel,
         } else
 #endif
         {
+            #if USER_ALARM_MSG
+            if(!info.alarmMsg.empty()) {
+                node["alarm.message"] = meta.status ? info.alarmMsg : "";
+            }
+            else
+            #endif
             node["alarm.message"] = meta.status && stsmsg ? stsmsg : "";
         }
     } // DBE_ALARM
@@ -249,7 +255,6 @@ void getTimeAlarm(dbChannel* pChannel,
     }
 #endif
 }
-
 static
 void getProperties(dbChannel* pChannel, db_field_log *pfl, Value& node)
 {
@@ -329,6 +334,9 @@ void IOCSource::get(Value& node, // node within top level structure addressed by
     }
 
     if((info.type==MappingInfo::Scalar || info.type==MappingInfo::Meta) && (change & (UpdateType::Value | UpdateType::Alarm))) {
+        #if USER_ALARM_MSG
+        info.updateUserAlarmMsg(dbChannelRecord(pChannel));
+        #endif
         getTimeAlarm(pChannel, pDbFieldLog, node, info, change);
     }
 
