@@ -207,6 +207,12 @@ std::shared_ptr<Operation> GetBuilder::_exec_info()
         // from user thread
         auto temp(std::move(op));
         auto loop(temp->loop);
+        if(syncCancel && loop.inLoop())
+            log_err_printf(io,
+                           "syncCancel info '%s' being destroyed on worker thread.\n"
+                           "Possible self-reference loop.  Setup with .syncCancel(false) if intended.\n",
+                           temp->channelName.c_str());
+
         // std::bind for lack of c++14 generalized capture
         // to move internal ref to worker for dtor
         loop.tryInvoke(syncCancel, std::bind([](std::shared_ptr<InfoOp>& op) {

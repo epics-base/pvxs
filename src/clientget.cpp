@@ -613,6 +613,12 @@ std::shared_ptr<Operation> gpr_setup(const std::shared_ptr<ContextImpl>& context
         // (maybe) user thread
         auto temp(std::move(internal));
         auto loop(temp->loop);
+        if(syncCancel && loop.inLoop())
+            log_err_printf(io,
+                           "syncCancel op%u '%s' being destroyed on worker thread.\n"
+                           "Possible self-reference loop.  Setup with .syncCancel(false) if intended.\n",
+                           temp->op, temp->channelName.c_str());
+
         // std::bind for lack of c++14 generalized capture
         // to move internal ref to worker for dtor
         loop.tryInvoke(syncCancel, std::bind([](std::shared_ptr<GPROp>& op) {

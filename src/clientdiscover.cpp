@@ -93,6 +93,12 @@ std::shared_ptr<Operation> DiscoverBuilder::exec()
         // (maybe) user thread
         auto loop(op->context->tcp_loop);
         auto temp(std::move(op));
+        if(syncCancel && loop.inLoop())
+            log_err_printf(io,
+                           "syncCancel discover '%s' being destroyed on worker thread.\n"
+                           "Possible self-reference loop.  Setup with .syncCancel(false) if intended.\n",
+                           temp->channelName.c_str());
+
         loop.tryInvoke(syncCancel, std::bind([](std::shared_ptr<Discovery>& op){
                            // on worker
                            op->context->discoverers.erase(op.get());

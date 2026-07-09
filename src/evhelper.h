@@ -198,6 +198,7 @@ public:
             return tryDispatch(std::move(fn));
     }
 
+    bool inLoop() const;
     void assertInLoop() const;
     //! Caller must be on the worker, or the worker must be stopped.
     //! @returns true if working is running.

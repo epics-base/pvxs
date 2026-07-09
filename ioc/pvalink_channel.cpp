@@ -267,6 +267,7 @@ void pvaLinkChannel::put(bool force)
         // start net Put, cancels in-progress put
         op_put = linkGlobal->provider_remote.put(key.first)
                 .rawRequest(pvReq)
+                .syncCancel(false)
                 .build([this](Value&& prototype) -> Value
         {
                 return linkBuildPut(this, std::move(prototype)); // TODO
