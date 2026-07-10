@@ -87,6 +87,7 @@ struct RequestInfo {
 
 struct Connection final : public ConnBase, public std::enable_shared_from_this<Connection> {
     const std::shared_ptr<ContextImpl> context;
+    const bool isTLS;
 
     // While HoldOff, the time until re-connection
     // While Connected, periodic Echo
@@ -107,17 +108,21 @@ struct Connection final : public ConnBase, public std::enable_shared_from_this<C
 
     uint32_t nextIOID = 0x10002000u;
 
+    epicsTime connTime;
+    std::shared_ptr<const ServerCredentials> cred;
+
     INST_COUNTER(Connection);
 
     Connection(const std::shared_ptr<ContextImpl>& context,
                const SockAddr &peerAddr,
-               bool reconn);
+               bool reconn, bool isTLS);
     virtual ~Connection();
 
     static
     std::shared_ptr<Connection> build(const std::shared_ptr<ContextImpl>& context,
                                       const SockAddr& serv,
-                                      bool reconn=false);
+                                      bool reconn,
+                                      bool isTLS);
 
 private:
     void startConnecting();
@@ -162,8 +167,8 @@ struct ConnectImpl final : public Connect
     std::shared_ptr<Channel> chan;
     const std::string _name;
     std::atomic<bool> _connected;
-    std::function<void()> _onConn;
-    std::function<void()> _onDis;
+    std::function<void(const Connected&)> _onConn;
+    std::function<void(const Disconnect&)> _onDis;
 
     ConnectImpl(const evbase& loop, const std::string& name)
         :loop(loop)
@@ -174,6 +179,7 @@ struct ConnectImpl final : public Connect
 
     virtual const std::string &name() const override final;
     virtual bool connected() const override final;
+    virtual std::string peerName() const override final;
 };
 
 struct Channel {
@@ -196,7 +202,7 @@ struct Channel {
     uint32_t sid = 0u;
 
     // channel created with .server() to bypass normal search process
-    SockAddr forcedServer;
+    SockEndpoint forcedServer;
 
     // when state==Searching, number of repetitions
     size_t nSearch = 0u;
@@ -315,9 +321,10 @@ struct ContextImpl : public std::enable_shared_from_this<ContextImpl>
     // chanByName key'd by (pv, forceServer)
     std::map<std::pair<std::string, std::string>, std::shared_ptr<Channel>> chanByName;
 
-    std::map<SockAddr, std::weak_ptr<Connection>> connByAddr;
+    // pair (addr, useTLS)
+    std::map<std::pair<SockAddr, bool>, std::weak_ptr<Connection>> connByAddr;
 
-    std::vector<std::pair<SockAddr, std::shared_ptr<Connection>>> nameServers;
+    std::vector<std::pair<SockEndpoint, std::shared_ptr<Connection>>> nameServers;
 
     evbase tcp_loop;
     const evevent searchRx4, searchRx6;
@@ -333,6 +340,10 @@ struct ContextImpl : public std::enable_shared_from_this<ContextImpl>
     const evevent beaconCleaner;
     const evevent cacheCleaner;
     const evevent nsChecker;
+
+#ifdef PVXS_ENABLE_OPENSSL
+    ossl::SSLContext tls_context;
+#endif
 
     INST_COUNTER(ClientContextImpl);
 

@@ -171,6 +171,9 @@ int main(int argc, char *argv[])
 
             }catch(client::Connected& conn) {
                 std::cerr<<conn.time<<" "<<name.c_str()<<" Connected to "<<conn.peerName<<"\n";
+                if(conn.cred) {
+                    std::cerr<<"    "<<*conn.cred<<"\n";
+                }
                 if(app.test(Level::Debug)) {
                     client::SubscriptionStat stats;
                     mon->stats(stats);
