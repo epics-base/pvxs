@@ -110,13 +110,6 @@ struct PVXS_API ConfigCommon {
     bool tls_disable_stapling{false};
 
     /**
-     * @brief The request timeout specified in a user call
-     * @note Cannot be set by an environment variable, but is passed in by commandline tools, or set programmatically
-     */
-    double request_timeout_specified{5.0};
-
-
-    /**
      * @brief The password for the keychain file
      */
     std::string tls_keychain_pwd;
@@ -144,17 +137,6 @@ struct PVXS_API ConfigCommon {
      * @brief Is stapling disabled?
      */
     bool isStaplingDisabled() const {return tls_disable_stapling;}
-
-    /**
-     * @brief Set the request timeout
-     * @param timeout the request timeout in seconds
-     */
-    void setRequestTimeout(const double timeout) {request_timeout_specified = timeout;}
-
-    /**
-     * @brief Get the request timeout
-     */
-    double getRequestTimeout() const {return request_timeout_specified;}
 
     /**
      * @brief Set the keychain password
