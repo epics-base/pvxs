@@ -52,12 +52,17 @@ struct Alarm {
 
 /** A scalar, or array of scalars, and meta-data
  *
+ * Passing an array TypeCode (eg. Float64A) builds an NTScalarArray.
+ *
  * @code
  * auto def = pvxs::nt::NTScalar{TypeCode::Float64}.build();
  * def += {
  *      Member(TypeCode::String, "myspecial"),
  * };
  * auto value = def.create(); // instantiate a Value
+ *
+ * // array of doubles (NTScalarArray)
+ * auto arr = pvxs::nt::NTScalar{TypeCode::Float64A}.create();
  * @endcode
  */
 struct NTScalar {
