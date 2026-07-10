@@ -169,7 +169,7 @@ private:
 
 /** Describe build and runtime configuration of current system.
  *
- * Print information which may be using for when troubleshooting,
+ * Print information which may be useful when troubleshooting,
  * or creating a bug report.
  *
  * Printed by CLI "pvxinfo -D" and iocsh "pvxs_target_information".
