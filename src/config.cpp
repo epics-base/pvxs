@@ -577,7 +577,6 @@ void Config::fromDefs(Config& self, const std::map<std::string, std::string>& de
         }
     }
 
-    if (pickone({"EPICS_PVAS_CERT_PV_PREFIX", "EPICS_PVA_CERT_PV_PREFIX"})) self.setCertPvPrefix(pickone.val);
 #endif  // PVXS_ENABLE_OPENSSL
 }
 Config& Config::applyEnv() {
@@ -649,9 +648,6 @@ void Config::updateDefs(defs_t& defs) const {
 
     // EPICS_PVAS_TLS_PORT
     defs["EPICS_PVA_TLS_PORT"] = defs["EPICS_PVAS_TLS_PORT"] = std::to_string(tls_port);
-
-    // EPICS_PVAS_CERT_PV_PREFIX
-    if (!getCertPvPrefix().empty()) defs["EPICS_PVAS_CERT_PV_PREFIX"] = getCertPvPrefix();
 #endif  // PVXS_ENABLE_OPENSSL
 }
 
@@ -810,7 +806,6 @@ void Config::fromDefs(Config& self, const std::map<std::string, std::string>& de
         }
     }
 
-    if (pickone({"EPICS_PVA_CERT_PV_PREFIX"})) self.setCertPvPrefix(pickone.val);
 #endif  // PVXS_ENABLE_OPENSSL
 }
 
@@ -848,9 +843,6 @@ void Config::updateDefs(defs_t& defs) const {
 
     // EPICS_PVA_TLS_PORT
     defs["EPICS_PVA_TLS_PORT"] = std::to_string(tls_port);
-
-    // EPICS_PVA_CERT_PV_PREFIX
-    if (!getCertPvPrefix().empty()) defs["EPICS_PVA_CERT_PV_PREFIX"] = getCertPvPrefix();
 
 #endif  // PVXS_ENABLE_OPENSSL
 }
