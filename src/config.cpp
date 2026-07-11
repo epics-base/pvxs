@@ -704,7 +704,7 @@ std::ostream& operator<<(std::ostream& strm, const Config& conf) {
 
 namespace client {
 
-void Config::fromDefs(Config& self, const std::map<std::string, std::string>& defs, bool useenv) {
+void _fromDefs(Config& self, const std::map<std::string, std::string>& defs, bool useenv) {
     PickOne pickone{defs, useenv};
 
     if(pickone({"EPICS_PVA_BROADCAST_PORT"})) {
@@ -766,7 +766,7 @@ void Config::fromDefs(Config& self, const std::map<std::string, std::string>& de
     } else {
         std::string filename = SB() << getXdgPvaConfigHome() << OSI_PATH_SEPARATOR << "client.p12";
         std::ifstream file(filename.c_str());
-        if (file.good()) tls_keychain_file = filename;
+        if (file.good()) self.tls_keychain_file = filename;
     }
 
     // EPICS_PVA_TLS_OPTIONS
@@ -787,12 +787,12 @@ void Config::fromDefs(Config& self, const std::map<std::string, std::string>& de
 }
 
 Config& Config::applyEnv() {
-    fromDefs(*this, std::map<std::string, std::string>(), true);
+    _fromDefs(*this, std::map<std::string, std::string>(), true);
     return *this;
 }
 
 Config& Config::applyDefs(const std::map<std::string, std::string>& defs) {
-    fromDefs(*this, defs, false);
+    _fromDefs(*this, defs, false);
     return *this;
 }
 
