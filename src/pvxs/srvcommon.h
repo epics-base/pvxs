@@ -34,7 +34,6 @@ namespace server {
 struct PVXS_API ClientCredentials : public PeerCredentials {
     //! (Copy of) Credentials blob as presented by the client.
     Value raw;
-    // For ABI backwards compatibility
     std::set<std::string> roles() const ;
 };
 
