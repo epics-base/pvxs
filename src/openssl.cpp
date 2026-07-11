@@ -973,13 +973,6 @@ bool SSLContext::getPeerCredentials(PeerCredentials &C, const SSL *ctx) {
             temp.method = "x509";
             temp.account = name;
 
-            // Get serial number
-            const ASN1_INTEGER* serial_asn1 = X509_get_serialNumber(cert);
-            if (!serial_asn1) throw std::runtime_error("Failed to retrieve serial number from peer certificate");
-            serial_number_t serial = 0;
-            for (int i = 0; i < serial_asn1->length; ++i) serial = serial << 8 | serial_asn1->data[i];
-            temp.serial = std::to_string(serial);
-
             // try to use certificate chain authority names to qualify
             if (const auto chain = SSL_get0_verified_chain(ctx)) {
                 const auto N = sk_X509_num(chain);
@@ -1006,10 +999,6 @@ bool SSLContext::getPeerCredentials(PeerCredentials &C, const SSL *ctx) {
                             }
                             authority += common_name;
 
-                            // If this is the issuer cert (first in the chain after entity), also set the issuer_id
-                            if (i == start_index) {
-                                temp.issuer_id = certs::CertStatus::getSkId(chain_cert);
-                            }
                             if (i == N - 1 && !(X509_check_ca(chain_cert) || (X509_get_extension_flags(chain_cert) & EXFLAG_SS))) {
                                 log_warn_printf(io, "Last cert in peer chain is not root Root certificate authority certificate? %s\n",
                                                 std::string(SB() << ossl::ShowX509{chain_cert}).c_str());

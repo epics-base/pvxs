@@ -29,8 +29,6 @@ Credentials::Credentials(const server::ClientCredentials& clientCredentials) {
     host = std::string(SB()<<addr.map6to4());
     method = clientCredentials.method;
     authority = clientCredentials.authority;
-    issuer_id = clientCredentials.issuer_id;
-    serial = clientCredentials.serial;
     isTLS = clientCredentials.isTLS;
     cred.emplace_back(clientCredentials.account);
 
