@@ -765,17 +765,6 @@ class CertStatusManager {
      */
     static std::string getStatusPvFromCert(const ossl_ptr<X509> &cert);
 
-    /**
-     * @brief Get the config PV from a Cert.
-     * This function gets the PVA extension that stores the config PV in the certificate
-     * if the certificate can be used in conjunction with a config monitor to check for
-     * expired status.
-     * @param cert the certificate to check for the config PV extension
-     * @return a blank string if no extension exists, otherwise contains the config PV
-     *         e.g. CERT:CONFIG:0293823f:098294739483904875
-     */
-    static std::string getConfigPvFromCert(const ossl_ptr<X509> &cert);
-
 
     /**
      * @brief Get the certificate issuer from a Cert.
@@ -811,15 +800,6 @@ class CertStatusManager {
      *         e.g. CERT:STATUS:0293823f:098294739483904875
      */
     static std::string getStatusPvFromCert(const X509 *cert_ptr);
-
-    /**
-     * @brief Get the certificate configuration PV from a Cert.
-     * This function gets the PVA certificate extension that holds the certificate configuration PV
-     * @param cert_ptr the certificate to check
-     * @return a blank string if no extension exists, otherwise contains the certificate configuration PV
-     *         e.g. CERT:CONFIG:0293823f:098294739483904875
-     */
-    static std::string getConfigPvFromCert(const X509 *cert_ptr);
 
     /**
      * @brief Get the expiration date from a Cert.
@@ -878,7 +858,6 @@ class CertStatusManager {
      * @throws CertStatusNoExtensionException if no extension is present in the certificate
      */
     static X509_EXTENSION *getStatusExtension(const X509 *certificate);
-    static X509_EXTENSION *getConfigExtension(const X509 *certificate);
     static ossl_ptr<OCSP_RESPONSE> getOCSPResponse(const shared_array<const uint8_t> &ocsp_bytes);
     static ossl_ptr<OCSP_RESPONSE> getOCSPResponse(const uint8_t *ocsp_bytes, size_t ocsp_bytes_len);
     static bool verifyOCSPResponse(const ossl_ptr<OCSP_BASICRESP> &basic_response, X509_STORE *trusted_store_ptr);

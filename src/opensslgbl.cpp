@@ -38,7 +38,6 @@ namespace pvxs {
 namespace ossl {
 
 int NID_SPvaCertStatusURI = NID_undef;
-int NID_SPvaCertConfigURI = NID_undef;
 
 OSSLGbl* ossl_gbl = nullptr;
 
@@ -118,10 +117,6 @@ static void osslInitImpl() {
     NID_SPvaCertStatusURI = OBJ_create(NID_SPvaCertStatusURIID, SN_SPvaCertStatusURI, LN_SPvaCertStatusURI);
     if(NID_SPvaCertStatusURI == NID_undef) {
         throw std::runtime_error("Failed to create NID for " SN_SPvaCertStatusURI);
-    }
-    NID_SPvaCertConfigURI = OBJ_create(NID_SPvaCertConfigURIID, SN_SPvaCertConfigURI, LN_SPvaCertConfigURI);
-    if(NID_SPvaCertConfigURI == NID_undef) {
-        throw std::runtime_error("Failed to create NID for " SN_SPvaCertConfigURI);
     }
 
     ossl_ptr<OSSL_LIB_CTX> ctx(__FILE__, __LINE__, OSSL_LIB_CTX_new());

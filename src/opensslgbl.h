@@ -36,15 +36,9 @@ PVXS_API extern OSSLGbl* ossl_gbl;
 #define SN_SPvaCertStatusURI "ASN.1 - SPvaCertStatusURI"
 #define LN_SPvaCertStatusURI "EPICS SPVA Certificate Status URI"
 
-// EPICS OID for "SPvaCertConfigURI" extension: "72473" DTMF for "SCIPE" :)
-#define NID_SPvaCertConfigURIID "1.3.6.1.4.1.72473.1"
-#define SN_SPvaCertConfigURI "ASN.1 - SPvaCertConfigURI"
-#define LN_SPvaCertConfigURI "EPICS SPVA Certificate Config URI"
-
 PVXS_API extern void osslInit();
 
 PVXS_API extern int NID_SPvaCertStatusURI;
-PVXS_API extern int NID_SPvaCertConfigURI;
 
 }  // namespace ossl
 }  // namespace pvxs

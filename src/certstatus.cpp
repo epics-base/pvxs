@@ -537,8 +537,6 @@ bool CertStatusManager::verifyOCSPResponse(const ossl_ptr<OCSP_BASICRESP> &basic
  */
 std::string CertStatusManager::getStatusPvFromCert(const ossl_ptr<X509> &cert) { return getStatusPvFromCert(cert.get()); }
 
-std::string CertStatusManager::getConfigPvFromCert(const ossl_ptr<X509> &cert) { return getConfigPvFromCert(cert.get()); }
-
 time_t CertStatusManager::getExpirationDateFromCert(const ossl_ptr<X509> &cert) { return getExpirationDateFromCert(cert.get()); }
 
 
@@ -559,27 +557,6 @@ X509_EXTENSION *CertStatusManager::getStatusExtension(const X509 *certificate) {
     X509_EXTENSION *extension = X509_get_ext(certificate, extension_index);
     if (!extension) {
         throw CertStatusNoExtensionException("Failed to get Certificate-Status-PV extension from the certificate.");
-    }
-    return extension;
-}
-
-/**
- * @brief Get the extension from the certificate.
- * This method retrieves the extension from the given certificate using the NID_PvaCertConfigURI.
- * If the extension is not found, it throws a CertConfigNoExtensionException.
- * @param certificate the certificate to retrieve the extension from
- * @return the X509_EXTENSION object, if found, otherwise throws an exception
- */
-X509_EXTENSION *CertStatusManager::getConfigExtension(const X509 *certificate) {
-    // Make sure the custom extensions are configured before querying them
-    ossl::osslInit();
-    const int extension_index = X509_get_ext_by_NID(certificate, ossl::NID_SPvaCertConfigURI, -1);
-    if (extension_index < 0) throw CertStatusNoExtensionException("Failed to find Certificate-Config-PV extension in certificate.");
-
-    // Get the extension object from the certificate
-    X509_EXTENSION *extension = X509_get_ext(certificate, extension_index);
-    if (!extension) {
-        throw CertStatusNoExtensionException("Failed to get Certificate-Config-PV extension from the certificate.");
     }
     return extension;
 }
@@ -635,53 +612,6 @@ std::string CertStatusManager::getStatusPvFromCert(const X509 *cert) {
     // Retrieve the extension data which is an ASN1_OCTET_STRING object containing DER-encoded IA5String
     const ASN1_OCTET_STRING *ext_data = X509_EXTENSION_get_data(extension);
     if (!ext_data) throw CertStatusNoExtensionException("Failed to get data from the Certificate-Status-PV extension.");
-
-    // Get the DER-encoded data
-    const unsigned char *data = ASN1_STRING_get0_data(ext_data);
-    if (!data) throw CertStatusNoExtensionException("Failed to extract data from ASN1_STRING.");
-
-    const int length = ASN1_STRING_length(ext_data);
-    if (length < 0) throw CertStatusNoExtensionException("Invalid length of ASN1_STRING data.");
-
-    // Decode the DER-encoded IA5String
-    const unsigned char *p = data;
-    const ossl_ptr<ASN1_IA5STRING> ia5_str(d2i_ASN1_IA5STRING(nullptr, &p, length), false);
-    if (!ia5_str) {
-        throw CertStatusNoExtensionException("Failed to decode DER-encoded IA5String from extension.");
-    }
-
-    // Extract the string value from the IA5String
-    const auto str_data = reinterpret_cast<const char *>(ASN1_STRING_get0_data(ia5_str.get()));
-    if (!str_data) {
-        throw CertStatusNoExtensionException("Failed to get data from decoded IA5String.");
-    }
-
-    const size_t str_length = ASN1_STRING_length(ia5_str.get());
-    if (str_length < 0) {
-        throw CertStatusNoExtensionException("Invalid length of decoded IA5String data.");
-    }
-
-    // Return the data as a std::string
-    return {str_data, str_length};
-}
-
-/**
- * @brief Get the string value of a custom extension by NID from a certificate.
- *
- * This will return the PV name to monitor for config of the given certificate.
- * It is stored in the certificate using a custom extension.
- * Exceptions are thrown if it is unable to retrieve the value of the extension
- * or it does not exist.
- *
- * @param cert the certificate to examine
- * @return the PV name to call for config on that certificate
- */
-std::string CertStatusManager::getConfigPvFromCert(const X509 *cert) {
-    const auto extension = getConfigExtension(cert);
-
-    // Retrieve the extension data, which is an ASN1_OCTET_STRING object containing DER-encoded IA5String
-    const ASN1_OCTET_STRING *ext_data = X509_EXTENSION_get_data(extension);
-    if (!ext_data) throw CertStatusNoExtensionException("Failed to get data from the Certificate-Config-PV extension.");
 
     // Get the DER-encoded data
     const unsigned char *data = ASN1_STRING_get0_data(ext_data);
