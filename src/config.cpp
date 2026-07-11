@@ -488,7 +488,7 @@ std::string printTLSOptions(const ConfigCommon& conf) {
 
 namespace server {
 
-void Config::fromDefs(Config& self, const std::map<std::string, std::string>& defs, bool useenv) {
+void _fromDefs(Config& self, const std::map<std::string, std::string>& defs, bool useenv) {
     PickOne pickone{defs, useenv};
 
     if(pickone({"EPICS_PVAS_SERVER_PORT", "EPICS_PVA_SERVER_PORT"})) {
@@ -544,7 +544,7 @@ void Config::fromDefs(Config& self, const std::map<std::string, std::string>& de
     } else {
         std::string filename = SB() << getXdgPvaConfigHome() << OSI_PATH_SEPARATOR << "server.p12";
         std::ifstream file(filename.c_str());
-        if (file.good()) tls_keychain_file = filename;
+        if (file.good()) self.tls_keychain_file = filename;
 }
 
     // EPICS_PVAS_TLS_OPTIONS
@@ -564,7 +564,7 @@ void Config::fromDefs(Config& self, const std::map<std::string, std::string>& de
 #endif  // PVXS_ENABLE_OPENSSL
 }
 Config& Config::applyEnv() {
-    fromDefs(*this, std::map<std::string, std::string>(), true);
+    _fromDefs(*this, std::map<std::string, std::string>(), true);
     return *this;
 }
 
@@ -603,7 +603,7 @@ Config Config::isolated(int family) {
 }
 
 Config& Config::applyDefs(const std::map<std::string, std::string>& defs) {
-    fromDefs(*this, defs, false);
+    _fromDefs(*this, defs, false);
     return *this;
 }
 

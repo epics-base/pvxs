@@ -168,7 +168,11 @@ const Config& Server::config() const
     return pvt->effective;
 }
 
-client::Config Server::clientConfig(const Config &server_config) {
+namespace {
+// Build a client configuration able to communicate with a server described by
+// the given server configuration.  File-local: used for the instance
+// clientConfig() and for the inner client context used during TLS setup.
+client::Config buildClientConfig(const Config &server_config) {
     client::Config ret;
     ret.udp_port = server_config.udp_port;
     ret.tcp_port = server_config.tcp_port;
@@ -186,13 +190,14 @@ client::Config Server::clientConfig(const Config &server_config) {
 
     return ret;
 }
+} // namespace
 
 client::Config Server::clientConfig() const
 {
     if(!pvt)
         throw std::logic_error("NULL Server");
 
-    return clientConfig(pvt->effective);
+    return buildClientConfig(pvt->effective);
 }
 
 Server& Server::addPV(const std::string& name, const SharedPV& pv)
@@ -558,7 +563,7 @@ Server::Pvt::Pvt(Server& svr, const Config& conf)
                 // TODO: currently not possible to disable TLS for an individual search.
                 //   until then, create a separate inner context to retrieve signed payload from CMS
                 log_debug_printf(osslsetup, "Creating a client context for certificate status to use in server TLS context creation%s", "\n");
-                auto inner_conf = clientConfig(effective);
+                auto inner_conf = buildClientConfig(effective);
                 inner_conf.tls_disabled = true;
                 log_debug_printf(osslsetup, "Created a client context for server certificate status%s", "\n");
                 const auto inner_client = inner_conf.build();
