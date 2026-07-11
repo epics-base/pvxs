@@ -10,12 +10,26 @@
  *
  */
 
+#include <array>
+
 #include "certstatus.h"
 
 #include "opensslgbl.h"
 
 namespace pvxs {
 namespace certs {
+
+// Status-name tables, defined once here rather than duplicated into every
+// translation unit that includes certstatus.h.  Out-of-range indices return a
+// safe fallback rather than reading past the end of the array.
+const char* CERT_STATE(std::size_t index) {
+    static const std::array<const char*, 7> names = CERT_STATES;
+    return index < names.size() ? names[index] : "UNKNOWN";
+}
+const char* OCSP_CERT_STATE(std::size_t index) {
+    static const std::array<const char*, 3> names = OCSP_CERT_STATES;
+    return index < names.size() ? names[index] : "OCSP_CERTSTATUS_UNKNOWN";
+}
 
 /**
  * @brief Constructor for the OCSPStatus class
