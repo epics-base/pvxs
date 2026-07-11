@@ -279,6 +279,25 @@ std::string getCertStatusURI(const std::string &cert_pv_prefix, const std::strin
     return cert_uri;
 }
 
+/**
+ * @brief Get the first 8 hex digits of the certificate's subject key identifier
+ * @param cert_ptr the certificate to read the subject key identifier extension from
+ * @return the first 8 hex digits of the subject key identifier
+ */
+std::string getSkId(const X509 *cert_ptr) {
+    const pvxs::ossl_ptr<ASN1_OCTET_STRING> skid(
+        static_cast<ASN1_OCTET_STRING *>(X509_get_ext_d2i(cert_ptr, NID_subject_key_identifier, nullptr, nullptr)), false);
+    if (!skid) {
+        throw std::runtime_error("Failed to get Subject Key Identifier.");
+    }
+
+    std::stringstream ss;
+    for (int i = 0; i < skid->length && ss.tellp() < 8; i++) {
+        ss << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(skid->data[i]);
+    }
+    return ss.str();
+}
+
 
 // for writing a PKCS#12 file
 struct PKCS12Writer {
@@ -463,7 +482,7 @@ struct CertCreator {
             add_extension(cert.get(), NID_ext_key_usage, extended_key_usage);
 
         if ( add_status_extension) {
-            const auto issuer_id = pvxs::certs::CertStatus::getSkId(root ? root : issuer);
+            const auto issuer_id = getSkId(root ? root : issuer);
             addCustomExtensionByNid(cert, pvxs::ossl::NID_SPvaCertStatusURI, getCertStatusURI("CERT", issuer_id, serial));
         }
 

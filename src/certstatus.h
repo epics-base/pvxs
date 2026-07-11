@@ -136,41 +136,6 @@ struct CertStatus {
     bool operator==(const CertStatus& rhs) const { return i == rhs.i; }
     bool operator!=(const CertStatus& rhs) const { return !(*this == rhs); }
 
-    /**
-     * @brief  Get the first 8 hex digits of the hex SKID (subject key identifier)
-     *
-     * Note that the given cert must contain the SKID extension in the first place
-     *
-     * @param cert  the cert from which to get the subject key identifier extension
-     * @return first 8 hex digits of the hex SKID (subject key identifier)
-     */
-    static std::string getSkId(const ossl_ptr<X509>& cert) { return getSkId(cert.get()); }
-
-    /**
-     * @brief Get the first 8 hex digits of the hex SKID (subject key identifier)
-     *
-     * Note that the given cert must contain the SKID extension in the first place
-     *
-     * @param cert_ptr the cert pointer from which to get the subject key identifier extension
-     * @return first 8 hex digits of the hex SKID (subject key identifier)
-     */
-    static std::string getSkId(const X509* cert_ptr) {
-        const ossl_ptr<ASN1_OCTET_STRING> skid(static_cast<ASN1_OCTET_STRING*>(X509_get_ext_d2i(cert_ptr, NID_subject_key_identifier, nullptr, nullptr)),
-                                               false);
-        if (!skid) {
-            throw std::runtime_error("Failed to get Subject Key Identifier.");
-        }
-
-        // Convert the first 8 chars to hex
-        const auto buf = skid->data;
-        std::stringstream ss;
-        for (int i = 0; i < skid->length && ss.tellp() < 8; i++) {
-            ss << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(buf[i]);
-        }
-
-        return ss.str();
-    }
-
    protected:
     /**
      * @brief Constructor for CertStatus only to be used by PVACertStatus and OCSPCertStatus
