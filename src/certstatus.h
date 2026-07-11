@@ -137,8 +137,8 @@ struct OCSPCertStatus;
 struct CertStatus {
     // enum value of the status
     uint32_t i{0};
-    // string representation of the status
-    std::string s{};
+    // string representation of the status (points into a static name table)
+    const char* s{""};
     // Default constructor
     CertStatus() = default;
     CertStatus(const CertStatus&) = default;
@@ -190,7 +190,7 @@ struct CertStatus {
      * @param status the enum index of the status
      * @param status_string the string representation of the status
      */
-    explicit CertStatus(const uint32_t status, std::string  status_string) : i(status), s(std::move(status_string)) {}
+    explicit CertStatus(const uint32_t status, const char* status_string) : i(status), s(status_string) {}
 
     // Friend declarations to allow cross-comparisons only between specific types
     friend struct PVACertStatus;
@@ -229,7 +229,7 @@ struct PVACertStatus : CertStatus {
      * @param status the enum index of the status
      * @return the string representation of the status
      */
-    static std::string toString(const certstatus_t status) { return CERT_STATE(status); }
+    static const char* toString(const certstatus_t status) { return CERT_STATE(status); }
 };
 
 /**
@@ -259,7 +259,7 @@ struct OCSPCertStatus : CertStatus {
      * @param status the enum index of the status
      * @return the string representation of the status
      */
-    static std::string toString(const ocspcertstatus_t& status) { return OCSP_CERT_STATE(status); }
+    static const char* toString(const ocspcertstatus_t& status) { return OCSP_CERT_STATE(status); }
 };
 
 /**

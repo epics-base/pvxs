@@ -432,7 +432,7 @@ cert_status_ptr<CertStatusManager> CertStatusManager::subscribe(const client::Co
                                if (update) {
                                    try {
                                         auto status_update{PVACertificateStatus(update, trusted_store_ptr, cert_id)};
-                                        log_debug_printf(status, "Status subscription %s received: %s\n", s.name().c_str(), status_update.status.s.c_str());
+                                        log_debug_printf(status, "Status subscription %s received: %s\n", s.name().c_str(), status_update.status.s);
                                         log_debug_printf(status, "Calling (*cb)(status_update)%s\n", "");
                                         (*cb)(status_update);
                                         log_debug_printf(status, "Called (*cb)(status_update)%s\n", "");

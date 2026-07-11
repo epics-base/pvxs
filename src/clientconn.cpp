@@ -67,7 +67,7 @@ int clientOCSPCallback(SSL* ctx, ossl::SSLContext*) {
             const auto status = parsed_status.status();
 
             ex_data->setPeerStatus(peer_cert, status);
-            log_debug_printf(stapling, "Client OCSP stapled response is: %s\n", parsed_status.ocsp_status.s.c_str());
+            log_debug_printf(stapling, "Client OCSP stapled response is: %s\n", parsed_status.ocsp_status.s);
             log_debug_printf(stapling, "Client OCSP stapled status date: %s\n", parsed_status.status_date.s.c_str());
             log_debug_printf(stapling, "Client OCSP stapled status valid until: %s\n", parsed_status.status_valid_until_date.s.c_str());
             log_debug_printf(stapling, "Client OCSP stapled revocation date: %s\n", parsed_status.revocation_date.s.c_str());
