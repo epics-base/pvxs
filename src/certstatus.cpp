@@ -302,6 +302,16 @@ uint64_t ASN1ToUint64(const ASN1_INTEGER* asn1_number) {
 
 namespace {
 
+// Format the first 8 hex digits of an octet buffer (e.g. a key identifier or
+// issuer key hash), as used for the issuer part of a certificate ID.
+std::string firstEightHex(const unsigned char* data, const int length) {
+    std::stringstream ss;
+    for (int i = 0; i < length && ss.tellp() < 8; i++) {
+        ss << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(data[i]);
+    }
+    return ss.str();
+}
+
 // Convert an ASN1_INTEGER to its decimal string representation.
 std::string asn1IntegerToDecimalString(const ASN1_INTEGER* value) {
     const ossl_ptr<BIGNUM> bn(ASN1_INTEGER_to_BN(value, nullptr), false);
@@ -327,13 +337,10 @@ std::string certIdFromOCSPCertId(const OCSP_CERTID* cert_id_ptr)
         throw OCSPParseException("Failed to extract issuer key hash and serial from OCSP_CERTID");
     }
 
-    std::stringstream issuer;
-    for (int i = 0; i < issuer_key_hash->length && issuer.tellp() < 8; i++) {
-        issuer << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(issuer_key_hash->data[i]);
-    }
-    if (issuer.tellp() != 8)       throw OCSPParseException("Issuer key hash too short to construct cert_id");
+    const auto issuer = firstEightHex(issuer_key_hash->data, issuer_key_hash->length);
+    if (issuer.size() != 8)        throw OCSPParseException("Issuer key hash too short to construct cert_id");
 
-    return CertStatusManager::getCertIdFromSerialAndIssuer(issuer.str(), asn1IntegerToDecimalString(serial));
+    return CertStatusManager::getCertIdFromSerialAndIssuer(issuer, asn1IntegerToDecimalString(serial));
 }
 
 }
@@ -582,13 +589,7 @@ std::string CertStatusManager::getIssuerIdFromCert(const X509* cert_ptr) {
                                        false);
     if (!akid || !akid->keyid) throw CertStatusNoExtensionException("Failed to get Authority Key Identifier.");
 
-    // Convert the first 8 chars to hex
-    std::stringstream ss;
-    for (int i = 0; i < akid->keyid->length && ss.tellp() < 8; i++) {
-        ss << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(akid->keyid->data[i]);
-    }
-
-    return ss.str();
+    return firstEightHex(akid->keyid->data, akid->keyid->length);
 }
 
 std::string CertStatusManager::getSerialFromCert(const X509* cert_ptr) {
