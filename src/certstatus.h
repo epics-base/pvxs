@@ -13,6 +13,7 @@
 #define PVXS_CERTSTATUS_H_
 
 #include <iomanip>
+#include <limits>
 #include <utility>
 
 #include <openssl/evp.h>
@@ -37,13 +38,7 @@ DEFINE_LOGGER(status_setup, "pvxs.certs.status.setup");
 DEFINE_LOGGER(status, "pvxs.certs.status");
 
 // Define permanently valid status time
-#if defined(__TIME_T_MAX__)
-#define PERMANENTLY_VALID_STATUS __TIME_T_MAX__
-#elif defined(__INT_MAX__)
-#define PERMANENTLY_VALID_STATUS (time_t)(__INT_MAX__)
-#else
-#define PERMANENTLY_VALID_STATUS (time_t)(((unsigned long long)~0) >> 1)
-#endif
+#define PERMANENTLY_VALID_STATUS (std::numeric_limits<time_t>::max)()
 
 namespace pvxs {
 namespace certs {

@@ -98,8 +98,16 @@ struct CertDate {
      * @return the string representation in local time
      */
     static std::string toString(const std::time_t& time) {
+        // A time_t that is out of gmtime()'s representable range (for example the
+        // std::numeric_limits<time_t>::max() sentinel used for "permanently valid")
+        // yields a null std::tm.  Treat that as a never-expiring marker rather than
+        // dereferencing null.
+        const std::tm* tm = std::gmtime(&time);
+        if (!tm) {
+            return "PERMANENTLY VALID";
+        }
         char buffer[100];
-        if (std::strftime(buffer, sizeof(buffer), CERT_TIME_FORMAT, std::gmtime(&time))) {
+        if (std::strftime(buffer, sizeof(buffer), CERT_TIME_FORMAT, tm)) {
             return std::string(buffer);
         }
         throw CertTimeParseException("Failed to format status date");
