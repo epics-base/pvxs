@@ -22,8 +22,8 @@
 typedef epicsGuard<epicsMutex> Guard;
 typedef epicsGuardRelease<epicsMutex> UnGuard;
 
-DEFINE_LOGGER(logshared, "pvxs.svr.pv");
-DEFINE_LOGGER(logsource, "pvxs.svr.src");
+DEFINE_LOGGER(logshared, "pvxs.server.sharedpv");
+DEFINE_LOGGER(logsource, "pvxs.server.staticsource");
 DEFINE_LOGGER(logmailbox, "pvxs.mailbox");
 
 namespace pvxs {
@@ -223,7 +223,7 @@ void SharedPV::attach(std::unique_ptr<ChannelControl>&& ctrlop)
                     log_err_printf(logshared, "error in Put cb: %s\n", e.what());
                 }
             } else {
-                op->error("Put not implemented by this PV");
+                op->error("RPC not implemented by this PV");
             }
 
         });
@@ -472,39 +472,17 @@ struct StaticSource::Impl final : public Source
 {
     mutable RWLock lock;
 
-    pv_list_t pvs;
+    list_t pvs;
     decltype (List::names) list;
 
-    /**
-     * @brief Claims all the searched names specified in a search operation for
-     * this static source.
-     *
-     * This method will iterate over the list of searched names contained in the
-     * search operation.
-     *
-     * Then it will try to directly match the searched name with one of the
-     * names associated with this static source.
-     *
-     * If it finds a match it will claim the searched name so that processing,
-     * and optionally a response, can take place.
-     *
-     * @param op The 'Search' object that contains the searched names to
-     * be matched.
-     *
-     * @return void, but claims all searched names that match
-     */
     virtual void onSearch(Search &op) override
     {
         auto G(lock.lockReader());
-
         for(auto& name : op) {
-            const auto searched_name = std::string(name.name());
-
-            // Try a direct match of the `searched_name` in `pvs` map
-            SharedPV pv;
-            if(simpleMatch(searched_name, pv) ) {
+            auto it(pvs.find(name.name()));
+            if(it!=pvs.end()) {
                 name.claim();
-                log_debug_printf(logsource, "%p claim '%s'\n", this, searched_name.c_str());
+                log_debug_printf(logsource, "%p claim '%s'\n", this, name.name());
             }
         }
     }
@@ -514,16 +492,16 @@ struct StaticSource::Impl final : public Source
         SharedPV pv;
         {
             auto G(lock.lockReader());
-            const auto searched_name = op->name();
+            auto it(pvs.find(op->name()));
+            bool found = it!=pvs.end();
+            log_debug_printf(logsource, "%p %screate '%s'\n",
+                             this, found ? "":"can't ", op->name().c_str());
+            if(!found)
+                return; // not mine
+            pv = it->second;
+        }
 
-            if(simpleMatch(searched_name, pv)) {
-                log_debug_printf(logsource, "%p create '%s'\n", this, searched_name.c_str());
-                pv.attach(std::move(op));
-            } else {
-                // not mine
-                log_debug_printf(logsource, "%p can't create '%s'\n", this, searched_name.c_str());
-        }
-        }
+        pv.attach(std::move(op));
     }
 
     virtual List onList() override
@@ -555,16 +533,6 @@ struct StaticSource::Impl final : public Source
             // TODO: details for SharedPV
         }
     }
-
-  private:
-    bool simpleMatch(const std::string &searched_name, SharedPV &pv) {
-        auto it(pvs.find(searched_name));
-        if((it)!=pvs.end()) {
-            pv = *it->second;
-            return true;
-        }
-        return false;
-    };
 };
 
 StaticSource StaticSource::build()
@@ -592,7 +560,7 @@ void StaticSource::close()
         auto G(impl->lock.lockReader());
 
         for(auto& pair : impl->pvs) {
-            pair.second->close();
+            pair.second.close();
         }
     }
 }
@@ -607,7 +575,7 @@ StaticSource& StaticSource::add(const std::string& name, const SharedPV &pv)
     if(impl->pvs.find(name)!=impl->pvs.end())
         throw std::logic_error("add() will not create duplicate PV");
 
-    impl->pvs[name] = std::make_shared<SharedPV>(pv);
+    impl->pvs[name] = pv;
     impl->list.reset();
 
     return *this;
@@ -625,7 +593,7 @@ StaticSource& StaticSource::remove(const std::string& name)
         auto it(impl->pvs.find(name));
         if(it==impl->pvs.end())
             return *this;
-        pv = *it->second;
+        pv = it->second;
         impl->pvs.erase(it);
         impl->list.reset();
     }
@@ -644,11 +612,8 @@ StaticSource::list_t StaticSource::list() const
 
     {
         auto G(impl->lock.lockReader());
-        // Create list_t from impl->pvs
-        for (const auto& pair : impl->pvs) {
-            ret[pair.first] = *(pair.second);
-        }
-        return ret;
+
+        return impl->pvs; // copies map
     }
 }
 
