@@ -370,15 +370,28 @@ ParsedOCSPStatus CertStatusManager::parse(const ossl_ptr<OCSP_RESPONSE> &ocsp_re
     // Verify OCSP response is signed by provided trusted root certificate authority
     verifyOCSPResponse(basic_response, trusted_store_ptr);
 
-    OCSP_SINGLERESP *single_response = OCSP_resp_get0(basic_response.get(), 0);
-    if (!single_response)                                   throw OCSPParseException("No entries found in OCSP response");
+    // An OCSP response may carry several SINGLERESPs; scan them for the one whose
+    // cert_id matches the certificate we are asking about rather than assuming index 0.
+    const int response_count = OCSP_resp_count(basic_response.get());
+    if (response_count <= 0)                                throw OCSPParseException("No entries found in OCSP response");
+
+    OCSP_SINGLERESP *single_response = nullptr;
+    const OCSP_CERTID *ocsp_cert_id = nullptr;
+    for (int i = 0; i < response_count; i++) {
+        OCSP_SINGLERESP *candidate = OCSP_resp_get0(basic_response.get(), i);
+        if (!candidate) continue;
+        const OCSP_CERTID *candidate_cert_id = OCSP_SINGLERESP_get0_id(candidate);
+        if (certIdFromOCSPCertId(candidate_cert_id) == cert_id) {
+            single_response = candidate;
+            ocsp_cert_id = candidate_cert_id;
+            break;
+        }
+    }
+    if (!single_response)                                   throw OCSPParseException(SB() << "OCSP response contains no entry for cert_id " << cert_id);
 
     ASN1_GENERALIZEDTIME *this_update = nullptr, *next_update = nullptr, *revocation_time = nullptr;
     int reason = 0;
 
-    const OCSP_CERTID *ocsp_cert_id = OCSP_SINGLERESP_get0_id(single_response);
-    const auto observed_cert_id = certIdFromOCSPCertId(ocsp_cert_id);
-    if (observed_cert_id != cert_id)                        throw OCSPParseException(SB() << "OCSP response cert_id mismatch. Expected: " << cert_id << ", Got: " << observed_cert_id);
     ASN1_INTEGER *serial = nullptr;
     if (OCSP_id_get0_info(nullptr, nullptr, nullptr, &serial, const_cast<OCSP_CERTID *>(ocsp_cert_id)) != 1 || !serial) {
         throw OCSPParseException("Failed to extract serial from OCSP_CERTID");
