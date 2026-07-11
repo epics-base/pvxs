@@ -455,17 +455,17 @@ cert_status_ptr<CertStatusManager> CertStatusManager::subscribe(const client::Co
                                         (*cb)(status_update);
                                         log_debug_printf(status, "Called (*cb)(status_update)%s\n", "");
                                    } catch (OCSPParseException &e) {
-                                       log_debug_printf(status, "Ignoring invalid %s status update: %s\n", s.name().c_str(), e.what());
+                                       log_err_printf(status, "Ignoring invalid %s status update: %s\n", s.name().c_str(), e.what());
                                    } catch (std::invalid_argument &e) {
-                                       log_debug_printf(status, "Ignoring invalid %s status update: %s\n", s.name().c_str(), e.what());
+                                       log_err_printf(status, "Ignoring invalid %s status update: %s\n", s.name().c_str(), e.what());
                                    } catch (std::exception &e) {
                                        log_err_printf(status, "Error processing %s status update: %s\n", s.name().c_str(), e.what());
                                    }
                                }
                            } catch (client::Connected &conn) {
-                               log_debug_printf(status, "Connected Subscription %s: %s\n", s.name().c_str(), conn.peerName.c_str());
+                               log_info_printf(status, "Connected Subscription %s: %s\n", s.name().c_str(), conn.peerName.c_str());
                            } catch (client::Disconnect &conn) {
-                               log_debug_printf(status, "Disconnected Subscription %s: %s\n", s.name().c_str(), conn.what());
+                               log_info_printf(status, "Disconnected Subscription %s: %s\n", s.name().c_str(), conn.what());
                            } catch (std::exception &e) {
                                log_err_printf(status, "Error Getting Subscription %s: %s\n", s.name().c_str(), e.what());
                            }
