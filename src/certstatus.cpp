@@ -302,6 +302,20 @@ uint64_t ASN1ToUint64(const ASN1_INTEGER* asn1_number) {
 
 namespace {
 
+// Convert an ASN1_INTEGER to its decimal string representation.
+std::string asn1IntegerToDecimalString(const ASN1_INTEGER* value) {
+    const ossl_ptr<BIGNUM> bn(ASN1_INTEGER_to_BN(value, nullptr), false);
+    if (!bn) throw OCSPParseException("Failed to convert integer to BIGNUM");
+    if (BN_is_negative(bn.get())) throw OCSPParseException("Serial number is negative");
+    if (BN_num_bits(bn.get()) > 64) throw OCSPParseException("Serial number overflow: value exceeds uint64_t");
+
+    char* decimal_str = BN_bn2dec(bn.get());
+    if (!decimal_str) throw OCSPParseException("Failed to convert integer to string");
+    const std::string result(decimal_str);
+    OPENSSL_free(decimal_str);
+    return result;
+}
+
 std::string certIdFromOCSPCertId(const OCSP_CERTID* cert_id_ptr)
 {
     if (!cert_id_ptr)                 throw OCSPParseException("No OCSP_CERTID found in OCSP response");
@@ -319,17 +333,7 @@ std::string certIdFromOCSPCertId(const OCSP_CERTID* cert_id_ptr)
     }
     if (issuer.tellp() != 8)       throw OCSPParseException("Issuer key hash too short to construct cert_id");
 
-    const ossl_ptr<BIGNUM> bn(ASN1_INTEGER_to_BN(serial, nullptr), false);
-    if (!bn)                          throw OCSPParseException("Failed to convert OCSP serial number to BIGNUM");
-    if (BN_is_negative(bn.get()))  throw OCSPParseException("OCSP serial number is negative");
-    if (BN_num_bits(bn.get()) > 64) throw OCSPParseException("OCSP serial number overflow: value exceeds uint64_t");
-
-    char* decimal_str = BN_bn2dec(bn.get());
-    if (!decimal_str)                 throw OCSPParseException("Failed to convert OCSP serial number to string");
-    const std::string serial_s(decimal_str);
-    OPENSSL_free(decimal_str);
-
-    return CertStatusManager::getCertIdFromSerialAndIssuer(issuer.str(), serial_s);
+    return CertStatusManager::getCertIdFromSerialAndIssuer(issuer.str(), asn1IntegerToDecimalString(serial));
 }
 
 }
@@ -592,24 +596,7 @@ std::string CertStatusManager::getSerialFromCert(const X509* cert_ptr) {
     if (!serial) {
         throw CertStatusNoExtensionException("Failed to get Serial Number from certificate.");
     }
-
-    // Convert ASN1_INTEGER to BIGNUM
-    const ossl_ptr<BIGNUM> bn(ASN1_INTEGER_to_BN(serial, nullptr), false);
-    if (!bn) {
-        throw CertStatusNoExtensionException("Failed to convert Serial Number to BIGNUM.");
-    }
-
-    // Convert BIGNUM to decimal string
-    char* decimal_str = BN_bn2dec(bn.get());
-    if (!decimal_str) {
-        throw CertStatusNoExtensionException("Failed to convert Serial Number to string.");
-    }
-
-    // Create a C++ string and free the C string
-    std::string result(decimal_str);
-    OPENSSL_free(decimal_str);
-
-    return result;
+    return asn1IntegerToDecimalString(serial);
 }
 
 std::string CertStatusManager::getCertIdFromCert(const X509 *cert_ptr) {
