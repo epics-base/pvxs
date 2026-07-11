@@ -285,15 +285,6 @@ public:
     /** Remove an element from the queue.
      *
      * Blocks while queue is empty.
-     *
-     * Backward-compatibility note:
-     * - Public API and semantics are unchanged. This method still returns a T by value
-     *   and wakes writers/readers exactly as before.
-     * - The implementation move-constructs the return value directly from the front() entry
-     *   instead of default-constructing then move-assigning. This removes an incidental
-     *   requirement that T be default-constructible and move-assignable. Only being
-     *   move-constructible is required, which is a relaxation and thus backward compatible
-     *   for previously working types. Types that worked before will continue to work.
      */
     T pop() {
         bool wakeupW, wakeupR;
