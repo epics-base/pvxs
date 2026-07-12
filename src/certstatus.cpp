@@ -415,31 +415,33 @@ cert_status_ptr<CertStatusManager> CertStatusManager::subscribe(const client::Co
     try {
         cert_status_ptr<CertStatusManager> cert_status_manager(new CertStatusManager(client));
         cert_status_manager->callback_ref = std::move(fn);
-        std::weak_ptr<CertStatusManager> weak_cert_status_manager(cert_status_manager);
+        std::weak_ptr<StatusCallback> weak_callback(cert_status_manager->callback_ref);
 
         log_debug_printf(status, "Subscribing to status: %s\n", status_pv.c_str());
         auto sub = cert_status_manager->client_.monitor(status_pv)
                        .maskConnected(true)
                        .maskDisconnected(true)
-                       .event([trusted_store_ptr, weak_cert_status_manager, cert_id](client::Subscription &s) {
+                       .event([trusted_store_ptr, weak_callback, cert_id](client::Subscription &s) {
                            try {
-                               const auto csm = weak_cert_status_manager.lock();
-                               if (!csm) return;
+                               // Lock only the callback, never the manager: the worker thread must
+                               // not be able to initiate destruction of the manager / client::Context
+                               // (which would ~evbase -> join() this very worker thread -> self-join).
+                               const auto cb = weak_callback.lock();
+                               if (!cb) return;
                                const auto update = s.pop();
                                if (update) {
                                    try {
                                         auto status_update{PVACertificateStatus(update, trusted_store_ptr, cert_id)};
                                         log_debug_printf(status, "Status subscription %s received: %s\n", s.name().c_str(), status_update.status.s.c_str());
-                                        csm->status_ = std::make_shared<CertificateStatus>(status_update);
-                                        log_debug_printf(status, "Calling (*csm->callback_ref)(status_update)%s\n", "");
-                                        (*csm->callback_ref)(status_update);
-                                        log_debug_printf(status, "Called (*csm->callback_ref)(status_update)%s\n", "");
+                                        log_debug_printf(status, "Calling (*cb)(status_update)%s\n", "");
+                                        (*cb)(status_update);
+                                        log_debug_printf(status, "Called (*cb)(status_update)%s\n", "");
                                    } catch (OCSPParseException &e) {
                                        log_debug_printf(status, "Ignoring invalid %s status update: %s\n", s.name().c_str(), e.what());
                                    } catch (std::invalid_argument &e) {
                                        log_debug_printf(status, "Ignoring invalid %s status update: %s\n", s.name().c_str(), e.what());
                                    } catch (std::exception &e) {
-                                       log_err_printf(status, "%s\n", e.what());
+                                       log_err_printf(status, "Error processing %s status update: %s\n", s.name().c_str(), e.what());
                                    }
                                }
                            } catch (client::Connected &conn) {

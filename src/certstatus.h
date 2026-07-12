@@ -35,7 +35,7 @@
 typedef epicsGuard<epicsMutex> Guard;
 typedef epicsGuardRelease<epicsMutex> UnGuard;
 
-DEFINE_LOGGER(status_setup, "pvxs.certs.status");
+DEFINE_LOGGER(status_setup, "pvxs.certs.status.setup");
 DEFINE_LOGGER(status, "pvxs.certs.status");
 
 // Define permanently valid status time
@@ -919,7 +919,6 @@ class CertStatusManager {
     std::shared_ptr<StatusCallback> callback_ref{};  // Option placeholder for ref to callback if used
     client::Context client_;
     std::shared_ptr<client::Subscription> sub_;
-    std::shared_ptr<CertificateStatus> status_;
 
     /**
      * @brief Get the custom status extension from the given certificate
