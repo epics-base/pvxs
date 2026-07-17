@@ -148,6 +148,30 @@ void testGetScalar()
               "valueAlarm.highAlarmLimit double = 100\n"
             )<<" fetch VAL w/ meta-data.  delta output";
 
+    // A field whose record supplies get_precision but NULLs get_graphic_double
+    // (bo, mbbiDirect, mbboDirect) must still be served its display.precision:
+    // DBR_PRECISION and DBR_GR_DOUBLE are independent rset slots.  bo.HIGH
+    // reports boHIGHprecision (2) while bo NULLs get_graphic_double, so the
+    // delta carries display.precision but neither display.limitLow nor
+    // display.limitHigh.
+    val = ctxt.get("test:precprop.HIGH").exec()->wait(5.0);
+    testStrEq(std::string(SB()<<val.format().delta()),
+              "value double = 5\n"
+              "alarm.severity int32_t = 3\n"
+              "alarm.status int32_t = 2\n"
+              "alarm.message string = \"UDF\"\n"
+              "timeStamp.secondsPastEpoch int64_t = 631152000\n"
+              "timeStamp.nanoseconds int32_t = 0\n"
+              "timeStamp.userTag int32_t = 0\n"
+              "display.description string = \"\"\n"
+              "display.units string = \"s\"\n"
+              "display.precision int32_t = 2\n"
+              "display.form.choices string[] = {7}[\"Default\", \"String\", \"Binary\", \"Decimal\", \"Hex\", \"Exponential\", \"Engineering\"]\n"
+              "control.limitLow double = 0\n"
+              "control.limitHigh double = 100000\n"
+            )<<" precprop.HIGH serves display.precision though bo NULLs "
+              "get_graphic_double; display.limitLow/limitHigh stay absent";
+
     val = ctxt.get("test:ai.DESC").exec()->wait(5.0);
     checkUTAG(val);
     testStrEq(std::string(SB()<<val.format()),
