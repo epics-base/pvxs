@@ -175,6 +175,7 @@ void testDefs()
         defs.clear();
         conf.updateDefs(defs);
         testEq(defs["EPICS_PVAS_TLS_KEYCHAIN"], "server.p12;<password read>");
+        testTrue(defs.find("EPICS_PVAS_TLS_KEYCHAIN_PWD_FILE") == defs.end());
 
         defs.clear();
         defs["EPICS_PVAS_TLS_KEYCHAIN"] = "server.p12";
@@ -250,7 +251,7 @@ void testDNS()
 
 MAIN(testconfig)
 {
-    testPlan(41);
+    testPlan(42);
     testSetup();
     testDefs();
     logger_config_env();
