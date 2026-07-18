@@ -143,6 +143,47 @@ void testDefs()
         testEq(conf.beaconDestinations, std::vector<std::string>({"1.2.1.2:1234", "4.3.2.1:1234"}));
         testEq(conf.interfaces, std::vector<std::string>({"1.1.1.1:5678", "1.2.3.4:5678"}));
     }
+
+#ifdef PVXS_ENABLE_OPENSSL
+    {
+        client::Config conf;
+        client::Config::defs_t defs;
+        defs["EPICS_PVA_TLS_KEYCHAIN"] = "client.p12;first;second";
+        defs["EPICS_PVA_TLS_KEYCHAIN_PWD_FILE"] = "legacy-password-file";
+        conf.applyDefs(defs);
+        testEq(conf.tls_keychain_file, "client.p12");
+        defs.clear();
+        conf.updateDefs(defs);
+        testEq(defs["EPICS_PVA_TLS_KEYCHAIN"], "client.p12;<password read>");
+        testTrue(defs.find("EPICS_PVA_TLS_KEYCHAIN_PWD_FILE") == defs.end());
+
+        defs.clear();
+        defs["EPICS_PVA_TLS_KEYCHAIN"] = "client.p12";
+        conf.applyDefs(defs);
+        defs.clear();
+        conf.updateDefs(defs);
+        testEq(defs["EPICS_PVA_TLS_KEYCHAIN"], "client.p12");
+    }
+
+    {
+        server::Config conf;
+        server::Config::defs_t defs;
+        defs["EPICS_PVAS_TLS_KEYCHAIN"] = "server.p12;first;second";
+        defs["EPICS_PVAS_TLS_KEYCHAIN_PWD_FILE"] = "legacy-password-file";
+        conf.applyDefs(defs);
+        testEq(conf.tls_keychain_file, "server.p12");
+        defs.clear();
+        conf.updateDefs(defs);
+        testEq(defs["EPICS_PVAS_TLS_KEYCHAIN"], "server.p12;<password read>");
+
+        defs.clear();
+        defs["EPICS_PVAS_TLS_KEYCHAIN"] = "server.p12";
+        conf.applyDefs(defs);
+        defs.clear();
+        conf.updateDefs(defs);
+        testEq(defs["EPICS_PVAS_TLS_KEYCHAIN"], "server.p12");
+    }
+#endif
 }
 
 void testServerAuto()
@@ -209,7 +250,7 @@ void testDNS()
 
 MAIN(testconfig)
 {
-    testPlan(34);
+    testPlan(41);
     testSetup();
     testDefs();
     logger_config_env();

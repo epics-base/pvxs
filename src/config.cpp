@@ -539,6 +539,7 @@ void _fromDefs(Config& self, const std::map<std::string, std::string>& defs, boo
         } else {
             // No semicolon: the whole value is the keychain filename
             self.tls_keychain_file = pickone.val;
+            self.setKeychainPassword({});
         }
         ensureDirectoryExists(self.tls_keychain_file);
     } else {
@@ -761,6 +762,7 @@ void _fromDefs(Config& self, const std::map<std::string, std::string>& defs, boo
             self.setKeychainPassword(pickone.val.substr(sep + 1));
         } else {
             self.tls_keychain_file = pickone.val;
+            self.setKeychainPassword({});
         }
         ensureDirectoryExists(self.tls_keychain_file);
     } else {
