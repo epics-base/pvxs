@@ -66,7 +66,12 @@ void to_wire(Buffer& buf, const FieldDesc* cur)
     }
 }
 
+#if defined(__rtems__) || defined(vxWorks)
+// a lower limit on embedded targets
+static constexpr unsigned maxNestingDepth = 10u;
+#else
 static constexpr unsigned maxNestingDepth = 20u;
+#endif
 
 void from_wire(Buffer& buf, std::vector<FieldDesc>& descs, TypeStore& cache, unsigned depth)
 {
