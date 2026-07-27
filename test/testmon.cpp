@@ -8,6 +8,8 @@
 #include <atomic>
 #include <typeinfo>
 
+#include <string.h>
+
 #include <testMain.h>
 
 #include <epicsUnitTest.h>
@@ -24,6 +26,60 @@
 
 namespace {
 using namespace pvxs;
+
+// a Source whose Monitor setup fails.  ViaConnect is the case a Source which
+// does not repeat SharedPV's internal try/catch hits without any error of its
+// own: MonitorSetupOp::connect() throws for a pvRequest selecting no fields.
+struct ThrowingSource : public server::Source {
+    enum mode_t {AtSetup, AtStart, ViaConnect};
+    const mode_t mode;
+    const Value prototype;
+    // signaled just before a callback throws of its own accord
+    const std::shared_ptr<epicsEvent> entered;
+
+    explicit ThrowingSource(mode_t mode)
+        :mode(mode)
+        ,prototype(nt::NTScalar{TypeCode::Int32}.create())
+        ,entered(std::make_shared<epicsEvent>())
+    {}
+
+    virtual void onSearch(Search &op) override final {
+        for(auto& pv : op) {
+            if(strcmp(pv.name(), "thrower")==0)
+                pv.claim();
+        }
+    }
+
+    virtual void onCreate(std::unique_ptr<server::ChannelControl> &&rop) override final {
+        if(rop->name()!="thrower")
+            return;
+
+        auto op(std::move(rop));
+        auto mode(this->mode);
+        auto ptype(prototype);
+        auto entered(this->entered);
+        op->onSubscribe([mode, ptype, entered](std::unique_ptr<server::MonitorSetupOp>&& mop) {
+            if(mode==AtSetup) {
+                entered->signal();
+                throw std::runtime_error("onSubscribe throws");
+            }
+
+            // for ViaConnect this is where the client's pvRequest throws
+            std::shared_ptr<server::MonitorControlOp> ctrl(mop->connect(ptype));
+
+            if(mode==AtStart) {
+                // the callback holds the control op alive; MonitorOp::cleanup()
+                // clears onStart and so breaks the cycle.  throws on start, and
+                // again on the stop which ServerOp::cleanup() synthesizes when
+                // the client destroys the operation
+                ctrl->onStart([ctrl, entered](bool start) {
+                    entered->signal();
+                    throw std::runtime_error(start ? "onStart(true) throws" : "onStart(false) throws");
+                });
+            }
+        });
+    }
+};
 
 struct BasicTest {
     Value initial;
@@ -187,6 +243,138 @@ struct BasicTest {
         testThrows<client::RemoteError>([this, &sub]() {
             testShow()<<pop(sub, evt);
         });
+    }
+
+    // a Source which does not guard connect() itself, as SharedPV does, is
+    // failed by a pvRequest the client chooses
+    void connectThrows()
+    {
+        testShow()<<__func__;
+
+        serv.addSource("thrower", std::make_shared<ThrowingSource>(ThrowingSource::ViaConnect));
+        serv.start();
+        mbox.open(initial);
+        subscribe("mailbox");
+
+        testThrows<client::Connected>([this](){
+            pop(sub, evt);
+        });
+        testEq(pop(sub, evt)["value"].as<int32_t>(), 42);
+
+        epicsEvent bevt;
+        auto bad(cli.monitor("thrower")
+                 .field("nonexistent")
+                 .maskConnected(true)
+                 .maskDisconnected(false)
+                 .event([&bevt](client::Subscription&) {
+                     bevt.signal();
+                 })
+                 .exec());
+        cli.hurryUp();
+
+        testThrows<client::RemoteError>([&bad, &bevt]() {
+            testShow()<<pop(bad, bevt);
+        });
+
+        post(43);
+        bool survived = false;
+        try {
+            survived = pop(sub, evt)["value"].as<int32_t>()==43;
+        }catch(std::exception& e){
+            testDiag("circuit lost: %s : %s", typeid(e).name(), e.what());
+        }
+        testOk(survived, "monitor survives a rejected pvRequest on the same circuit");
+    }
+
+    void setupThrows()
+    {
+        testShow()<<__func__;
+
+        serv.addSource("thrower", std::make_shared<ThrowingSource>(ThrowingSource::AtSetup));
+        serv.start();
+        mbox.open(initial);
+        subscribe("mailbox");
+
+        testThrows<client::Connected>([this](){
+            pop(sub, evt);
+        });
+        testEq(pop(sub, evt)["value"].as<int32_t>(), 42);
+
+        // a Source callback which throws fails only its own operation ...
+        epicsEvent bevt;
+        auto bad(cli.monitor("thrower")
+                 .maskConnected(true)
+                 .maskDisconnected(false)
+                 .event([&bevt](client::Subscription&) {
+                     bevt.signal();
+                 })
+                 .exec());
+        cli.hurryUp();
+
+        testThrows<client::RemoteError>([&bad, &bevt]() {
+            testShow()<<pop(bad, bevt);
+        });
+
+        // ... and leaves the TCP circuit it shares with "mailbox" intact
+        post(43);
+        bool survived = false;
+        try {
+            survived = pop(sub, evt)["value"].as<int32_t>()==43;
+        }catch(std::exception& e){
+            testDiag("circuit lost: %s : %s", typeid(e).name(), e.what());
+        }
+        testOk(survived, "monitor survives a throwing setup on the same circuit");
+    }
+
+    void startThrows()
+    {
+        testShow()<<__func__;
+
+        auto src(std::make_shared<ThrowingSource>(ThrowingSource::AtStart));
+        serv.addSource("thrower", src);
+        serv.start();
+        mbox.open(initial);
+        subscribe("mailbox");
+
+        testThrows<client::Connected>([this](){
+            pop(sub, evt);
+        });
+        testEq(pop(sub, evt)["value"].as<int32_t>(), 42);
+
+        // setup succeeds; the server calls onStart() when the client starts it
+        epicsEvent bevt;
+        auto bad(cli.monitor("thrower")
+                 .maskConnected(true)
+                 .maskDisconnected(true)
+                 .event([&bevt](client::Subscription&) {
+                     bevt.signal();
+                 })
+                 .exec());
+        cli.hurryUp();
+        testTrue(src->entered->wait(5.0))<<"onStart(true) reached";
+
+        post(43);
+        bool survived = false;
+        try {
+            survived = pop(sub, evt)["value"].as<int32_t>()==43;
+        }catch(std::exception& e){
+            testDiag("circuit lost: %s : %s", typeid(e).name(), e.what());
+        }
+        testOk(survived, "monitor survives a throwing onStart on the same circuit");
+
+        // destroying the operation makes ServerOp::cleanup() stop it, which
+        // calls onStart(false) from a path the client uses for every teardown
+        bad.reset();
+        testTrue(src->entered->wait(5.0))<<"onStart(false) reached";
+
+        post(44);
+        survived = false;
+        try {
+            survived = pop(sub, evt)["value"].as<int32_t>()==44;
+        }catch(std::exception& e){
+            testDiag("circuit lost: %s : %s", typeid(e).name(), e.what());
+        }
+        testOk(survived, "monitor survives a throwing stop on the same circuit");
     }
 
     void testNoMark()
@@ -414,7 +602,7 @@ struct TestReconn : public BasicTest
 
 MAIN(testmon)
 {
-    testPlan(45);
+    testPlan(59);
     testSetup();
     try{
         logger_config_env();
@@ -423,6 +611,9 @@ MAIN(testmon)
         BasicTest().asyncCancel();
         BasicTest().cancelDuringEvent();
         BasicTest().badRequest();
+        BasicTest().connectThrows();
+        BasicTest().setupThrows();
+        BasicTest().startThrows();
         BasicTest().testNoMark();
         TestLifeCycle().testBasic(true);
         TestLifeCycle().testBasic(false);

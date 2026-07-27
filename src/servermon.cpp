@@ -589,7 +589,13 @@ void ServerConn::handle_MONITOR()
                    std::string(SB()<<pvRequest).c_str());
 
         if(chan->onSubscribe) {
-            chan->onSubscribe(std::move(ctrl));
+            try {
+                chan->onSubscribe(std::move(ctrl));
+            }catch(std::exception& e){
+                // a remote error will be signaled from ~ServerMonitorSetup
+                log_err_printf(connsetup, "Client %s Monitor \"%s\" onSubscribe() error: %s\n",
+                               peerName.c_str(), chan->name.c_str(), e.what());
+            }
         } else {
             ctrl->error("Monitor operation not implemented by this PV");
         }
@@ -679,8 +685,14 @@ void ServerConn::handle_MONITOR()
                 op->state = start ? ServerOp::Executing : ServerOp::Idle;
             }
 
-            if(op->onStart)
-                op->onStart(start);
+            if(op->onStart) {
+                try {
+                    op->onStart(start);
+                }catch(std::exception& e){
+                    log_err_printf(connsetup, "Client %s IOID %u onStart() error: %s\n",
+                                   peerName.c_str(), unsigned(ioid), e.what());
+                }
+            }
 
             {
                 Guard G(op->lock);
