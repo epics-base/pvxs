@@ -24,8 +24,16 @@ set(CMAKE_PLATFORM_IMPLICIT_LINK_DIRECTORIES
 )
 set(CMAKE_SYSTEM_LIBRARY_PATH ${CMAKE_PLATFORM_IMPLICIT_LINK_DIRECTORIES})
 
+# RTEMS 6 no longer installs a BSP spec file.  Passing -specs bsp_specs to
+# an RTEMS 6 toolchain fails before anything is compiled.
+if(CMAKE_SYSTEM_VERSION VERSION_LESS 6)
+  set(_rtems_bsp_specs "-specs bsp_specs ")
+else()
+  set(_rtems_bsp_specs "")
+endif()
+
 set(CMAKE_C_FLAGS_INIT
- "-B${RTEMS_TARGET_PREFIX}/${RTEMS_BSP}/lib/ -specs bsp_specs -qrtems ${RTEMS_BSP_C_FLAGS}"
+ "-B${RTEMS_TARGET_PREFIX}/${RTEMS_BSP}/lib/ ${_rtems_bsp_specs}-qrtems ${RTEMS_BSP_C_FLAGS}"
 )
 set(CMAKE_C_FLAGS_INIT ${CMAKE_C_FLAGS_INIT})
 
