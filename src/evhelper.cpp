@@ -11,6 +11,10 @@
 #  include <mswsock.h>
 #endif
 
+#ifdef __rtems__
+#  include <rtems/score/cpuopts.h>
+#endif
+
 #include <cstring>
 #include <system_error>
 #include <deque>
@@ -175,12 +179,20 @@ struct evbase::Pvt final : public epicsThreadRunable
         try {
             evconfig conf(__FILE__, __LINE__, event_config_new());
 #ifdef __rtems__
+#  if (__RTEMS_MAJOR__ < 6) || (__RTEMS_MAJOR__ == 6 && __RTEMS_MINOR__ <= 2)
             /* with libbsd circa RTEMS 5.1
              * TCP peer close/reset notifications appear to be lost.
              * Maybe due to absence of NOTE_EOF?
              * poll() seems to work though.
+             *
+             * The rtems-libbsd descriptor fixes restoring kqueue ship in
+             * RTEMS 6.3; the version condition follows the rtems-libbsd
+             * maintainer's recommendation.  Note the poll backend spins
+             * on RTEMS 6: libbsd reports POLLERR for the pipe() libevent
+             * notifies itself through.
              */
             event_config_avoid_method(conf.get(), "kqueue");
+#  endif
 #endif
             decltype (base) tbase(__FILE__, __LINE__, event_base_new_with_config(conf.get()));
             if(evthread_make_base_notifiable(tbase.get())) {
