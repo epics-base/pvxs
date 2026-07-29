@@ -53,12 +53,12 @@ jobs:
           py: cp314-cp314t
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
         with:
             submodules: recursive
 
       - name: Automatic core dumper analysis
-        uses: mdavidsaver/ci-core-dumper@master
+        uses: mdavidsaver/ci-core-dumper@cda67d63a56db36aca1126d8d00aa5f7ff1ee1db # master
 
       - name: Detect pre-release
         run: python ./gha-set-pre.py
@@ -72,7 +72,14 @@ jobs:
             ls /opt/python/
             /opt/python/${{ matrix.py }}/bin/python --version
 
-            yum -y install gdb || dnf -y install gdb || (apt update && apt -y install gdb)
+            # best-effort install for core dump analysis.  manylinux2010 images may have a broken/archived EPEL.
+            if command -v yum >/dev/null 2>&1; then
+                yum -y --disablerepo=epel install gdb || yum -y install gdb || true
+            elif command -v dnf >/dev/null 2>&1; then
+                dnf -y install gdb || true
+            elif command -v apt-get >/dev/null 2>&1; then
+                apt-get update && apt-get -y install gdb || true
+            fi
 
             export PATH="/opt/python/${{ matrix.py }}/bin:\$PATH"
             export SETUPTOOLS_DSO_PLAT_NAME="${{ matrix.ml }}"
@@ -118,7 +125,7 @@ jobs:
 
       - name: Save wheels
         if: ${{ ! matrix.skip }}
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           retention-days: 1
           name: whl-${{ matrix.py }}-${{ matrix.ml }}
@@ -126,7 +133,7 @@ jobs:
 
       - name: Save source
         if: ${{ matrix.src }}
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           retention-days: 1
           name: whl-source
@@ -194,11 +201,11 @@ jobs:
             arch: macosx_11_0_universal2
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
         with:
             submodules: recursive
 
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: ${{ matrix.py }}
 
@@ -241,7 +248,7 @@ jobs:
 
       - name: Save wheels
         if: ${{ ! matrix.skip }}
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           retention-days: 1
           name: whl-${{ matrix.py }}-${{ matrix.os }}
@@ -252,13 +259,13 @@ jobs:
     needs: [manylinux, native]
     steps:
       - name: Download
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
             merge-multiple: true
 
       - run: ls -lhtr
 
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: 3.11
 

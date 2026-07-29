@@ -12,7 +12,7 @@ LIBEVENT ?= $(LIBEVENT_$(T_A))
 LIBEVENT_$(T_A) ?= $(wildcard $(abspath $(INSTALL_LOCATION)/bundle/usr/$(T_A)))
 
 _LIBEVENT_BUNDLE_LIBS_YES = event_openssl
-ifeq (WIN32,$(OS_CLASS))
+ifeq (msvc,$(CMPLR_CLASS))
 _LIBEVENT_SYS_LIBS_YES += libssl libcrypto
 else
 _LIBEVENT_SYS_LIBS_YES += ssl crypto

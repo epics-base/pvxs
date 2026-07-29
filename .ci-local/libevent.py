@@ -66,7 +66,4 @@ for arch in os.environ.get('CI_CROSS_TARGETS', '').split(':'):
 
     print('Enable', arch, arch_ver)
 
-    with open('configure/CONFIG_SITE.local', 'a') as F:
-        F.write('\nCROSS_COMPILER_TARGET_ARCHS+=%s\n'%arch)
-
     check_call('make -C bundle libevent.'+arch+' VERBOSE=1', shell=True, env=env)

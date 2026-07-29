@@ -1,0 +1,92 @@
+# EPICS YAML
+version: 1.0
+$schema: https://json-schema.org/draft/2020-12/schema
+# yaml-language-server: $schema=../../epics-base/modules/libcom/src/as/epics-access-security-schema.yaml
+
+# user access groups
+uags:
+  - name: bar
+    users:
+      - boss
+  - name: foo
+    users:
+      - testing
+  - name: ops
+    users:
+      - geek
+
+# host access groups
+hags:
+  - name: local
+    hosts:
+      - 127.0.0.1
+      - localhost
+      - 192.168.0.11
+  - name: admin
+    hosts:
+      - admin.intranet.com
+
+# Access security group definitions
+asgs:
+  # no access by default
+  - name: DEFAULT
+    rules:
+      - level: 0
+        access: NONE
+        trapwrite: false
+
+  # read only access for non-secure connections for foo and ops
+  - name: ro
+    rules:
+      - level: 0
+        access: NONE
+        trapwrite: false
+      - level: 1
+        access: READ
+        trapwrite: false
+        uags:
+          - foo
+          - ops
+        methods:
+          - ca
+
+  # read write access for foo with a secure connection authenticated by EPICS Root Certificate Authority
+  - name: rw
+    links:
+      - INPA: ACC-CT{}Prmt:Remote-Sel
+      - INPB: ACC-CT{}Prmt:Remote-Sel
+    rules:
+      - level: 0
+        access: NONE
+        trapwrite: false
+      - level: 1
+        access: WRITE
+        trapwrite: true
+        calc: VAL>=0
+        uags:
+          - foo
+        methods:
+          - x509
+        authorities:
+          - EPICS Root Certificate Authority
+
+  # RPC access for localhost user bar with an EPICS Root Certificate Authority authenticated connection
+  - name: rwx
+    rules:
+      - level: 0
+        access: NONE
+        trapwrite: false
+      - level: 1
+        access: RPC
+        trapwrite: true
+        uags:
+          - bar
+        hags:
+          - local
+        methods:
+          - x509
+          - ignored
+          - ignored_too
+        authorities:
+          - EPICS Root Certificate Authority
+          - ORNL Org Certificate Authority

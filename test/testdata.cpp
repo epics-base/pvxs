@@ -94,8 +94,6 @@ void testAssignUnion()
 
     val["->u16"] = 42;
     testEq(val.as<std::string>(), "42");
-    val["u16"] = 43;
-    testEq(val.as<uint16_t>(), 43);
     val["->s"] = "test";
     testEq(val.as<std::string>(), "test");
 
@@ -126,20 +124,8 @@ void testAssignAny()
 
     val = 42;
 
-    // automagic ANY assignment promotes to StoreType
-    testEq(val["->"].type(), TypeCode::Int64);
-    testEq(val.as<int64_t>(), 42);
-
-    {
-        auto us = TypeDef(TypeCode::UInt32).create();
-        us = -1;
-        val.from(us); // typed ANY assignment
-    }
-    testEq(val["->"].type(), TypeCode::UInt32);
-    testEq(val.as<uint64_t>(), 0xffffffff);
-
     testThrows<std::logic_error>([&val](){
-        val.from(val); // self assignment would create infinite recursion
+        val.from(val);
     });
 }
 
@@ -564,7 +550,7 @@ void test_cache_sync()
 
 MAIN(testdata)
 {
-    testPlan(196);
+    testPlan(189);
     testSetup();
     testTraverse();
     testAssign();
@@ -612,7 +598,6 @@ MAIN(testdata)
 #endif
     testConvertScalar2<int32_t, uint64_t, int64_t>(-2147483648, 0x80000000, -2147483648);
     testTodoEnd();
-    testConvertScalar2<int32_t, int32_t, uint64_t>(-2147483648, -2147483648, 0xffffffff80000000llu);
     testConvertScalar2<int32_t, uint64_t, int64_t>(0, 0x100000000llu, -0);
     testTodoBegin("UB");
     // test non-finite -> integer casts

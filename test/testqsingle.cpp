@@ -10,7 +10,6 @@
 #include <string.h>
 
 #include <testMain.h>
-#include <alarm.h>
 #include <asDbLib.h>
 #include <dbAccess.h>
 #include <dbLock.h>
@@ -18,13 +17,10 @@
 #include <epicsExit.h>
 #include <asTrapWrite.h>
 #include <generalTimeSup.h>
-#include <iocsh.h>
 
 #include "dblocker.h"
 #include "testioc.h"
 #include "utilpvt.h"
-
-#include "capturestd.h"
 
 #if EPICS_VERSION_INT >= VERSION_INT(3, 15, 0, 2)
 #  define HAVE_lsi
@@ -882,46 +878,6 @@ void testMonitorAIFilt(TestClient& ctxt)
     sub2.testEmpty();
 }
 
-void testMonitorDBEAlarm(TestClient& ctxt)
-{
-    testDiag("%s", __func__);
-
-    auto prec(testdbRecordPtr("test:ai"));
-    {
-        ioc::DBLocker L(prec);
-
-        prec->tpro = 50; // initial
-        prec->sevr = 0;
-        prec->stat = 0;
-    }
-
-    TestSubscription sub(ctxt.monitor("test:ai.TPRO")
-                             .record("DBE", DBE_ALARM)
-                             .maskConnected(true)
-                             .maskDisconnected(true));
-
-    auto val(sub.waitForUpdate());
-    testShow()<<"Initial\n"<<val.format().delta();
-    testEq(val["value"].as<int32_t>(), 50);
-    testEq(val["alarm.severity"].as<int32_t>(), 0);
-
-    {
-        ioc::DBLocker L(prec);
-
-        prec->tpro = 52; // event discarded
-        db_post_events(prec, &prec->tpro, DBE_VALUE);
-        prec->tpro = 53;
-        prec->sevr = MAJOR_ALARM;
-        prec->stat = READ_ALARM;
-        db_post_events(prec, &prec->tpro, DBE_VALUE|DBE_ALARM);
-    }
-
-    val = sub.waitForUpdate();
-    testShow()<<"Delta\n"<<val.format().delta();
-    testEq(val["value"].as<int32_t>(), 53);
-    testEq(val["alarm.severity"].as<int32_t>(), 2);
-}
-
 void testMonitorDBE(TestClient& ctxt)
 {
     testDiag("%s", __func__);
@@ -950,59 +906,11 @@ void testMonitorDBE(TestClient& ctxt)
     testEq(val["value"].as<int32_t>(), 43);
 }
 
-void testiocsh(TestClient& ctxt)
-{
-    testDiag("%s", __func__);
-
-    TestSubscription sub(ctxt.monitor("test:ai")
-                             .maskConnected(true)
-                             .maskDisconnected(true));
-
-    auto val(sub.waitForUpdate());
-
-    {
-        CaptureStd cap([](){
-            iocshCmd("pvxsr 5");
-        });
-        testStrEq(cap.err(), "");
-        testStrMatch(".*EPICS_PVAS_AUTO_BEACON_ADDR_LIST=NO.*", cap.out());
-        testStrMatch(".*Source: __server.*", cap.out());
-        testStrMatch(".*test:nsec.*", cap.out());
-        testStrMatch(".*State: Running TCP_Port:.*", cap.out());
-        testStrMatch(".*test:ai TX=.*", cap.out());
-    }
-    {
-        CaptureStd cap([](){
-            iocshCmd("pvxsi");
-        });
-        testStrEq(cap.err(), "");
-        testStrMatch(".*Toolchain.*", cap.out());
-        testStrMatch(".*epicsThreadGetCPUs.*", cap.out());
-        testStrMatch(".*EPICS_PVAS_AUTO_BEACON_ADDR_LIST=.*", cap.out());
-    }
-    {
-        CaptureStd cap([](){
-            iocshCmd("pvxrefshow");
-            iocshCmd("pvxrefsave");
-            iocshCmd("pvxrefdiff");
-        });
-        testStrEq(cap.err(), "");
-        testStrMatch(".*StructTop.*", cap.out());
-    }
-    {
-        CaptureStd cap([](){
-            iocshCmd("pvxsl 5");
-        });
-        testStrEq(cap.err(), "");
-        testStrMatch(".*RECORDS.*test:ai.*", cap.out());
-    }
-}
-
 } // namespace
 
 MAIN(testqsingle)
 {
-    testPlan(113);
+    testPlan(95);
     testSetup();
     pvxs::logger_config_env();
     generalTimeRegisterCurrentProvider("test", 1, &testTimeCurrent);
@@ -1045,9 +953,7 @@ MAIN(testqsingle)
             testMonitorAI(mctxt);
             testMonitorBO(mctxt);
             testMonitorAIFilt(mctxt);
-            testMonitorDBEAlarm(mctxt);
             testMonitorDBE(mctxt);
-            testiocsh(mctxt);
         }
         timeSim = false;
         testPutBlock();

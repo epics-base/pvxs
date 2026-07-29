@@ -48,7 +48,6 @@ jobs:
             os: ubuntu-latest
             cmp: gcc
             configuration: default
-            base: "7.0"
             extra: "CMD_CPPFLAGS=-Werror"
             doc: 1
 
@@ -56,7 +55,6 @@ jobs:
             os: ubuntu-latest
             cmp: gcc
             configuration: default
-            base: "7.0"
             # https://gcc.gnu.org/onlinedocs/libstdc++/manual/using_macros.html
             extra: "CMD_CPPFLAGS=\"-D_GLIBCXX_ASSERTIONS -D_GLIBCXX_DEBUG -D_GLIBCXX_DEBUG_PEDANTIC\""
             doc: 1
@@ -65,48 +63,43 @@ jobs:
             os: ubuntu-latest
             cmp: gcc
             configuration: default
-            base: "7.0"
             extra: "CMD_CXXFLAGS=-std=c++17"
 
           - name: Cross mingw64 DLL
             os: ubuntu-latest
             cmp: gcc
             configuration: default
-            base: "7.0"
             cross: "windows-x64-mingw"
+#            extra: "WITH_OPENSSL=YES"
 
           - name: Cross mingw64 static
             os: ubuntu-latest
             cmp: gcc
             configuration: static
-            base: "7.0"
             cross: "windows-x64-mingw"
+#            extra: "WITH_OPENSSL=YES"
 
           - name: RTEMS5
             os: ubuntu-22.04
             cmp: gcc
             configuration: default
-            base: "7.0"
             cross: "RTEMS-pc686-qemu@5"
  
           - name: Native Linux with clang
             os: ubuntu-latest
             cmp: clang
             configuration: default
-            base: "7.0"
 
           - name: Native Linux with clang ubsan
             os: ubuntu-latest
             cmp: clang
             configuration: default
-            base: "7.0"
             extra: "CMD_CFLAGS=-fsanitize=undefined CMD_CXXFLAGS=-fsanitize=undefined CMD_LDFLAGS=-fsanitize=undefined"
 
           - name: Native Linux with libevent stable
             os: ubuntu-latest
             cmp: gcc
             configuration: default
-            base: "7.0"
             libevent: "release-2.1.12-stable"
 
           - name: Native Linux with 7.0.2
@@ -137,24 +130,21 @@ jobs:
             os: macos-latest
             cmp: clang
             configuration: default
-            base: "7.0"
 
           - name: vs2022 DLL
             os: windows-2022
             cmp: vs2022
             configuration: debug
-            base: "7.0"
-            extra: "CMD_CXXFLAGS=-analyze"
+            extra: "CMD_CXXFLAGS=-analysis"
 
           - name: vs2022 static
             os: windows-2022
             cmp: vs2022
             configuration: static-debug
-            base: "7.0"
-            extra: "CMD_CXXFLAGS=-analyze"
+            extra: "CMD_CXXFLAGS=-analysis"
 
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
       with:
         submodules: true
     - name: "apt-get install"
@@ -163,7 +153,7 @@ jobs:
         sudo apt-get -y install libreadline-dev g++-mingw-w64-x86-64 cmake gdb qemu-system-x86 libssl-dev
       if: runner.os == 'Linux'
     - name: vcpkg cache
-      uses: actions/cache@v4
+      uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
       with:
         path: c:/vcpkg-cache
         key: ${{ runner.os }}-vcpkg
@@ -182,7 +172,7 @@ jobs:
     - name: Host Info
       run: openssl version -a
     - name: Automatic core dumper analysis
-      uses: mdavidsaver/ci-core-dumper@master
+      uses: mdavidsaver/ci-core-dumper@cda67d63a56db36aca1126d8d00aa5f7ff1ee1db # master
     - name: Prepare and compile dependencies
       run: python .ci/cue.py prepare
     - name: Build libevent
@@ -231,7 +221,7 @@ jobs:
       run: grep . cfg/*
     - name: Upload tapfiles Artifact
       if: ${{ always() }}
-      uses: actions/upload-artifact@v7
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
       with:
         name: tapfiles ${{ matrix.name }}
         path: '**/O.*/*.tap'
@@ -256,16 +246,14 @@ jobs:
             image: centos:7
             cmp: gcc
             configuration: default
-            base: "7.0"
 
           - name: Linux fedora latest
             image: fedora:latest
             cmp: gcc
             configuration: default
-            base: "7.0"
 
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
       with:
         submodules: true
 

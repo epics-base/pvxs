@@ -1,0 +1,74 @@
+name: Docker Multi-Platform Build Pipeline
+
+on:
+  workflow_dispatch:
+    inputs:
+      build_target:
+        description: 'Which image to build'
+        required: true
+        type: choice
+        options:
+          - pvxs
+  push:
+    branches:
+      - 'tls'
+
+jobs:
+  check_docker_changes:
+    runs-on: ubuntu-22.04
+    outputs:
+      non_docker_changed: ${{ steps.filter.outputs.non_docker }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          fetch-depth: 2
+      - uses: dorny/paths-filter@4512585405083f25c027a35db413c2b3b9006d50 # v2
+        id: filter
+        with:
+          base: ${{ github.event.before }}
+          filters: |
+            non_docker:
+              - 'src/**'
+              - 'include/**'
+              - 'test/**'
+              - 'example/[!docker]/**'
+
+  build-pvxs:
+    needs: [check_docker_changes]
+    if: |
+      always() && 
+      (github.event_name == 'workflow_dispatch' && 
+       github.event.inputs.build_target == 'pvxs') || 
+      (github.event_name == 'push' && 
+       needs.check_docker_changes.outputs.non_docker_changed == 'true')
+    runs-on: ubuntu-22.04
+    outputs:
+      status: ${{ job.status }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          ref: tls
+          submodules: recursive
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+      - name: Login to Docker Hub
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and push pvxs
+        uses: docker/build-push-action@ca052bb54ab0790a636c9b5f226502c73d547a25 # v5
+        with:
+          context: .
+          file: example/docker/pvxs/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          no-cache: true
+          build-args: |
+            DOCKER_REGISTRY=ghcr.io
+            DOCKER_USERNAME=slac-epics
+          tags: ghcr.io/slac-epics/pvxs:latest

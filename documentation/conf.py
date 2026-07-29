@@ -48,8 +48,8 @@ def read_version(fmt):
 # -- Project information -----------------------------------------------------
 
 project = 'PVXS'
-copyright = time.strftime('%Y Michael Davidsaver and Osprey DCS LLC')
-author = 'Michael Davidsaver'
+copyright = time.strftime('%Y Michael Davidsaver, George McIntyre, Osprey DCS LLC, LBL, and SLAC')
+author = 'Michael Davidsaver and George McIntyre'
 
 # The short X.Y version
 version = git_describe() or read_version('{PVXS_MAJOR_VERSION}.{PVXS_MINOR_VERSION}.{PVXS_MAINTENANCE_VERSION}')

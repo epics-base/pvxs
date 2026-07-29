@@ -15,15 +15,21 @@ jobs:
       PVXS_LOG: pvxs.*=WARN
 
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
       with:
         fetch-depth: "0"
         submodules: true
+
     - name: "apt-get install"
       run: |
         sudo apt-get update
-        sudo apt-get -y install libreadline-dev libevent-dev \
-         python3-sphinx python3-breathe inkscape
+        sudo apt-get -y install \
+         doxygen \
+         inkscape \
+         libevent-dev \
+         libreadline-dev \
+         python3-breathe \
+         python3-sphinx
 
     - name: Prepare and compile dependencies
       run: python .ci/cue.py prepare
@@ -38,7 +44,7 @@ jobs:
 
     - name: Upload gh-pages preview
       id: ghpages
-      uses: actions/upload-pages-artifact@v5
+      uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5
       with:
         retention-days: 7
         path: documentation/html/
@@ -47,7 +53,7 @@ jobs:
   publish:
     runs-on: ubuntu-latest
 
-    if: github.ref=='refs/heads/master'
+    if: github.ref=='refs/heads/tls'
     needs: generate
 
     permissions:
@@ -60,6 +66,9 @@ jobs:
       url: ${{ steps.ghpages.outputs.page_url }}
 
     steps:
+      - name: Setup Pages
+        uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b # v5
+
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v5
+        uses: actions/deploy-pages@cd2ce8fcbc39b97be8ca5fce6e763baed58fa128 # v5

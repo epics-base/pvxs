@@ -17,13 +17,13 @@
 #include <epicsString.h>
 
 #include <pvxs/log.h>
+#include <pvxs/credentials.h>
 
 #include "alarm.h"
 #include "iocsource.h"
 #include "dbentry.h"
 #include "dberrormessage.h"
 #include "typeutils.h"
-#include "credentials.h"
 #include "securityclient.h"
 #include "securitylogger.h"
 #include "utilpvt.h"

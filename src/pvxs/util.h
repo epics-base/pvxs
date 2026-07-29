@@ -325,10 +325,11 @@ public:
      */
     T pop() {
         bool wakeupW, wakeupR;
-        T ret;
-        {
+        // move-construct the return value directly from the queue entry to avoid
+        // requiring T to be default-constructible or move-assignable
+        T ret = [&]() -> T {
             Guard G(lock);
-            // wait for queue to become not empty
+            // wait for the queue to become not empty
             while(Q.empty()) {
                 nreaders++;
                 {
@@ -339,11 +340,12 @@ public:
             }
             // wakeup a writer since the queue will have an empty entry
             wakeupW = nwriters;
-            ret = std::move(Q.front());
+            T tmp(std::move(Q.front()));
             Q.pop_front();
             // wakeup next reader if entries remain
             wakeupR = !Q.empty() && nreaders;
-        }
+            return tmp;
+        }();
         if(wakeupR)
             notifyR.signal();
         if(wakeupW)

@@ -14,7 +14,22 @@ REV="${1:-HEAD}"
 TDIR=`mktemp -d`
 trap 'rm -rf "$TDIR"' EXIT INT QUIT TERM
 
-git archive --format tar "$REV" | tar -C "$TDIR" -xv
+ git archive --format tar "$REV" | tar -C "$TDIR" -xv
+
+ # git archive does not include submodule contents.
+ # Coverage builds compile code which includes headers from bundle/* submodules.
+ git submodule update --init --recursive
+ git submodule foreach --recursive 'printf "%s\n" "$sm_path"' | while IFS= read -r sm_path
+ do
+     [ -n "$sm_path" ] || continue
+
+     # If REV predates this submodule, skip.
+     if sm_rev=$(git rev-parse "$REV:$sm_path" 2>/dev/null)
+     then
+         install -d "$TDIR/$sm_path"
+         git -C "$sm_path" archive --format tar "$sm_rev" | tar -C "$TDIR/$sm_path" -x
+     fi
+ done
 
 if [ -f configure/RELEASE.local ]
 then

@@ -14,15 +14,16 @@
 #include <asLib.h>
 #include <dbChannel.h>
 
-#include "credentials.h"
+#include <pvxs/credentials.h>
+
 #include "securityclient.h"
 
 namespace pvxs {
 namespace ioc {
 
 class SecurityLogger {
-    void* pfieldsave;
-    dbChannel *pchan;
+    void* pfieldsave = nullptr;
+    dbChannel *pchan = nullptr;
     void* pvt;
 public:
     ~SecurityLogger() {
@@ -39,15 +40,13 @@ public:
     }
 
     SecurityLogger()
-        :pfieldsave(nullptr)
-        ,pchan(nullptr)
-        ,pvt(nullptr)
-    {}
+            :pvt(nullptr) {
+    }
     SecurityLogger(dbChannel* pDbChannel,
                    const Credentials& credentials,
                    const SecurityClient& securityClient)
         :pfieldsave(pDbChannel->addr.pfield)
-        ,pchan(pDbChannel)
+#ifndef EPICS_ASLIB_HAS_IDENTITY
         ,pvt(asTrapWriteWithData((securityClient.cli)[0], // The user is the first element
                          credentials.cred[0].c_str(),     // The user is the first element
                          credentials.host.c_str(),
@@ -56,6 +55,20 @@ public:
                          dbChannelFinalElements(pDbChannel),
                          nullptr
                  ))
+#else
+        ,pvt(asTrapWriteBeforeWithIdentityData(
+            (ASIDENTITY){
+                .user = credentials.cred[0].c_str(),
+                .host = (char *)credentials.host.c_str(),
+                .method =  credentials.method.c_str(),
+                .authority = credentials.authority.c_str(),
+                .protocol = AS_PROTOCOL_TLS },
+            pDbChannel,
+            dbChannelFinalFieldType(pDbChannel),
+            dbChannelFinalElements(pDbChannel),
+            nullptr
+        ))
+#endif
     {
         /* asTrapWrite callbacks may have called clobbered
          * see
