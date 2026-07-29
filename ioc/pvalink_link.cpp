@@ -84,8 +84,8 @@ void pvaLink::onTypeChange()
 {
     assert(lchan->connected && lchan->root); // we should only be called when connected
 
-    fld_value = fld_severity = fld_nanoseconds = fld_usertag
-            = fld_message = fld_severity = fld_meta = Value();
+    fld_value = fld_severity = fld_seconds = fld_nanoseconds = fld_usertag
+            = fld_message = fld_meta = Value();
 
     Value root;
     if(fieldName.empty()) {

@@ -63,6 +63,7 @@ INC += pvxs/config.h
 INC += pvxs/data.h
 INC += pvxs/log.h
 INC += pvxs/netcommon.h
+INC += pvxs/json.h
 INC += pvxs/nt.h
 INC += pvxs/server.h
 INC += pvxs/sharedArray.h
@@ -92,6 +93,9 @@ LIB_SRCS += datafmt.cpp
 LIB_SRCS += describe.cpp
 LIB_SRCS += evhelper.cpp
 LIB_SRCS += log.cpp
+ifdef BASE_3_15
+LIB_SRCS += json.cpp
+endif
 LIB_SRCS += nt.cpp
 LIB_SRCS += osdSockExt.cpp
 LIB_SRCS += osgroups.cpp

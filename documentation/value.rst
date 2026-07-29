@@ -75,6 +75,8 @@ Attempting to extract an integer from this will then throw a `pvxs::NoField` exc
 Value
 -----
 
+.. _fieldlookup:
+
 Field Lookup
 ^^^^^^^^^^^^
 
@@ -82,6 +84,26 @@ Access to members of structured types is accomplished through `pvxs::Value::oper
 These two methods differ in how errors are communicated.
 operator[] will return an "invalid" or "empty" Value if the expression does not address a member.
 lookup() will throw an exception describing where and how expression evaluation failed.
+
+Argument strings may contain:
+
+* name of a child field.  eg. ``"value"``
+* name of a descendant field.  eg ``"alarm.severity"``
+* element of an array of structures.  eg ``"dimension[0]"``
+* name of a union field.  eg. ``"->booleanValue"``
+
+These may be composed.  eg.
+
+* ``"dimension[0].size"``
+* ``"dimension[0]size"`` ('.' may be omitted after Struct array indexing)
+* ``"value->booleanValue"``
+
+With a non-const Value, a successful lookup of a Union field modifies the Union
+to select the chosen field.
+
+.. note:: Since UNRELEASED A leading "->" may be omitted when beginning
+          lookup at a Union.  eg. "->booleanValue" may be replaced with
+          "booleanValue".
 
 Iteration
 ^^^^^^^^^

@@ -18,9 +18,14 @@ namespace client {
 
 typedef epicsGuard<epicsMutex> Guard;
 
-DEFINE_LOGGER(monevt, "pvxs.cli.mon");
-DEFINE_LOGGER(io, "pvxs.cli.io");
-DEFINE_LOGGER(status_cli, "pvxs.st.cli");
+DEFINE_LOGGER(monevt, "pvxs.client.monitor");
+DEFINE_LOGGER(io, "pvxs.client.io");
+
+RequestFL::~RequestFL()
+{
+    Guard G(lock);
+    unused.clear(); // pacify valgrind with free() under lock
+}
 
 namespace {
 struct Entry {
@@ -41,6 +46,8 @@ struct SubscriptionImpl final : public OperationBase, public Subscription
     std::function<void (Subscription&, const Value&)> onInit;
     std::function<void(Subscription&)> event;
     Value pvRequest;
+    bool event_busy = false;
+    bool onInit_busy = false;
     bool pipeline = false;
     bool autostart = true;
     bool maskConn = false, maskDiscon = true;
@@ -79,7 +86,7 @@ struct SubscriptionImpl final : public OperationBase, public Subscription
                  event_new(loop.base, -1, EV_TIMEOUT, &tickAckS, this))
     {}
     virtual ~SubscriptionImpl() {
-        if(loop.assertInRunningLoop())
+        if(onWorker && loop.assertInRunningLoop())
             _cancel(true);
     }
 
@@ -104,12 +111,14 @@ struct SubscriptionImpl final : public OperationBase, public Subscription
     void doNotify()
     {
         if(event) {
+            event_busy = true;
             try {
                 event(*this);
             }catch(std::exception& e){
                 log_exc_printf(io, "Unhandled user exception in Monitor %s %s : %s\n",
                                 __func__, typeid (e).name(), e.what());
             }
+            event_busy = false;
         }
     }
 
@@ -138,7 +147,6 @@ struct SubscriptionImpl final : public OperationBase, public Subscription
                 chan->statTx += conn->enqueueTxBody(CMD_MONITOR);
 
                 state = p ? Idle : Running;
-                log_debug_printf(status_cli, "%24.24s = %-12s : %-41s: %s\n", "SubscriptionImpl::state", state == Idle ? "Idle" : "Running", "SubscriptionImpl::pause()", chan->name.c_str());
             }
         });
     }
@@ -272,6 +280,8 @@ struct SubscriptionImpl final : public OperationBase, public Subscription
     virtual void _onEvent(std::function<void(Subscription&)>&& fn) override final {
         decltype (event) junk;
         loop.call([this, &junk, &fn]() {
+            if(event_busy)
+                throw std::logic_error("Must not replace Subscription::onEvent() while callback in progress");
             junk = std::move(event);
             this->event = std::move(fn);
         });
@@ -279,10 +289,14 @@ struct SubscriptionImpl final : public OperationBase, public Subscription
 
     virtual bool cancel() override final {
         decltype (event) junk;
+        decltype (onInit) junkI;
         bool ret = false;
-        (void)loop.tryCall([this, &junk, &ret](){
+        (void)loop.tryCall([this, &junk, &junkI, &ret](){
             ret = _cancel(false);
-            junk = std::move(event);
+            if(!event_busy)
+                junk = std::move(event); // trash when cancelled from app. worker
+            if(!onInit_busy)
+                junkI = std::move(onInit);
             // leave opByIOID for GC
         });
         return ret;
@@ -293,10 +307,12 @@ struct SubscriptionImpl final : public OperationBase, public Subscription
             log_info_printf(io, "Server %s channel %s monitor implied cancel\n",
                             chan->conn ? chan->conn->peerName.c_str() : "<disconnected>",
                             chan->name.c_str());
+
+        } else {
+            log_info_printf(io, "Server %s channel %s monitor cancel\n",
+                            chan->conn ? chan->conn->peerName.c_str() : "<disconnected>",
+                            chan->name.c_str());
         }
-        log_info_printf(io, "Server %s channel %s monitor cancel\n",
-                        chan->conn ? chan->conn->peerName.c_str() : "<disconnected>",
-                        chan->name.c_str());
 
         if(state==Idle || state==Running) {
             chan->conn->sendDestroyRequest(chan->sid, ioid);
@@ -310,7 +326,6 @@ struct SubscriptionImpl final : public OperationBase, public Subscription
         }
         bool ret = state!=Done;
         state = Done;
-        log_debug_printf(status_cli, "%24.24s = %-12s : %-41s: %s\n", "SubscriptionImpl::state", "Done", "SubscriptionImpl::_cancel()", channelName.c_str());
         return ret;
     }
 
@@ -351,7 +366,6 @@ struct SubscriptionImpl final : public OperationBase, public Subscription
                          unsigned(queueSize), unsigned(ackAt));
 
         state = Creating;
-        log_debug_printf(status_cli, "%24.24s = %-12s : %-41s: %s\n", "SubscriptionImpl::state", "Creating", "SubscriptionImpl::createOp()", channelName.c_str());
 
         bool notify = false;
         if(!maskConn || pipeline) {
@@ -407,7 +421,6 @@ struct SubscriptionImpl final : public OperationBase, public Subscription
 
             chan->pending.push_back(self);
             state = Connecting;
-            log_debug_printf(status_cli, "%24.24s = %-12s : %-41s: %s\n", "SubscriptionImpl::state", "Connecting", "SubscriptionImpl::disconnected()", chan->name.c_str());
 
             if(notify)
                 doNotify();
@@ -501,7 +514,42 @@ void Connection::handle_MONITOR()
                        peerName.c_str(), unsigned(ioid));
             return;
         }
+    }
 
+    // Validate the message against operation state before decoding payload.
+
+    std::shared_ptr<OperationBase> op;
+    SubscriptionImpl* mon = nullptr;
+    if(M.good() && info) {
+        op = info->handle.lock();
+        if(!op) {
+            // assume op has already sent CMD_DESTROY_REQUEST
+            log_debug_printf(io, "Server %s ignoring stale cmd%02x ioid %u\n",
+                             peerName.c_str(), CMD_MONITOR, unsigned(ioid));
+            return;
+        }
+
+        if(uint8_t(op->op)!=CMD_MONITOR) {
+            // peer mixes up IOID and operation type
+            M.fault(__FILE__, __LINE__);
+
+        } else {
+            mon = static_cast<SubscriptionImpl*>(op.get());
+
+            // check that subcmd is as expected based on operation state
+            if((mon->state==SubscriptionImpl::Creating) && init) {
+
+            } else if((mon->state==SubscriptionImpl::Idle) && !init) {
+
+            } else if((mon->state==SubscriptionImpl::Running) && !init) {
+
+            } else {
+                M.fault(__FILE__, __LINE__);
+            }
+        }
+    }
+
+    if(M.good()) {
         if(!sts.isSuccess()) {
 
         } else if(init) {
@@ -509,6 +557,8 @@ void Connection::handle_MONITOR()
             // initialize info->fl later, with access to queueSize
 
         } else if(!final || !M.empty()) {
+            if(!info->fl)
+                throw std::logic_error("clientmon after INIT w/o FL");
 
             // Take from free-list of pre-allocated Value
             Value raw;
@@ -518,11 +568,10 @@ void Connection::handle_MONITOR()
                 if(!info->fl->unused.empty()) {
                     raw = std::move(info->fl->unused.back());
                     info->fl->unused.pop_back();
-
-                } else {
-                    raw = info->prototype.cloneEmpty();
                 }
             }
+            if(!raw)
+                raw = info->prototype.cloneEmpty();
             // Wrap Value for automatic return to our free-list
             {
                 std::weak_ptr<RequestFL> wfl(info->fl);
@@ -567,39 +616,6 @@ void Connection::handle_MONITOR()
         }
     }
 
-    // validate received message against operation state
-
-    std::shared_ptr<OperationBase> op;
-    SubscriptionImpl* mon = nullptr;
-    if(M.good() && info) {
-        op = info->handle.lock();
-        if(!op) {
-            // assume op has already sent CMD_DESTROY_REQUEST
-            log_debug_printf(io, "Server %s ignoring stale cmd%02x ioid %u\n",
-                             peerName.c_str(), CMD_MONITOR, unsigned(ioid));
-            return;
-        }
-
-        if(uint8_t(op->op)!=CMD_MONITOR) {
-            // peer mixes up IOID and operation type
-            M.fault(__FILE__, __LINE__);
-
-        } else {
-            mon = static_cast<SubscriptionImpl*>(op.get());
-
-            // check that subcmd is as expected based on operation state
-            if((mon->state==SubscriptionImpl::Creating) && init) {
-
-            } else if((mon->state==SubscriptionImpl::Idle) && !init) {
-
-            } else if((mon->state==SubscriptionImpl::Running) && !init) {
-
-            } else {
-                M.fault(__FILE__, __LINE__);
-            }
-        }
-    }
-
     if(!M.good() || !mon) {
         log_crit_printf(io, "%s:%d Server %s sends invalid MONITOR.  Disconnecting...\n",
                         M.file(), M.line(), peerName.c_str());
@@ -614,7 +630,6 @@ void Connection::handle_MONITOR()
     if(!sts.isSuccess()) {
         update.exc = std::make_exception_ptr(RemoteError(sts.msg));
         mon->state = SubscriptionImpl::Done;
-        log_debug_printf(status_cli, "%24.24s = %-12s : %-41s: %s\n", "SubscriptionImpl::state", "Done", "Connection::handle_MONITOR()", mon->channelName.c_str());
 
     } else if(mon->state==SubscriptionImpl::Creating) {
         log_debug_printf(io, "Server %s channel %s monitor Created\n",
@@ -622,19 +637,19 @@ void Connection::handle_MONITOR()
                         mon->chan->name.c_str());
 
         mon->state = SubscriptionImpl::Idle;
-        log_debug_printf(status_cli, "%24.24s = %-12s : %-41s: %s\n", "SubscriptionImpl::state", "Idle", "Connection::handle_MONITOR()", mon->channelName.c_str());
 
+        mon->onInit_busy = true;
         try {
             if(mon->onInit)
                 mon->onInit(*mon, info->prototype);
         }catch(std::exception& e){
             mon->state = SubscriptionImpl::Done;
-            log_debug_printf(status_cli, "%24.24s = %-12s : %-41s: %s\n", "SubscriptionImpl::state", "Done", "Connection::handle_MONITOR()", mon->channelName.c_str());
             update.exc = std::current_exception();
             log_debug_printf(io, "Server %s channel %s monitor Create error: %s\n",
                             peerName.c_str(),
                             mon->chan->name.c_str(), e.what());
         }
+        mon->onInit_busy = false;
 
         if(mon->autostart && mon->state == SubscriptionImpl::Idle)
             mon->resume();
@@ -729,7 +744,6 @@ void Connection::handle_MONITOR()
 
     if(mon->state==SubscriptionImpl::Done || final) {
         mon->state=SubscriptionImpl::Done;
-        log_debug_printf(status_cli, "%24.24s = %-12s : %-41s: %s\n", "SubscriptionImpl::state", "Done", "Connection::handle_MONITOR()", mon->channelName.c_str());
 
         opByIOID.erase(ioid);
         mon->chan->opByIOID.erase(ioid);
@@ -788,7 +802,7 @@ std::shared_ptr<Subscription> MonitorBuilder::exec()
             try {
                 auto percent = parseTo<double>(sval.substr(0, sval.size()-1u));
                 if(percent>0.0 && percent<=100.0) {
-                    op->ackAt = uint32_t(percent * op->queueSize);
+                    op->ackAt = uint32_t(percent / 100.0 * op->queueSize);
                 } else {
                     throw std::invalid_argument("not in range (0%, 100%]");
                 }
@@ -818,6 +832,12 @@ std::shared_ptr<Subscription> MonitorBuilder::exec()
         // from user thread
         auto temp(std::move(op));
         auto loop(temp->loop);
+        if(syncCancel && loop.inLoop())
+            log_err_printf(io,
+                           "syncCancel monitor '%s' being destroyed on worker thread.\n"
+                           "Possible self-reference loop.  Setup with .syncCancel(false) if intended.\n",
+                           temp->channelName.c_str());
+
         // std::bind for lack of c++14 generalized capture
         // to move internal ref to worker for dtor
         loop.tryInvoke(syncCancel, std::bind([](std::shared_ptr<SubscriptionImpl>& op) {
@@ -832,6 +852,8 @@ std::shared_ptr<Subscription> MonitorBuilder::exec()
     auto server(std::move(_server));
     context->tcp_loop.dispatch([op, context, server]() {
         // on worker
+        op->onWorker = true;
+
         try {
             op->chan = Channel::build(context, op->channelName, server);
 

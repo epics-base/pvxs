@@ -26,6 +26,10 @@ jobs:
           py: cp37-cp37m
           skip: true
 
+        - ml: manylinux2010_x86_64
+          py: cp38-cp38
+          skip: true
+
         - ml: manylinux2014_x86_64
           py: cp39-cp39
 
@@ -43,10 +47,10 @@ jobs:
 
         - ml: manylinux_2_28_x86_64
           py: cp314-cp314
+          src: true
 
         - ml: manylinux_2_28_x86_64
           py: cp314-cp314t
-          src: true
 
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
@@ -121,7 +125,7 @@ jobs:
 
       - name: Save wheels
         if: ${{ ! matrix.skip }}
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           retention-days: 1
           name: whl-${{ matrix.py }}-${{ matrix.ml }}
@@ -129,7 +133,7 @@ jobs:
 
       - name: Save source
         if: ${{ matrix.src }}
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           retention-days: 1
           name: whl-source
@@ -244,7 +248,7 @@ jobs:
 
       - name: Save wheels
         if: ${{ ! matrix.skip }}
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           retention-days: 1
           name: whl-${{ matrix.py }}-${{ matrix.os }}
@@ -255,7 +259,7 @@ jobs:
     needs: [manylinux, native]
     steps:
       - name: Download
-        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
             merge-multiple: true
 

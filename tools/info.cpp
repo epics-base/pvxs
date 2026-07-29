@@ -14,7 +14,6 @@
 
 #include <pvxs/client.h>
 #include <pvxs/log.h>
-
 #include "utilpvt.h"
 #include "evhelper.h"
 
@@ -68,30 +67,27 @@ int main(int argc, char *argv[])
                     break;
                 default:
                     usage(argv[0]);
-                    std::cerr<<"\nUnknown argument: -"<<char(optopt)<<std::endl;
+                    std::cerr<<"\nUnknown argument: "<<char(opt)<<std::endl;
                     return 1;
                 }
             }
         }
 
-        // Build the context
-        auto conf = client::Config::fromEnv();
+        std::atomic<int> remaining{argc-optind};
+        epicsEvent done;
 
-        auto ctxt = conf.build();
+        auto ctxt(client::Context::fromEnv());
 
         if(verbose)
-            std::cout<<"Effective config\n"<<conf;
+            std::cerr<<"Effective config\n"<<ctxt.config();
 
         std::list<std::shared_ptr<client::Operation>> ops;
         std::list<std::shared_ptr<client::Connect>> conns;
 
-        std::atomic<int> remaining{argc-optind};
-        epicsEvent done;
-
         for(auto n : range(optind, argc)) {
             if(verbose)
                 conns.push_back(ctxt.connect(argv[n]).onConnect([](const client::Connected& cb) {
-                    std::cout<<"# "<<(*cb.cred)<<"\n";
+                    std::cerr<<"# "<<(*cb.cred)<<std::endl;
                 }).exec());
 
             ops.push_back(ctxt.info(argv[n])
@@ -101,8 +97,9 @@ int main(int argc, char *argv[])
                                   std::cout<<" from "<<result.peerName()<<"\n"<<result()
                                              .format()
                                              .showValue(false);
+                                  std::cout.flush();
                               }catch(std::exception& e){
-                                  std::cout<<" Error: "<<e.what()<<"\n";
+                                  std::cout<<" Error: "<<e.what()<<std::endl;
                               }
 
                               if(remaining.fetch_sub(1)==1)

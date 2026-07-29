@@ -99,13 +99,14 @@ struct PVRParser
      *     |  ENT PVR
      * ENT : FIELD | RECORD | name
      * FIELD : "field" '(' FIELD_LIST ')'
-     * RECORD : "record" '[' OPTIONS '}'
+     * RECORD : "record" '[' OPTIONS ']'
      * FIELD_LIST :
      *            | name
      *            | FIELD_LIST ',' name
      * OPTIONS ->
      *            | name '=' name
      *            | OPTIONS ',' name '=' name
+     * name : [a-zA-Z0-9_.]+
      */
     enum token_t {
         // terminals

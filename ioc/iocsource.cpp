@@ -362,9 +362,7 @@ void IOCSource::get(Value& node, // node within top level structure addressed by
 void
 IOCSource::doPreProcessing(dbChannel* pDbChannel, SecurityLogger& securityLogger, const Credentials& credentials,
         const SecurityClient& securityClient) {
-    if (pDbChannel->addr.special == SPC_ATTRIBUTE) {
-        throw std::runtime_error("Unable to put value: Modifications not allowed: S_db_noMod");
-    } else if (pDbChannel->addr.precord->disp && pDbChannel->addr.pfield != &pDbChannel->addr.precord->disp) {
+    if (pDbChannel->addr.precord->disp && pDbChannel->addr.pfield != &pDbChannel->addr.precord->disp) {
         throw std::runtime_error("Unable to put value: Field Disabled: S_db_putDisabled");
     }
 
@@ -422,12 +420,10 @@ void IOCSource::doPostProcessing(dbChannel* pDbChannel, TriState forceProcessing
 
 /**
  * Set a flag that will force processing of record in the specified security control object
- *
- * @param pvRequest the request
- * @param securityControlObject the security control object to update
  */
-void IOCSource::setForceProcessingFlag(server::RemoteLogger *op, const Value& pvRequest,
-                                       const std::shared_ptr<SecurityControlObject>& securityControlObject)
+void IOCSource::setForceProcessingFlag(server::RemoteLogger *op,
+                                       const Value& pvRequest,
+                                       TriState& forceProc)
 {
     auto proc = pvRequest["record._options.process"];
     bool b;
@@ -436,12 +432,12 @@ void IOCSource::setForceProcessingFlag(server::RemoteLogger *op, const Value& pv
         return; // not provided
 
     } else if(proc.as(b)) { // actual bool, integer, or string parsable to bool
-        securityControlObject->forceProcessing = b ? True : False;
+        forceProc = b ? True : False;
         return;
 
     } else if(proc.as(s)) {
         if(s=="passive") {
-            securityControlObject->forceProcessing = Unset;
+            forceProc = Unset;
             return;
         }
     }

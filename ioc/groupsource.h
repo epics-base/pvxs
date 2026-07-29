@@ -45,27 +45,12 @@ private:
     IOCGroupConfig& config;
 
     // Handles all get, put and subscribe requests
-    static void onOp(Group& group, std::unique_ptr<server::ConnectOp>&& channelConnectOperation);
-
-    //////////////////////////////
-    // Get
-    //////////////////////////////
-    static void get(Group& group, const std::unique_ptr<server::ExecOp>& getOperation);
-
-    //////////////////////////////
-    // Put
-    //////////////////////////////
-    static void putGroup(Group& group, std::unique_ptr<server::ExecOp>& putOperation, const Value& value,
-            const GroupSecurityCache& groupSecurityCache);
 
     //////////////////////////////
     // Subscriptions
     //////////////////////////////
-	static void onDisableSubscription(const std::shared_ptr<GroupSourceSubscriptionCtx>& groupSubscriptionCtx);
-	static void onStartSubscription(const std::shared_ptr<GroupSourceSubscriptionCtx>& groupSubscriptionCtx);
 	void onSubscribe(const std::shared_ptr<GroupSourceSubscriptionCtx>& groupSubscriptionCtx,
 			std::unique_ptr<server::MonitorSetupOp>&& subscriptionOperation) const;
-    static void onStart(const std::shared_ptr<GroupSourceSubscriptionCtx>& groupSubscriptionCtx, bool isStarting);
 };
 
 } // ioc

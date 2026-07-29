@@ -7,14 +7,17 @@
 #include <iostream>
 #include <map>
 #include <list>
+#include <atomic>
 
-#include <epicsThread.h>
+#include <epicsVersion.h>
 #include <epicsGetopt.h>
+#include <epicsThread.h>
 
 #include <pvxs/client.h>
 #include <pvxs/nt.h>
 #include <pvxs/log.h>
 #include "utilpvt.h"
+#include "evhelper.h"
 
 using namespace pvxs;
 
@@ -62,7 +65,7 @@ int main(int argc, char *argv[])
                     break;
                 default:
                     usage(argv[0]);
-                    std::cerr<<"\nUnknown argument: -"<<char(optopt)<<std::endl;
+                    std::cerr<<"\nUnknown argument: "<<char(opt)<<std::endl;
                     return 1;
                 }
             }
@@ -114,16 +117,13 @@ int main(int argc, char *argv[])
             query[pair.first] = pair.second;
         }
 
-        // Build the context
-        auto conf (client::Config::fromEnv());
-
-        auto ctxt = conf.build();
-
-        if(verbose)
-            std::cout<<"Effective config\n"<<conf;
-
         epicsEvent done;
         int ret=2;
+
+        auto ctxt(client::Context::fromEnv());
+
+        if(verbose)
+            std::cerr<<"Effective config\n"<<ctxt.config();
 
         auto op =ctxt.rpc(pvname, arg)
                      .result([&ret, &done](client::Result&& result) {
@@ -131,6 +131,7 @@ int main(int argc, char *argv[])
                 auto val = result();
                 if(val)
                     std::cout<<val;
+                std::cout.flush();
                 ret=0;
             }catch(std::exception& e){
                 std::cerr<<ERL_ERROR " "<<typeid(e).name()<<" : "<<e.what()<<"\n";

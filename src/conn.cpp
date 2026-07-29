@@ -215,7 +215,7 @@ void ConnBase::bevRead()
         assert(ret==sizeof(header)); // previously verified
 
         if(header[0]!=0xca || header[1]==0 || (isClient ^ !!(header[2]&pva_flags::Server))) {
-            log_hex_printf(connio, Level::Err, header, sizeof(header),
+            log_hex_printf(connio, Level::Crit, header, sizeof(header),
                            "%s %s Protocol decode fault.  Force disconnect.\n", peerLabel(), peerName.c_str());
             bev.reset();
             break;

@@ -9,9 +9,6 @@
 #include <atomic>
 
 #include <cstring>
-#include <fstream>
-#include <sstream>
-#include <string>
 
 #include <epicsVersion.h>
 #include <epicsGetopt.h>
@@ -19,7 +16,6 @@
 
 #include <pvxs/client.h>
 #include <pvxs/log.h>
-
 #include "utilpvt.h"
 #include "evhelper.h"
 
@@ -44,7 +40,7 @@ void usage(const char* argv0)
                ;
 }
 
-}  // namespace
+}
 
 int main(int argc, char *argv[])
 {
@@ -54,13 +50,11 @@ int main(int argc, char *argv[])
         bool verbose = false;
         std::string request;
         Value::Fmt::format_t format = Value::Fmt::Delta;
-        auto arrLimit = uint64_t(20);
+        auto arrLimit = uint64_t(-1);
 
-        std::string options;
-        options = "hVvdw:r:#:F:";
         {
             int opt;
-            while ((opt = getopt(argc, argv, options.c_str())) != -1) {
+            while ((opt = getopt(argc, argv, "hVvdw:r:#:F:")) != -1) {
                 switch(opt) {
                 case 'h':
                     usage(argv[0]);
@@ -94,24 +88,21 @@ int main(int argc, char *argv[])
                     break;
                 default:
                     usage(argv[0]);
-                    std::cerr<<"\nUnknown argument: -"<<char(optopt)<<std::endl;
+                    std::cerr<<"\nUnknown argument: "<<char(opt)<<std::endl;
                     return 1;
                 }
             }
         }
 
-        // Build the context
-        auto conf = client::Config::fromEnv();
-
-        auto ctxt = conf.build();
-
-        if(verbose)
-            std::cout<<"Effective config\n"<<conf;
-
-        std::list<std::shared_ptr<client::Operation>> ops;
-
         std::atomic<int> remaining{argc-optind};
         epicsEvent done;
+
+        auto ctxt(client::Context::fromEnv());
+
+        if(verbose)
+            std::cerr<<"Effective config\n"<<ctxt.config();
+
+        std::list<std::shared_ptr<client::Operation>> ops;
 
         for(auto n : range(optind, argc)) {
 
@@ -124,6 +115,7 @@ int main(int argc, char *argv[])
                                          .format()
                                          .format(format)
                                          .arrayLimit(arrLimit);
+                              std::cout.flush();
 
                               if(remaining.fetch_sub(1)==1)
                                   done.signal();

@@ -209,7 +209,7 @@ void SharedPV::attach(std::unique_ptr<ChannelControl>&& ctrlop)
         conn->onPut([self](std::unique_ptr<ExecOp>&& op, Value&& val) {
             // on server worker
 
-            log_debug_printf(logshared, "%s on %s RPC\n", op->peerName().c_str(), op->name().c_str());
+            log_debug_printf(logshared, "%s on %s PUT\n", op->peerName().c_str(), op->name().c_str());
 
             Guard G(self->lock);
             auto cb(self->onPut);
@@ -223,7 +223,7 @@ void SharedPV::attach(std::unique_ptr<ChannelControl>&& ctrlop)
                     log_err_printf(logshared, "error in Put cb: %s\n", e.what());
                 }
             } else {
-                op->error("RPC not implemented by this PV");
+                op->error("PUT not implemented by this PV");
             }
 
         });

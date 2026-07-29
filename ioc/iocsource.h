@@ -64,7 +64,7 @@ public:
     static void
     setForceProcessingFlag(server::RemoteLogger *op,
                            const Value& pvRequest,
-                           const std::shared_ptr<SecurityControlObject>& securityControlObject);
+                           TriState &forceProc);
 };
 
 struct CurrentOp {

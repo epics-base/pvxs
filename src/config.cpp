@@ -413,11 +413,10 @@ void parseTLSOptions(ConfigCommon& conf, const std::string& options) {
     split_into(opts, options);
 
     for(auto opt : opts) {
-        auto sep(opt.find_first_of('='));
-        if ( sep == std::string::npos)
-            sep = opt.size();
+        const auto sep(opt.find_first_of('='));
         auto key(opt.substr(0, sep));
-        auto val(sep<=key.size() ? opt.substr(sep+1) : std::string());
+        // valueless tokens (e.g. no_stapling) get an empty val
+        auto val(sep!=std::string::npos ? opt.substr(sep+1) : std::string());
 
         if(key=="client_cert") {
             if(val=="require") {

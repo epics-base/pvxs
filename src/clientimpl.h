@@ -33,6 +33,7 @@ namespace pvxs {
 namespace client {
 
 struct Channel;
+struct Discovery;
 struct ContextImpl;
 
 struct ResultWaiter {
@@ -59,6 +60,8 @@ struct OperationBase : public Operation
     uint32_t ioid = 0;
     Value result;
     bool done = false;
+    // state of handoff from user thread to worker
+    bool onWorker = false;
     std::shared_ptr<ResultWaiter> waiter;
 
     OperationBase(operation_t op, const evbase& loop, const std::string& name);
@@ -78,6 +81,7 @@ struct RequestFL {
     std::vector<Value> unused;
 
     explicit RequestFL(size_t limit) :limit(limit) {}
+    ~RequestFL();
 };
 
 struct RequestInfo {
@@ -181,7 +185,7 @@ struct ConnectImpl final : public Connect
     const std::string _name;
     std::atomic<bool> _connected;
     std::function<void(const Connected&)> _onConn;
-    std::function<void()> _onDis;
+    std::function<void(const Disconnect&)> _onDis;
 
     ConnectImpl(const evbase& loop, const std::string& name)
         :loop(loop)
@@ -192,6 +196,7 @@ struct ConnectImpl final : public Connect
 
     virtual const std::string &name() const override final;
     virtual bool connected() const override final;
+    virtual std::string peerName() const override final;
 };
 
 struct Channel {
@@ -246,25 +251,6 @@ struct Channel {
                                    const std::string& server);
 };
 
-struct Discovery final : public OperationBase
-{
-    const std::shared_ptr<ContextImpl> context;
-    std::function<void(const Discovered &)> notify;
-    bool running = false;
-
-    Discovery(const std::shared_ptr<ContextImpl>& context, const std::string& name);
-    ~Discovery();
-
-    virtual bool cancel() override final;
-private:
-    bool _cancel(bool implicit);
-
-    // unused for this special case
-    virtual void _reExecGet(std::function<void (Result &&)> &&resultcb) override final;
-    virtual void _reExecPut(const Value &arg, std::function<void (Result &&)> &&resultcb) override final;
-    virtual void createOp() override final;
-    virtual void disconnected(const std::shared_ptr<OperationBase> &self) override final;
-};
 
 struct ContextImpl : public std::enable_shared_from_this<ContextImpl>
 {

@@ -19,6 +19,7 @@
 
 #include "testioc.h"
 #include "utilpvt.h"
+#include "capturestd.h"
 
 extern "C" {
 extern int testioc_registerRecordDeviceDriver(struct dbBase*);
@@ -39,7 +40,7 @@ int testTimeCurrent(epicsTimeStamp *pDest)
 
 void checkUTAG(Value& v, int32_t expect, const char *fld="timeStamp.userTag")
 {
-#ifdef DBR_UTAG
+#if DBR_UTAG
     auto utag = v[fld];
     int32_t tag = -1;
     if(!utag.isMarked() || (tag = utag.as<int32_t>())!=expect)
@@ -678,18 +679,22 @@ void testIQ()
     sub.testEmpty();
 }
 
-void testConst()
+void testConst(bool atomic)
 {
-    testDiag("%s", __func__);
+    auto isatom = atomic ? "true": "false";
+    testDiag("%s(%s)", __func__, isatom);
     TestClient ctxt;
 
-    auto val(ctxt.get("tst:const").exec()->wait(5.0));
+    auto val(ctxt.get("tst:const")
+                 .record("atomic", atomic)
+                 .exec()->wait(5.0));
     testStrEq(std::string(SB()<<val.format()),
+              std::string(SB()<<
               "struct {\n"
               "    struct {\n"
               "        struct {\n"
               "            int32_t queueSize = 0\n"
-              "            bool atomic = true\n"
+              "            bool atomic = "<<isatom<<"\n"
               "        } _options\n"
               "    } record\n"
               "    struct {\n"
@@ -697,13 +702,14 @@ void testConst()
               "        int64_t i = 14\n"
               "        string s = \"hello\"\n"
               "    } s\n"
-              "}\n");
+              "}\n"));
     testStrEq(std::string(SB()<<val.format().delta()),
-              "record._options.atomic bool = true\n"
+              std::string(SB()<<
+              "record._options.atomic bool = "<<isatom<<"\n"
               "s.d double = 1.5\n"
               "s.i int64_t = 14\n"
               "s.s string = \"hello\"\n"
-              );
+              ));
 
     TestSubscription sub(ctxt.monitor("tst:const"));
     val = sub.waitForUpdate();
@@ -731,6 +737,36 @@ void testBatch()
     testEq(ret["SUM.value"].as<int32_t>(), 3);
 }
 
+void testiocsh()
+{
+    testDiag("%s", __func__);
+
+    {
+        CaptureStd cap([](){
+            iocshCmd("pvxgl 5 \"\"");
+        });
+        testStrEq(cap.err(), "");
+        testStrMatch(".*enm:ENUM.*enm:ENUM:INDEX.VAL has triggers.*", cap.out());
+    }
+}
+
+// tst:SECIDX's first put-order-sorted field is a channel-less Structure,
+// and value.x is the channel-backed puttable field after it.  A non-atomic
+// group put of value.x must authorise against value.x's own security client.
+void testGroupPutSecIndex()
+{
+    testDiag("%s", __func__);
+    TestClient ctxt;
+
+    try {
+        ctxt.put("tst:SECIDX").record("atomic", false).set("value.x", 5).exec()->wait(5.0);
+        testPass("non-atomic group put authorised against the field's own security client");
+    } catch (client::RemoteError& e) {
+        testFail("non-atomic group put failed: %s", e.what());
+    }
+    testdbGetFieldEqual("tst:secidx", DBR_LONG, 5);
+}
+
 void testDbLoadGroup()
 {
     testDiag("%s", __func__);
@@ -753,7 +789,7 @@ void testDbLoadGroup()
 
 MAIN(testqgroup)
 {
-    testPlan(39);
+    testPlan(46);
     testSetup();
     {
         generalTimeRegisterCurrentProvider("test", 1, &testTimeCurrent);
@@ -768,6 +804,7 @@ MAIN(testqgroup)
         testdbReadDatabase("ntenum.db", nullptr, "P=enm");
         testdbReadDatabase("iq.db", nullptr, "N=iq:");
         testdbReadDatabase("const.db", nullptr, "P=tst:");
+        testdbReadDatabase("secidxgroup.db", nullptr, "P=tst:");
         testdbReadDatabase("batch.db", nullptr, "P=tst:b:");
         iocsh("../qgroup.cmd");
         ioc.init();
@@ -775,9 +812,12 @@ MAIN(testqgroup)
         testEnum();
         testImage();
         testIQ();
-        testConst();
+        testConst(true);
+        testConst(false);
         testBatch();
+        testGroupPutSecIndex();
         testDbLoadGroup();
+        testiocsh();
     }
     // call epics atexits explicitly to handle older base w/o de-init hooks
     epicsExitCallAtExits();

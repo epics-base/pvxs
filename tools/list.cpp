@@ -18,7 +18,6 @@
 #include <pvxs/client.h>
 #include <pvxs/nt.h>
 #include <pvxs/log.h>
-
 #include "utilpvt.h"
 #include "evhelper.h"
 
@@ -101,7 +100,7 @@ int main(int argc, char *argv[])
                     break;
                 default:
                     usage(argv[0]);
-                    std::cerr<<"\nUnknown argument: -"<<char(optopt)<<std::endl;
+                    std::cerr<<"\nUnknown argument: "<<char(opt)<<std::endl;
                     return 1;
                 }
             }
@@ -113,12 +112,12 @@ int main(int argc, char *argv[])
             return 1;
         }
 
-        // Build the context
-        auto conf = client::Config::fromEnv();
-
-        auto ctxt = conf.build();
-
         epicsEvent done;
+        std::atomic<int> remaining{argc-optind}; // query mode only
+
+        auto ctxt(client::Context::fromEnv());
+        auto conf = ctxt.config();
+
         SigInt H([&done]() {
             done.signal();
         });
@@ -156,8 +155,6 @@ int main(int argc, char *argv[])
 
         } else { // query mode, fetch info from specific servers
 
-            std::atomic<int> remaining{argc-optind};
-
             for(auto n : range(optind, argc)) {
                 ops.push_back(ctxt.rpc("server")
                               .server(argv[n])
@@ -176,7 +173,7 @@ int main(int argc, char *argv[])
                                   if(top["implLang"].as(temp)) {
                                       std::cout<<" lang=\""<<escape(temp)<<"\"";
                                   };
-                                  std::cout<<"\n";
+                                  std::cout<<std::endl;
 
                               } else { // channels
                                   if(verbose)

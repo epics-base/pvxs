@@ -4,11 +4,14 @@
  * in file LICENSE that is included with this distribution.
  */
 
+#include "epicsTime.h"
 #include <testMain.h>
 #include <epicsExit.h>
+#include <iocsh.h>
 #include <dbLock.h>
 #include <dbLink.h>
 #include <recGbl.h>
+#include <dbAccess.h>
 #include <dbUnitTest.h>
 #include <aiRecord.h>
 #include <aaoRecord.h>
@@ -33,6 +36,8 @@
 #include "dblocker.h"
 #include "qsrvpvt.h"
 #include "pvalink.h"
+#include "capturestd.h"
+#include "testioc.h"
 
 using namespace pvxs::ioc;
 using namespace pvxs;
@@ -340,6 +345,9 @@ namespace {
             src->tse = epicsTimeEventDeviceTime;
             src->time.secPastEpoch = 0x12345678;
             src->time.nsec = 0x10203040;
+#ifdef dbGetTimeStampTag
+            src->utag = 0x00010002;
+#endif
             src->val = 7;
 #ifdef HAS_ALARM_MESSAGE
             strcpy(src->amsg, "Test");
@@ -351,7 +359,6 @@ namespace {
 
         long ret, nelem;
         epicsEnum16 stat, sevr;
-        epicsTimeStamp time;
         char egu[10] = "";
         short prec;
         double val, lolo, low, high, hihi;
@@ -382,9 +389,29 @@ namespace {
         testSkip(1, "No AMSG");
 #endif
 
-        testTrue((ret=dbGetTimeStamp(&inp->inp, &time))==0
-                 && time.secPastEpoch==0 && time.nsec==0)
-                <<" ret="<<ret<<" sec="<<time.secPastEpoch<<" ns="<<time.nsec;
+        auto checkTime = [](DBLINK *plink,
+                            epicsUInt32 sec, epicsUInt32 ns,
+                            epicsUTag utag)
+        {
+            epicsTimeStamp actualT;
+            long ret;
+
+#ifdef dbGetTimeStampTag
+            epicsUTag actualU;
+            testTrue((ret=dbGetTimeStampTag(plink, &actualT, &actualU))==0
+                     && actualT.secPastEpoch==sec
+                     && actualT.nsec==ns
+                     && actualU==utag)
+                <<" ret="<<ret<<" sec="<<actualT.secPastEpoch<<" ns="<<actualT.nsec<<" utag="<<actualU;
+#else
+            testTrue((ret=dbGetTimeStamp(plink, &actualT))==0
+                     && actualT.secPastEpoch==sec
+                     && actualT.nsec==ns)
+                <<" ret="<<ret<<" sec="<<actualT.secPastEpoch<<" ns="<<actualT.nsec;
+#endif
+        };
+
+        checkTime(&inp->inp, 0, 0, 0);
 
         testTrue((ret=dbGetLink(&inp->inp, DBR_DOUBLE, &val, nullptr, nullptr))==0
                  && val==7.0)<<" ret="<<ret<<" val="<<val;
@@ -407,9 +434,7 @@ namespace {
         testSkip(1, "No AMSG");
 #endif
 
-        testTrue((ret=dbGetTimeStamp(&inp->inp, &time))==0
-                 && time.secPastEpoch==0x12345678 && time.nsec==0x10203040)
-                <<" ret="<<ret<<" sec="<<time.secPastEpoch<<" ns="<<time.nsec;
+        checkTime(&inp->inp, 0x12345678, 0x10203040, 0x00010002);
 
         testTrue((ret=dbGetGraphicLimits(&inp->inp, &low, &high))==0 && low==-9 && high==9)
                 <<" ret="<<ret<<" low="<<low<<" high="<<high;
@@ -604,6 +629,82 @@ namespace {
         ntndarray.close();
     }
 
+    void testiocsh()
+    {
+        testDiag("==== %s ====", __func__);
+
+        {
+            CaptureStd cap([](){
+                iocshCmd("dbpvar \"\" 5");
+            });
+            testStrEq(cap.err(), "");
+            testStrMatch(".*PVA links in all records.*async:target conn=T.*", cap.out());
+        }
+        {
+            CaptureStd cap([](){
+                iocshCmd("dbjlr \"\" 5");
+            });
+            testStrEq(cap.err(), "");
+            testStrMatch(".*\'pva\': testToFromString:str1.*", cap.out());
+        }
+    }
+
+    void testUserTag()
+    {
+        testDiag("==== %s ====", __func__);
+        auto serv(ioc::server());
+        TestClient ctxt;
+
+        // create SharedPV to manipulate userTag
+        auto srcutag_shpv(server::SharedPV::buildReadonly());
+        auto top = nt::NTScalar{TypeCode::Int32}.create();
+        top["value"] = 0;
+        top["timeStamp.secondsPastEpoch"] = 0;
+        top["timeStamp.nanoseconds"] = 0;
+        top["timeStamp.userTag"] = 0;
+        srcutag_shpv.open(top);
+        serv.addPV("source:utag", srcutag_shpv);
+
+        // routine check if link is connected
+        testqsrvWaitForLinkConnected("target:utag.INP");
+
+        // publish update to be reflected in target:utag
+        {
+            auto update = top.cloneEmpty();
+            update["value"] = 42;
+            update["timeStamp.secondsPastEpoch"] = 0x12345678;
+            update["timeStamp.nanoseconds"] = 0x10203040;
+            update["timeStamp.userTag"] = 0x90010002;
+            QSrvWaitForLinkUpdate A("target:utag.INP");
+            srcutag_shpv.post(update);
+        }
+
+        // Check if record was updated with timeStamp + userTag from link
+        auto prec(testdbRecordPtr("target:utag"));
+        {
+            ioc::DBLocker L(prec);
+            testEq(prec->time.secPastEpoch, (0x12345678u-POSIX_TIME_AT_EPICS_EPOCH));
+            testEq(prec->time.nsec, 0x10203040u);
+#if DBR_UTAG
+            testEq(prec->utag, 0x90010002u);
+#else
+            testSkip(1, "No UTAG");
+#endif
+        }
+
+        // get PV from target:utag and verify if timeStamp is the same from source:utag
+        auto val(ctxt.get("target:utag").exec()->wait(5.0));
+        testEq(val["value"].as<int32_t>(), 42);
+        testEq(val["timeStamp.secondsPastEpoch"].as<int64_t>(), 0x12345678);
+        testEq(val["timeStamp.nanoseconds"].as<int32_t>(), 0x10203040);
+#if DBR_UTAG
+        testEq(val["timeStamp.userTag"].as<int32_t>(), (int32_t)0x90010002);
+#else
+        testSkip(1, "No UTAG");
+#endif
+        ctxt.close();
+    }
+
 
 } // namespace
 
@@ -611,7 +712,7 @@ extern "C" void testioc_registerRecordDeviceDriver(struct dbBase *);
 
 MAIN(testpvalink)
 {
-    testPlan(102);
+    testPlan(113);
     testSetup();
     pvxs::logger_config_env();
 
@@ -643,6 +744,8 @@ MAIN(testpvalink)
         testAtomic();
         testEnum();
         testNTNDArray();
+        testiocsh();
+        testUserTag();
     }
     catch (std::exception &e)
     {

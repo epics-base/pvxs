@@ -241,11 +241,15 @@ void ServerConn::handle_SEARCH()
             nreply++;
     }
 
-    if(nreply==0 && !mustReply && !foundtcp )
 #ifdef PVXS_ENABLE_OPENSSL
-      if (!foundtls)
+    if(!(foundtcp || foundtls))
+        return; // no supported protocol, can't reply
+#else
+    if(!foundtcp)
+        return; // no supported protocol, can't reply
 #endif
-        return;
+    if(nreply==0 && !mustReply)
+        return; // no result, and no forced reply
 
     {
         (void)evbuffer_drain(txBody.get(), evbuffer_get_length(txBody.get()));
@@ -345,7 +349,7 @@ void ServerConn::handle_CREATE_CHANNEL()
                     if(msg)
                         break;
                 }catch(std::exception& e){
-                    log_exc_printf(serversearch, "Client %s Unhandled error in onCreate %s,%d %s : %s\n", peerName.c_str(),
+                    log_err_printf(serversearch, "Client %s in onCreate %s,%d %s : %s\n", peerName.c_str(),
                                pair.first.second.c_str(), pair.first.first,
                                typeid(&e).name(), e.what());
                 }

@@ -12,8 +12,8 @@
 namespace pvxs {
 namespace client {
 
-DEFINE_LOGGER(setup, "pvxs.cli.init");
-DEFINE_LOGGER(io, "pvxs.cli.io");
+DEFINE_LOGGER(setup, "pvxs.client.setup");
+DEFINE_LOGGER(io, "pvxs.client.io");
 
 namespace {
 
@@ -21,6 +21,7 @@ struct InfoOp : public OperationBase
 {
     std::function<void(Result&&)> done;
     Value result;
+    bool done_busy = false;
 
     enum state_t {
         Connecting, // waiting for an active Channel
@@ -36,7 +37,7 @@ struct InfoOp : public OperationBase
 
     virtual ~InfoOp()
     {
-        if(loop.assertInRunningLoop())
+        if(onWorker && loop.assertInRunningLoop())
             _cancel(true);
     }
 
@@ -45,7 +46,8 @@ struct InfoOp : public OperationBase
         bool ret = false;
         (void)loop.tryCall([this, &junk, &ret](){
             ret = _cancel(false);
-            junk = std::move(done);
+            if(!done_busy)
+                junk = std::move(done);
             // leave opByIOID for GC
         });
         return ret;
@@ -160,18 +162,19 @@ void Connection::handle_GET_FIELD()
     info->state = InfoOp::Done;
 
     if(info->done) {
-        auto done = std::move(info->done);
         Result res;
         if(sts.isSuccess()) {
             res = Result(std::move(prototype), peerName);
         } else {
             res = Result(std::make_exception_ptr(RemoteError(sts.msg)));
         }
+        info->done_busy = true;
         try {
-            done(std::move(res));
+            info->done(std::move(res));
         }catch(std::exception& e){
             log_exc_printf(setup, "Unhandled exception %s in Info result() callback: %s\n", typeid (e).name(), e.what());
         }
+        info->done_busy = false;
 
     } else {
         info->result = prototype;
@@ -204,6 +207,12 @@ std::shared_ptr<Operation> GetBuilder::_exec_info()
         // from user thread
         auto temp(std::move(op));
         auto loop(temp->loop);
+        if(syncCancel && loop.inLoop())
+            log_err_printf(io,
+                           "syncCancel info '%s' being destroyed on worker thread.\n"
+                           "Possible self-reference loop.  Setup with .syncCancel(false) if intended.\n",
+                           temp->channelName.c_str());
+
         // std::bind for lack of c++14 generalized capture
         // to move internal ref to worker for dtor
         loop.tryInvoke(syncCancel, std::bind([](std::shared_ptr<InfoOp>& op) {
@@ -219,6 +228,8 @@ std::shared_ptr<Operation> GetBuilder::_exec_info()
     auto server(std::move(_server));
     context->tcp_loop.dispatch([op, context, name, server]() {
         // on worker
+        op->onWorker = true;
+
         try {
             op->chan = Channel::build(context, name, server);
 

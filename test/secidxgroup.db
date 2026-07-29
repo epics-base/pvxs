@@ -1,0 +1,13 @@
+# A group whose first (put-order sorted) field is a channel-less
+# Structure, followed by a channel-backed puttable field.  A non-atomic group
+# put of value.x must authorise against value.x's own access-security client,
+# not drift onto the channel-less field's (empty, deny-all) client.
+record(longout, "$(P)secidx") {
+    field(VAL, "0")
+    info(Q:group, {
+        "$(P)SECIDX": {
+            "value": { +type:"structure" },
+            "value.x": { +type:"plain", +channel:"VAL", +putorder:0 }
+        }
+    })
+}

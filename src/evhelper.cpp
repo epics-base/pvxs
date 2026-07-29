@@ -348,6 +348,11 @@ bool evbase::_call(mfunction&& fn, bool dothrow) const
     return true;
 }
 
+bool evbase::inLoop() const
+{
+    return pvt->worker.isCurrentThread();
+}
+
 void evbase::assertInLoop() const
 {
     if(!pvt->worker.isCurrentThread()) {

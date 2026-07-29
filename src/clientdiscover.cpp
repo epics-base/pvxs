@@ -9,11 +9,32 @@
 #include "utilpvt.h"
 #include "clientimpl.h"
 
-DEFINE_LOGGER(setup, "pvxs.cli.init");
-DEFINE_LOGGER(io, "pvxs.cli.io");
+DEFINE_LOGGER(setup, "pvxs.client.setup");
+DEFINE_LOGGER(io, "pvxs.client.io");
 
 namespace pvxs {
 namespace client {
+
+struct Discovery final : public OperationBase
+{
+    const std::shared_ptr<ContextImpl> context;
+    std::function<void(const Discovered &)> notify;
+    bool notify_busy = false;
+    bool running = false;
+
+    Discovery(const std::shared_ptr<ContextImpl>& context, const std::string& name);
+    ~Discovery();
+
+    virtual bool cancel() override final;
+private:
+    bool _cancel(bool implicit);
+
+    // unused for this special case
+    virtual void _reExecGet(std::function<void (Result &&)> &&resultcb) override final;
+    virtual void _reExecPut(const Value &arg, std::function<void (Result &&)> &&resultcb) override final;
+    virtual void createOp() override final;
+    virtual void disconnected(const std::shared_ptr<OperationBase> &self) override final;
+};
 
 Discovery::Discovery(const std::shared_ptr<ContextImpl> &context, const std::string& name)
     :OperationBase (Operation::Discover, context->tcp_loop, name)
@@ -21,7 +42,7 @@ Discovery::Discovery(const std::shared_ptr<ContextImpl> &context, const std::str
 {}
 
 Discovery::~Discovery() {
-    if(loop.assertInRunningLoop())
+    if(onWorker && loop.assertInRunningLoop())
         _cancel(true);
 }
 
@@ -31,7 +52,8 @@ bool Discovery::cancel()
     bool ret;
     loop.call([this, &junk, &ret](){
         ret = _cancel(false);
-        junk = std::move(notify);
+        if(!notify_busy)
+            junk = std::move(notify);
         // leave opByIOID for GC
     });
     return ret;
@@ -71,9 +93,15 @@ std::shared_ptr<Operation> DiscoverBuilder::exec()
         // (maybe) user thread
         auto loop(op->context->tcp_loop);
         auto temp(std::move(op));
-        loop.tryInvoke(syncCancel, std::bind([](const std::shared_ptr<Discovery>& operation){
+        if(syncCancel && loop.inLoop())
+            log_err_printf(io,
+                           "syncCancel discover '%s' being destroyed on worker thread.\n"
+                           "Possible self-reference loop.  Setup with .syncCancel(false) if intended.\n",
+                           temp->channelName.c_str());
+
+        loop.tryInvoke(syncCancel, std::bind([](std::shared_ptr<Discovery>& op){
                            // on worker
-                           operation->context->discoverers.erase(operation.get());
+                           op->context->discoverers.erase(op.get());
 
                        }, std::move(temp)));
     });
@@ -81,8 +109,10 @@ std::shared_ptr<Operation> DiscoverBuilder::exec()
     // setup timer to send discovery
 
     context->tcp_loop.dispatch([op, context, ping]() {
+        // on worker
+        op->onWorker = true;
 
-        if(!context->isRunning())
+        if(context->state!=ContextImpl::Running)
             throw std::logic_error("Context close()d");
 
         bool first = context->discoverers.empty();
@@ -104,11 +134,13 @@ void ContextImpl::serverEvent(const Discovered &evt)
 {
     for(auto& pair : discoverers) {
         if(auto dis = pair.second.lock()) {
+            dis->notify_busy = true;
             try {
                 dis->notify(evt);
             } catch(std::exception& e) {
                 log_exc_printf(io, "Unhandled exception during Discovery callback : %s\n", e.what());
             }
+            dis->notify_busy = false;
         }
     }
 }

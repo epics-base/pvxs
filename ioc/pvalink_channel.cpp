@@ -117,7 +117,7 @@ void pvaLinkChannel::open()
         try {
             linkGlobal->queue.push(shared_from_this());
         }catch(std::bad_weak_ptr&){
-            log_err_printf(_logger, "channel '%s' open during dtor?", key.first.c_str());
+            log_err_printf(_logger, "channel '%s' open during dtor?\n", key.first.c_str());
         }
     })
             .exec();
@@ -267,6 +267,7 @@ void pvaLinkChannel::put(bool force)
         // start net Put, cancels in-progress put
         op_put = linkGlobal->provider_remote.put(key.first)
                 .rawRequest(pvReq)
+                .syncCancel(false)
                 .build([this](Value&& prototype) -> Value
         {
                 return linkBuildPut(this, std::move(prototype)); // TODO
@@ -412,10 +413,6 @@ void pvaLinkChannel::run()
 
             links_changed = false;
         }
-
-        update_seq++;
-        update_evt.signal();
-        log_debug_printf(_logger, "%s Sequence point %u\n", key.first.c_str(), update_seq);
     }
     // unlock link
 
@@ -429,6 +426,13 @@ void pvaLinkChannel::run()
     for(auto& trac : nonatomic_records) {
         ioc::DBLocker L(trac.prec);
         trac.scan();
+    }
+
+    {
+        Guard G(lock);
+        update_seq++;
+        update_evt.signal();
+        log_debug_printf(_logger, "%s Sequence point %u\n", key.first.c_str(), update_seq);
     }
 
     log_debug_printf(_logger, "Requeueing %s\n", key.first.c_str());

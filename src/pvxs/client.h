@@ -63,13 +63,12 @@ struct PVXS_API Finished : public Disconnect
 //! Indication of connection to a server
 struct PVXS_API Connected : public std::runtime_error
 {
+    Connected(const std::string& peerName) // legacy
+        :Connected(peerName, epicsTime::getCurrent(), nullptr)
+    {}
     Connected(const std::string& peerName,
               const epicsTime& time,
-              const std::shared_ptr<const ServerCredentials>& cred);
-    Connected(const std::string& peerName,
-              const std::shared_ptr<const ServerCredentials>& cred)
-        :Connected(peerName, epicsTime::getCurrent(), cred) // legacy
-    {}
+              const std::shared_ptr<const ServerCredentials>& cred = nullptr);
     virtual ~Connected();
 
     //! Server IP address
@@ -293,6 +292,13 @@ struct PVXS_API Connect {
     virtual const std::string& name() const =0;
     //! Poll (momentary) connection status
     virtual bool connected() const =0;
+    /** Poll (momentary) peer name
+     *
+     * @returns An empty string when not connected,
+     *          or the rendered numeric address (IP4 or 6).
+     * @since UNRELEASED
+     */
+    virtual std::string peerName() const =0;
 };
 
 class GetBuilder;
@@ -953,7 +959,7 @@ class ConnectBuilder
     std::string _pvname;
     std::string _server;
     std::function<void(const Connected&)> _onConn;
-    std::function<void()> _onDis;
+    std::function<void(const Disconnect&)> _onDis;
     bool _syncCancel = true;
 public:
     ConnectBuilder() {}
@@ -974,7 +980,13 @@ public:
         return *this;
     }
     //! Handler to be invoked when channel becomes disconnected.
-    ConnectBuilder& onDisconnect(std::function<void()>&& cb) { _onDis = std::move(cb); return *this; }
+    ConnectBuilder& onDisconnect(std::function<void(const Disconnect&)>&& cb)
+    { _onDis = std::move(cb); return *this; }
+    ConnectBuilder& onDisconnect(std::function<void()>&& cb)
+    {
+        _onDis = [cb](const Disconnect&) { cb(); };
+        return *this;
+    }
 
     /** Controls whether Connect::~Connect() synchronizes.
      *

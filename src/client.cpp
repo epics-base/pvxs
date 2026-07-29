@@ -200,7 +200,7 @@ void Channel::disconnect(const std::shared_ptr<Channel>& self)
 
     for(auto& interested : conns) {
         if(interested->_connected.exchange(false, std::memory_order_relaxed) && interested->_onDis)
-            interested->_onDis();
+            interested->_onDis(Disconnect());
     }
 
     auto ops(std::move(opByIOID));
@@ -250,6 +250,15 @@ bool ConnectImpl::connected() const
 {
     return _connected.load(std::memory_order_relaxed);
 }
+std::string ConnectImpl::peerName() const
+{
+    std::string ret;
+    loop.call([this, &ret](){
+        if(chan && chan->conn && chan->conn->state==ConnBase::Connected)
+            ret = chan->conn->peerName;
+    });
+    return ret;
+}
 
 std::shared_ptr<Connect> ConnectBuilder::exec()
 {
@@ -290,7 +299,7 @@ std::shared_ptr<Connect> ConnectBuilder::exec()
             Connected evt(conn->peerName, conn->connTime, conn->cred);
             op->_onConn(evt);
         } else if(!cur && op->_onDis) {
-            op->_onDis();
+            op->_onDis(Disconnect());
         }
 
         op->chan->connectors.push_back(op.get());

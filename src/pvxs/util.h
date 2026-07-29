@@ -31,12 +31,15 @@ class Escaper
 {
     const char* val;
     size_t count;
+    int quoting = -1; // -1 never, 0 if escaping, 1 always
     friend
     PVXS_API
     std::ostream& operator<<(std::ostream& strm, const Escaper& esc);
 public:
     PVXS_API explicit Escaper(const char* v);
+    explicit Escaper(const std::string& s) :val(s.c_str()),count(s.size()) {}
     constexpr explicit Escaper(const char* v, size_t l) :val(v),count(l) {}
+    Escaper& quote(int q) { quoting = q; return *this; }
 };
 
 PVXS_API
@@ -57,6 +60,8 @@ std::ostream& operator<<(std::ostream& strm, const Escaper& esc);
 //!   std::string blah("this \"is a test\"");
 //!   std::cout<<pvxs::escape(blah);
 //! @endcode
+//!
+//! @since UNRELEASED Valid UTF-8 code points are passed through instead of being escaped.
 inline detail::Escaper escape(const std::string& s) {
     return detail::Escaper(s.c_str(), s.size());
 }
@@ -75,6 +80,38 @@ inline detail::Escaper escape(const char* s) {
 inline detail::Escaper escape(const char* s,size_t n) {
     return detail::Escaper(s,n);
 }
+
+/** Render string.  Quoted if escapes are printed.
+ *
+ *  Accepts arguments as:
+ *  @code
+ *  Printable maybeQuote(const std::string& s);
+ *  Printable maybeQuote(const char* s);
+ *  Printable maybeQuote(const char* s,size_t n);
+ *  @endcode
+ *
+ *  @since UNRELEASED
+ */
+template<typename... T>
+inline detail::Escaper maybeQuote(const T&... s) {
+    return detail::Escaper(s...).quote(0);
+};
+
+/** Render quoted string
+ *
+ *  Accepts arguments as:
+ *  @code
+ *  Printable quote(const std::string& s);
+ *  Printable quote(const char* s);
+ *  Printable quote(const char* s,size_t n);
+ *  @endcode
+ *
+ *  @since UNRELEASED
+ */
+template<typename... T>
+inline detail::Escaper quote(const T&... s) {
+    return detail::Escaper(s...).quote(1);
+};
 
 struct ServerGUID : public std::array<uint8_t, 12> {};
 
