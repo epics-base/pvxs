@@ -55,8 +55,14 @@ void ServerChan::cleanup()
     }
 
     auto fn(std::move(onClose));
-    if(fn)
-        fn("");
+    if(fn) {
+        try {
+            fn("");
+        }catch(std::exception& e){
+            log_err_printf(connsetup, "Channel \"%s\" onClose() error: %s\n",
+                           name.c_str(), e.what());
+        }
+    }
 }
 
 ServerChannelControl::ServerChannelControl(const std::shared_ptr<ServerConn> &conn, const std::shared_ptr<ServerChan>& channel)
