@@ -416,7 +416,12 @@ void _fromDefs(Config& self, const std::map<std::string, std::string>& defs, boo
     }
 
     if(pickone({"EPICS_PVAS_INTF_ADDR_LIST"})) {
-        split_addr_into(pickone.name.c_str(), self.interfaces, pickone.val, self.tcp_port, true);
+        // defaultPort=0, matching the client EPICS_PVA_INTF_ADDR_LIST path below.
+        // A port-less interface stays at port 0 so the acceptor loop can follow the
+        // server onto the port actually bound -- including a conflict fallback chosen
+        // while binding the first interface.  Filling in tcp_port here erases that
+        // "follow me" signal and strands the interface on the unbindable port.
+        split_addr_into(pickone.name.c_str(), self.interfaces, pickone.val, 0, true);
     }
 
     if(pickone({"EPICS_PVAS_IGNORE_ADDR_LIST"})) {
