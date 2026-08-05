@@ -61,7 +61,3 @@ record(longout, "test:ro") {
 record(longout, "test:disp") {
     field(DISP, "1")
 }
-record(longin, "test:nsec") {
-    field(VAL , "100")
-    info(Q:time:tag, "nsec:lsb:8")
-}

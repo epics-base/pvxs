@@ -11,6 +11,10 @@ include src/pvxs/*.h
 include src/pvxs/*.h@
 include src/os/default/*.cpp
 include src/os/WIN32/*.cpp
+include site/*.cpp
+include site/*.h
+include site/gen_siteregister.py
+
 include ioc/*.h
 include ioc/*.c
 include ioc/*.cpp
