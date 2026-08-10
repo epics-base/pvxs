@@ -467,6 +467,8 @@ void from_wire(Buffer& buf, Status& sts)
 
     } else {
         sts.code = Status::type_t(buf.pop());
+        if(sts.code < 0 || sts.code > Status::Fatal)
+            sts.code = Status::Fatal;
         from_wire(buf, sts.msg);
         from_wire(buf, sts.trace);
     }
