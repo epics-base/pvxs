@@ -23,10 +23,13 @@ This implies that callbacks for a single operation,
 those stored through a `pvxs::server::ChannelControl` and related \*Op,
 will also never be executed concurrently.
 
+User code must avoid doing unnecessary work from within a callback function as this will
+prevent other callbacks from being executed.
+
 Ownership and Lifetime
 ----------------------
 
-The \*Op classes are interfaces through which callback functors are passed.
+The ``*Op`` classes are interfaces through which callback functors are passed.
 These functors are stored in underlying, and otherwise hidden, server data structures.
 Therefore, it is safe to eg. capture a ``shared_ptr<ExecOp>`` into an ``onCancel``
 functor without creating a reference loop.
@@ -34,8 +37,8 @@ functor without creating a reference loop.
 The lifetime of these server data structures are tied to the remote client.
 So variables captured into a functor like `pvxs::server::ConnectOp::onGet`, or onCancel,
 will be destroyed when the client times out, closes the channel, or closes the operation.
-Also when the server side forces channel closure via `pvxs::server::ConnectOp::close`.
-The various \*Close callbacks may also be used if explicit cleanup is needed on
+Also when the server side forces channel closure via `pvxs::server::ChannelControl::close`.
+The various ``onClose`` callbacks may also be used if explicit cleanup is needed on
 certain conditions.
 
 API

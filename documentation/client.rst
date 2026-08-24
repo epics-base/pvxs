@@ -207,7 +207,7 @@ However, it is guaranteed that callbacks relating to a given Channel (PV name + 
 This implies that callbacks for a single operation will also never be executed concurrently.
 
 User code must avoid doing unnecessary work from within a callback function as this will
-prevent other callbacks from be executed.
+prevent other callbacks from being executed.
 
 Ownership
 ^^^^^^^^^
