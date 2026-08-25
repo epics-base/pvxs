@@ -1,0 +1,52 @@
+name: ABICheck shadow ABI scan
+
+on: [push, pull_request, workflow_dispatch]
+
+# The scanner is an advisory, parallel signal.  It needs no PR comments, no
+# status write access, and no repository secrets.
+permissions:
+  contents: read
+
+jobs:
+  abicheck-shadow:
+    runs-on: ubuntu-latest
+    env:
+      SETUP_PATH: .ci-local
+      SET: defaults
+      CMP: gcc
+      BCFG: default
+      BASE: "7.0"
+      _PVXS_ABORT_ON_CRIT: 1
+      PVXS_LOG: pvxs.*=WARN
+      ABICHECK_MAKE_JOBS: "2"
+      ABICHECK_REF: ba70cdeecaa70ae8c0623182f6ffa71d514054f5
+
+    steps:
+    - uses: actions/checkout@v6
+      with:
+        fetch-depth: "0"
+        submodules: true
+        persist-credentials: false
+
+    - name: Install scanner and build prerequisites
+      run: |
+        sudo apt-get update
+        sudo apt-get -y install libreadline-dev libevent-dev cmake castxml
+        python -m pip install --disable-pip-version-check \
+          "git+https://github.com/abicheck/abicheck@${ABICHECK_REF}"
+        abicheck --version
+
+    - name: Prepare EPICS dependencies
+      run: python .ci/cue.py prepare
+
+    - name: Run full source-evidence shadow scan
+      run: python .ci/cue.py exec ./.ci-local/abicheck-diff.sh
+
+    - name: Upload ABICheck reports
+      if: ${{ always() }}
+      uses: actions/upload-artifact@v7
+      with:
+        retention-days: 7
+        name: abicheck-shadow
+        path: compat_reports/abicheck
+        if-no-files-found: ignore
