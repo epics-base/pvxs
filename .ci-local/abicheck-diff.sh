@@ -6,6 +6,9 @@ OLD_REF=${1:-}
 NEW_REF=${2:-HEAD}
 ABICHECK=${ABICHECK:-abicheck}
 JOBS=${ABICHECK_MAKE_JOBS:-2}
+# GCC 13 defaults to C++17, while CastXML otherwise falls back to an older
+# dialect when replaying the compile database.  Make the build dialect explicit.
+ABICHECK_OPT_CXXFLAGS=${ABICHECK_OPT_CXXFLAGS:--g -Og -std=c++17}
 REPORT_ROOT=${ABICHECK_REPORT_ROOT:-compat_reports/abicheck}
 RUN_ROOT=${RUNNER_TEMP:-${TMPDIR:-/tmp}}/pvxs-abicheck-${GITHUB_RUN_ID:-$$}
 
@@ -49,7 +52,8 @@ prepare_build() {
     [ -f configure/CONFIG_SITE.local ] && cp configure/CONFIG_SITE.local "$src/configure/"
     sed -i -e "s|\$(TOP)|$(pwd)|g" -e 's|-Werror||g' "$src"/configure/*.local 2>/dev/null || true
     bear --output "$src/compile_commands.json" -- \
-      make -C "$src" CROSS_COMPILER_TARGET_ARCHS= OPT_CFLAGS='-g -Og' OPT_CXXFLAGS='-g -Og' ioc -j"$JOBS"
+      make -C "$src" CROSS_COMPILER_TARGET_ARCHS= OPT_CFLAGS='-g -Og' \
+      OPT_CXXFLAGS="$ABICHECK_OPT_CXXFLAGS" ioc -j"$JOBS"
 }
 
 prepare_build "$OLD_SRC"
