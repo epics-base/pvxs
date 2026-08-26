@@ -6,9 +6,9 @@ OLD_REF=${1:-}
 NEW_REF=${2:-HEAD}
 ABICHECK=${ABICHECK:-abicheck}
 JOBS=${ABICHECK_MAKE_JOBS:-2}
-# GCC 13 defaults to C++17, while CastXML otherwise falls back to an older
-# dialect when replaying the compile database.  Make the build dialect explicit.
-ABICHECK_OPT_CXXFLAGS=${ABICHECK_OPT_CXXFLAGS:--g -Og -std=c++17}
+# CastXML bundled with GCC 13 cannot parse libstdc++ in PVXS's C++11 mode.
+# This affects only AST extraction; the binary remains built with PVXS defaults.
+ABICHECK_CASTXML_CXXSTD=${ABICHECK_CASTXML_CXXSTD:-c++17}
 REPORT_ROOT=${ABICHECK_REPORT_ROOT:-compat_reports/abicheck}
 RUN_ROOT=${RUNNER_TEMP:-${TMPDIR:-/tmp}}/pvxs-abicheck-${GITHUB_RUN_ID:-$$}
 
@@ -52,8 +52,7 @@ prepare_build() {
     [ -f configure/CONFIG_SITE.local ] && cp configure/CONFIG_SITE.local "$src/configure/"
     sed -i -e "s|\$(TOP)|$(pwd)|g" -e 's|-Werror||g' "$src"/configure/*.local 2>/dev/null || true
     bear --output "$src/compile_commands.json" -- \
-      make -C "$src" CROSS_COMPILER_TARGET_ARCHS= OPT_CFLAGS='-g -Og' \
-      OPT_CXXFLAGS="$ABICHECK_OPT_CXXFLAGS" ioc -j"$JOBS"
+      make -C "$src" CROSS_COMPILER_TARGET_ARCHS= OPT_CFLAGS='-g -Og' OPT_CXXFLAGS='-g -Og' ioc -j"$JOBS"
 }
 
 prepare_build "$OLD_SRC"
@@ -126,6 +125,7 @@ run_one() {
       --include "old:epics-gcc=$EPICS_BASE/include/compiler/gcc" --include "new:epics-gcc=$EPICS_BASE/include/compiler/gcc" \
       --depth source --sources "old=$OLD_SRC" --sources "new=$NEW_SRC" \
       --build-info "old=$old_db" --build-info "new=$new_db" \
+      --compiler-option "-std=$ABICHECK_CASTXML_CXXSTD" \
       --require-complete-analysis --format review --write "json=$base.json" -o "$base.md"
     then
         rc=0
