@@ -31,9 +31,12 @@ jobs:
     - name: Install scanner and build prerequisites
       run: |
         sudo apt-get update
-        sudo apt-get -y install libreadline-dev libevent-dev cmake castxml
+        sudo apt-get -y install libreadline-dev libevent-dev cmake
+        /usr/share/miniconda/bin/conda install -y -c conda-forge castxml
+        echo "/usr/share/miniconda/bin" >> "$GITHUB_PATH"
         python -m pip install --disable-pip-version-check \
           "git+https://github.com/abicheck/abicheck@${ABICHECK_REF}"
+        castxml --version
         abicheck --version
 
     - name: Prepare EPICS dependencies
