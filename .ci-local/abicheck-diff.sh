@@ -106,15 +106,14 @@ run_one() {
     [ -n "$oldso" ] && [ -n "$newso" ] || return 64
     old_headers="$RUN_ROOT/headers-old-$target"
     new_headers="$RUN_ROOT/headers-new-$target"
-    stage_headers "$OLD_SRC" "$target" "$old_headers"
-    stage_headers "$NEW_SRC" "$target" "$new_headers"
+    stage_headers "$OLD_SRC" "$target" "$old_headers" || return $?
+    stage_headers "$NEW_SRC" "$target" "$new_headers" || return $?
     old_db="$OLD_SRC/compile_commands.$target.json"
     new_db="$NEW_SRC/compile_commands.$target.json"
-    project_compile_db "$OLD_SRC" "$target" "$old_db"
-    project_compile_db "$NEW_SRC" "$target" "$new_db"
+    project_compile_db "$OLD_SRC" "$target" "$old_db" || return $?
+    project_compile_db "$NEW_SRC" "$target" "$new_db" || return $?
     base="$REPORT_ROOT/${target}_${old_id}_to_${new_id}"
-    set +e
-    "$ABICHECK" compare "$oldso" "$newso" \
+    if "$ABICHECK" compare "$oldso" "$newso" \
       --version "old=$old_sha" --version "new=$new_sha" \
       --header "old=$old_headers" --header "new=$new_headers" \
       --include "old:pvxs=$OLD_SRC/include" --include "new:pvxs=$NEW_SRC/include" \
@@ -124,21 +123,40 @@ run_one() {
       --depth source --sources "old=$OLD_SRC" --sources "new=$NEW_SRC" \
       --build-info "old=$old_db" --build-info "new=$new_db" \
       --require-complete-analysis --format review --write "json=$base.json" -o "$base.md"
-    rc=$?
-    set -e
+    then
+        rc=0
+    else
+        rc=$?
+    fi
+    printf '%s\n' "$rc" > "$RUN_ROOT/$target.exit-code"
     if [ -n "${GITHUB_STEP_SUMMARY:-}" ] && [ -f "$base.md" ]; then cat "$base.md" >> "$GITHUB_STEP_SUMMARY"; fi
-    [ "$first" -eq 1 ] || printf ',' >> "$status_file"
-    first=0
-    printf '{"target":"%s","exit_code":%s,"report":"%s.json"}' "$target" "$rc" "$(basename "$base")" >> "$status_file"
     case "$rc" in 0|2|4) return 0;; *) return "$rc";; esac
 }
 
+append_target() {
+    target=$1
+    rc=$2
+    base="$REPORT_ROOT/${target}_${old_id}_to_${new_id}"
+    [ "$first" -eq 1 ] || printf ',' >> "$status_file"
+    first=0
+    if [ -f "$base.json" ]; then
+        printf '{"target":"%s","exit_code":%s,"report":"%s.json"}' "$target" "$rc" "$(basename "$base")" >> "$status_file"
+    else
+        printf '{"target":"%s","exit_code":%s,"report":null}' "$target" "$rc" >> "$status_file"
+    fi
+}
+
 for target in libpvxs libpvxsIoc; do
-    set +e
-    run_one "$target"
-    rc=$?
-    set -e
-    [ "$rc" -eq 0 ] || overall=1
+    if run_one "$target"; then
+        rc=0
+    else
+        rc=$?
+    fi
+    if [ -f "$RUN_ROOT/$target.exit-code" ]; then
+        rc=$(cat "$RUN_ROOT/$target.exit-code")
+    fi
+    append_target "$target" "$rc"
+    case "$rc" in 0|2|4) ;; *) overall=1;; esac
 done
 printf '],"integration_health":%s}\n' "$overall" >> "$status_file"
 exit "$overall"
