@@ -4,11 +4,10 @@
 set -eu
 
 OLD=${1:-}
-NEW=${2:-}
+# The default is the checked-out commit, not `git describe --tags`: a PR/push
+# must compare its revision with the nearest preceding release.
+NEW=${2:-HEAD}
 
-if [ -z "$NEW" ]; then
-    NEW="$(git describe --tags)"
-fi
 if [ -z "$OLD" ]; then
     OLD="$(git describe --tags --abbrev=0 "$NEW")"
     if [ "$OLD" = "$NEW" ]; then
@@ -36,20 +35,6 @@ fi
 [ -n "$EPICS_BASE" ] && [ -d "$EPICS_BASE/include" ] || {
     echo "EPICS_BASE include tree unavailable; run via 'python .ci/cue.py exec' after prepare" >&2
     exit 64
-}
-
-setupsrc() {
-    rev=$1
-    dst=$2
-    git archive "$rev" | tar -C "$RUN_ROOT" -xf -
-    mv "$RUN_ROOT"/pvxs-* "$dst" 2>/dev/null || {
-        mkdir -p "$dst"
-        git archive "$rev" | tar -C "$dst" -xf -
-    }
-    [ -f configure/RELEASE.local ] && cp configure/RELEASE.local "$dst/configure/"
-    [ -f configure/CONFIG_SITE.local ] && cp configure/CONFIG_SITE.local "$dst/configure/"
-    sed -i -e "s|\$(TOP)|$(pwd)|g" -e 's|-Werror||g' "$dst"/configure/*.local 2>/dev/null || true
-    make -C "$dst" CROSS_COMPILER_TARGET_ARCHS= OPT_CFLAGS='-g -Og' OPT_CXXFLAGS='-g -Og' ioc -j"$JOBS"
 }
 
 # git archive produces no enclosing directory, unlike the old helper.  Keep
@@ -89,7 +74,8 @@ run_one() {
         --include "old:epics-os=$EPICS_BASE/include/os/Linux" --include "new:epics-os=$EPICS_BASE/include/os/Linux" \
         --include "old:epics-gcc=$EPICS_BASE/include/compiler/gcc" --include "new:epics-gcc=$EPICS_BASE/include/compiler/gcc" \
         --depth source --sources "old=$OLD_SRC" --sources "new=$NEW_SRC" \
-        --require-complete-analysis --diagnostic-comparison --format review -o "$report"
+        --require-complete-analysis --format review \
+        --write "json=${report%.md}.json" -o "$report"
     rc=$?
     set -e
 
@@ -97,7 +83,8 @@ run_one() {
         cat "$report" >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || true
     fi
     case "$rc" in
-        0|1|2|4) echo "$lib: abicheck shadow verdict rc=$rc" ; return 0 ;;
+        0|2|4) echo "$lib: abicheck shadow verdict rc=$rc" ; return 0 ;;
+        1) echo "$lib: incomplete analysis assurance; refusing an advisory verdict" >&2; return 1 ;;
         *) echo "$lib: abicheck infrastructure failure rc=$rc" >&2; return "$rc" ;;
     esac
 }
