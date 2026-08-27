@@ -19,7 +19,9 @@ permissions:
 jobs:
   abicheck-shadow:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    # A full source-evidence scan runs two revisions of both public DSOs.
+    # Keep this above the measured ~100-minute worst case, not at 45 minutes.
+    timeout-minutes: 120
     env:
       SETUP_PATH: .ci-local
       SET: defaults
