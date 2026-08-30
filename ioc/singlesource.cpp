@@ -55,8 +55,7 @@ void subscriptionCallback(SingleSourceSubscriptionCtx* subscriptionContext,
 
         {
             DBLocker F(dbChannelRecord(subscriptionContext->info->chan));
-            // TODO MappingInfo::nsecMask
-            IOCSource::get(currentValue, MappingInfo(), Value(), change, pChannel, pDbFieldLog);
+            IOCSource::get(currentValue, *subscriptionContext->info, Value(), change, pChannel, pDbFieldLog);
         }
 
         // Make sure that the initial subscription update has occurred on both channels before continuing
@@ -281,7 +280,6 @@ void singleGet(const SingleInfo& info,
     auto& pDbChannel(info.chan);
     try {
         auto returnValue = valuePrototype.cloneEmpty();
-        // TODO: MappingInfo::nsecMask
         IOCSource::initialize(returnValue, info, pDbChannel);
         {
             DBLocker F(pDbChannel->addr.precord); // lock

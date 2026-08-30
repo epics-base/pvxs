@@ -30,6 +30,7 @@
 #include <pvxs/server.h>
 #include <pvxs/source.h>
 
+#include "sitehooks.h"
 #include "iocshcommand.h"
 #include "utilpvt.h"
 #include "qsrvpvt.h"
@@ -488,6 +489,7 @@ void pvxsBaseRegistrar() noexcept {
 
         // Register our hook handler to intercept certain state changes
         initHookRegister(&pvxsInitHook);
+        site::registerHooks();
 
         if(enableQ) {
             single_enable();

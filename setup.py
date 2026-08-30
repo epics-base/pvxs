@@ -2,6 +2,8 @@
 
 import os
 import re
+import subprocess
+import sys
 
 from glob import glob
 
@@ -12,6 +14,18 @@ from setuptools_dso import DSO, Extension, setup, build_dso, ProbeToolchain
 from epicscorelibs.config import get_config_var
 import epicscorelibs.path
 import epicscorelibs.version
+
+def generate_siteregister():
+    """Generate site/siteregister.cpp from site/*.cpp source names."""
+    srcs = sorted(f for f in glob('site/*.cpp')
+                  if os.path.basename(f) != 'siteregister.cpp')
+    with open('site/siteregister.cpp', 'w') as fh:
+        subprocess.check_call([sys.executable, 'site/gen_siteregister.py'] + srcs,
+                              stdout=fh)
+
+
+generate_siteregister()
+
 
 def pvxsversion():
     with open(os.path.join('configure', 'CONFIG_PVXS_VERSION'), 'r') as F:
@@ -574,6 +588,7 @@ def define_DSOS(self):
         "ioc/credentials.cpp",
         "ioc/dberrormessage.cpp",
         "ioc/demo.cpp",
+        "ioc/sitehooks.cpp",
         "ioc/field.cpp",
         "ioc/fielddefinition.cpp",
         "ioc/fieldname.cpp",
@@ -597,7 +612,7 @@ def define_DSOS(self):
         "ioc/pvalink_jlif.cpp",
         "ioc/pvalink_link.cpp",
         "ioc/pvalink_lset.cpp",
-    ]
+    ] + glob('site/*.cpp')
 
     probe = ProbeToolchain()
 

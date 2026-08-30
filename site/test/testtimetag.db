@@ -1,0 +1,25 @@
+# Record with Q:time:tag "nsec:lsb:8": low 8 bits of nsec become userTag.
+# With nsec=102030: nanoseconds -> 101888 (0xFFFFF00 applied), userTag -> 142 (low 8 bits).
+record(longin, "test:timetag") {
+    field(VAL, "100")
+    info(Q:time:tag, "nsec:lsb:8")
+}
+
+# Record without Q:time:tag: no masking applied, nanoseconds pass through unchanged.
+record(longin, "test:notag") {
+    field(VAL, "200")
+}
+
+# Record with an unrecognised Q:time:tag format: should be silently ignored,
+# leaving nanoseconds unmasked and userTag at its default (zero).
+record(longin, "test:badtag") {
+    field(VAL, "0")
+    info(Q:time:tag, "invalid")
+}
+
+# Record with Q:time:tag "nsec:lsb:4": exercises a different bit-width.
+# nsec=102030, mask=0xF: nanoseconds -> 102016, userTag -> 14.
+record(longin, "test:timetag4") {
+    field(VAL, "0")
+    info(Q:time:tag, "nsec:lsb:4")
+}

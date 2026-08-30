@@ -36,11 +36,7 @@ struct MappingInfo {
 
     int64_t putOrder = std::numeric_limits<int64_t>::min();
 
-    uint32_t nsecMask = 0u;
-
     Value cval;
-
-    void updateNsecMask(dbCommon *prec);
 };
 
 /**
