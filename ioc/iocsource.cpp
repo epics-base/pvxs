@@ -121,7 +121,14 @@ void getArrayValue(dbChannel* pChannel,
                          Value& value)
 {
     auto final_type(dbChannelFinalFieldType(pChannel));
-    auto buf(std::make_shared<std::vector<char>>(dbChannelFinalElements(pChannel) * dbChannelFinalFieldSize(pChannel)));
+    // Size the buffer by the request type's output element size, not the
+    // field's storage size: dbGet() writes dbValueSize(final_type) bytes per
+    // element, which is MAX_STRING_SIZE for DBR_STRING regardless of the
+    // field's own size (dbConvert.c getStringString strides pdst by
+    // MAX_STRING_SIZE).  For numeric types dbValueSize() == field_size, so a
+    // type-changing filter (e.g. ts -> DBR_DOUBLE) is unaffected, while a
+    // DBF_STRING field with field_size < MAX_STRING_SIZE can no longer overrun.
+    auto buf(std::make_shared<std::vector<char>>(dbChannelFinalElements(pChannel) * dbValueSize(final_type)));
     long nReq = dbChannelFinalElements(pChannel);
 
     DBErrorMessage dbErrorMessage(dbChannelGet(pChannel, final_type,
