@@ -121,7 +121,7 @@ void getArrayValue(dbChannel* pChannel,
                          Value& value)
 {
     auto final_type(dbChannelFinalFieldType(pChannel));
-    auto buf(std::make_shared<std::vector<char>>(dbChannelFinalElements(pChannel) * dbChannelFinalFieldSize(pChannel)));
+    auto buf(std::make_shared<std::vector<char>>(dbChannelFinalElements(pChannel) * dbValueSize(final_type)));
     long nReq = dbChannelFinalElements(pChannel);
 
     DBErrorMessage dbErrorMessage(dbChannelGet(pChannel, final_type,
