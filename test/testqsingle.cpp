@@ -169,6 +169,47 @@ void testGetScalar()
               "    } display\n"
               "}\n");
 
+    val = ctxt.get("test:ai.EGU").exec()->wait(5.0);
+    checkUTAG(val);
+    testStrEq(std::string(SB()<<val.format()),
+              "struct \"epics:nt/NTScalar:1.0\" {\n"
+              "    string value = \"arb\"\n"
+              "    struct \"alarm_t\" {\n"
+              "        int32_t severity = 2\n"
+              "        int32_t status = 1\n"
+              "        string message = \"HIGH\"\n"
+              "    } alarm\n"
+              "    struct \"time_t\" {\n"
+              "        int64_t secondsPastEpoch = 643497678\n"
+              "        int32_t nanoseconds = 102030\n"
+              "        int32_t userTag = 0\n"
+              "    } timeStamp\n"
+              "    struct {\n"
+              "        string description = \"Analog input\"\n"
+              "        string units = \"\"\n"
+              "    } display\n"
+              "}\n");
+
+    val = ctxt.get("test:bo.ZNAM").exec()->wait(5.0);
+    testStrEq(std::string(SB()<<val.format()),
+              "struct \"epics:nt/NTScalar:1.0\" {\n"
+              "    string value = \"Zero\"\n"
+              "    struct \"alarm_t\" {\n"
+              "        int32_t severity = 3\n"
+              "        int32_t status = 2\n"
+              "        string message = \"UDF\"\n"
+              "    } alarm\n"
+              "    struct \"time_t\" {\n"
+              "        int64_t secondsPastEpoch = 631152000\n"
+              "        int32_t nanoseconds = 0\n"
+              "        int32_t userTag = 0\n"
+              "    } timeStamp\n"
+              "    struct {\n"
+              "        string description = \"\"\n"
+              "        string units = \"\"\n"
+              "    } display\n"
+              "}\n");
+
     val = ctxt.get("test:ai.SCAN").exec()->wait(5.0);
     checkUTAG(val);
     testStrEq(std::string(SB()<<val.format()),
@@ -1002,7 +1043,7 @@ void testiocsh(TestClient& ctxt)
 
 MAIN(testqsingle)
 {
-    testPlan(113);
+    testPlan(115);
     testSetup();
     pvxs::logger_config_env();
     generalTimeRegisterCurrentProvider("test", 1, &testTimeCurrent);
