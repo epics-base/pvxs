@@ -264,7 +264,8 @@ struct PVXS_API Source {
      *
      *  - Do nothing, allowing some other Source with higher/later order a chance to create.
      *  - Call ChannelControl::close() to explicitly reject the channel.
-     *  - std::move() the op and/or call ChannelControl::setHandler() to accept the new channel.
+     *  - std::move() the op and/or call ChannelControl::onOp(), ChannelControl::onSubscribe(),
+     *    and/or ChannelControl::onRPC() to accept the new channel.
      *  - std::move() the op and allow ChannelControl to be destroyed to implicitly reject the channel.
      */
     virtual void onCreate(std::unique_ptr<ChannelControl>&& op) =0;

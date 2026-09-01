@@ -54,7 +54,8 @@ void ServerChan::cleanup()
         }
     }
 
-    auto fn(std::move(onClose));
+    decltype(onClose) fn;
+    fn.swap(onClose);
     if(fn)
         fn("");
 }
@@ -303,7 +304,7 @@ void ServerConn::handle_CREATE_CHANNEL()
                     if(chan->state!=ServerChan::Creating) {
                         msg = "rejected";
 
-                    } else if(chan->onOp || chan->onRPC || chan->onSubscribe || chan->onClose) {
+                    } else if(chan->onOp || chan->onRPC || chan->onSubscribe) {
                         msg = "accepted";
                         claimed = true;
 
@@ -333,12 +334,12 @@ void ServerConn::handle_CREATE_CHANNEL()
                 sts.code = Status::Fatal;
                 sts.msg = "Refused to create Channel";
                 sts.trace = "pvx:serv:refusechan:";
-                chan->state = ServerChan::Destroy;
+                chan->cleanup();
 
                 sid = -1;
             }
 
-            // ServerChannelControl destroyed it not saved by claiming Source
+            // ServerChannelControl destroyed if not saved by claiming Source
         }
 
 

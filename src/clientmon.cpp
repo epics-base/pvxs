@@ -260,7 +260,8 @@ struct SubscriptionImpl final : public OperationBase, public Subscription
 
                 ret.reset(strong.get(), [strong](Subscription*) mutable {
                     // on worker?
-                    auto junk(std::move(strong));
+                    decltype(strong) junk;
+                    junk.swap(strong);
                     // need to do cleanup on worker if running
                     auto loop(junk->loop);
                     loop.tryCall(std::bind([](std::shared_ptr<SubscriptionImpl>& junk) noexcept {
@@ -282,7 +283,7 @@ struct SubscriptionImpl final : public OperationBase, public Subscription
         loop.call([this, &junk, &fn]() {
             if(event_busy)
                 throw std::logic_error("Must not replace Subscription::onEvent() while callback in progress");
-            junk = std::move(event);
+            junk.swap(event);
             this->event = std::move(fn);
         });
     }
@@ -294,9 +295,9 @@ struct SubscriptionImpl final : public OperationBase, public Subscription
         (void)loop.tryCall([this, &junk, &junkI, &ret](){
             ret = _cancel(false);
             if(!event_busy)
-                junk = std::move(event); // trash when cancelled from app. worker
+                junk.swap(event); // trash when cancelled from app. worker
             if(!onInit_busy)
-                junkI = std::move(onInit);
+                junkI.swap(onInit);
             // leave opByIOID for GC
         });
         return ret;

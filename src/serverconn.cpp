@@ -489,15 +489,17 @@ void ServerOp::cleanup()
     if(state==ServerOp::Dead)
         return;
 
-    if(state==ServerOp::Executing && onCancel) {
-        auto fn(std::move(onCancel));
-        fn();
+    if(onCancel) {
+        decltype(onCancel) fn;
+        fn.swap(onCancel);
+        if(state==ServerOp::Executing)
+            fn();
     }
 
     state = ServerOp::Dead;
 
-    onCancel = nullptr;
-    auto closer(std::move(onClose));
+    decltype(onClose) closer;
+    closer.swap(onClose);
     bool notify = closer.operator bool();
 
     if(auto ch = chan.lock()) {

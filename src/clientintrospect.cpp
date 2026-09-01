@@ -47,7 +47,7 @@ struct InfoOp : public OperationBase
         (void)loop.tryCall([this, &junk, &ret](){
             ret = _cancel(false);
             if(!done_busy)
-                junk = std::move(done);
+                junk.swap(done);
             // leave opByIOID for GC
         });
         return ret;

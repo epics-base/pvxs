@@ -53,7 +53,7 @@ bool Discovery::cancel()
     loop.call([this, &junk, &ret](){
         ret = _cancel(false);
         if(!notify_busy)
-            junk = std::move(notify);
+            junk.swap(notify);
         // leave opByIOID for GC
     });
     return ret;

@@ -184,11 +184,11 @@ struct GPROp : public OperationBase
         (void)loop.tryCall([&, this](){
             ret = _cancel(false);
             if(!builder_busy)
-                junkB = std::move(builder);
+                junkB.swap(builder);
             if(!done_busy)
-                junkD = std::move(done);
+                junkD.swap(done);
             if(!onInit_busy)
-                junkI = std::move(onInit);
+                junkI.swap(onInit);
             // leave opByIOID for GC
         });
         return ret;
