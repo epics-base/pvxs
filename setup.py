@@ -5,8 +5,6 @@ import re
 
 from glob import glob
 
-from distutils import log
-from distutils.errors import CompileError
 from setuptools import Command, Distribution
 from setuptools_dso import DSO, Extension, setup, build_dso, ProbeToolchain
 from epicscorelibs.config import get_config_var
@@ -48,8 +46,8 @@ def cexpand(iname, oname, defs={}, dry_run=False):
     
     defs dict used to expand "@MACRO@", or replace "#cmakedefine MACRO VALUE" lines
     """
-    log.info('expand %s -> %s', iname, oname)
-    log.debug('With %s', defs)
+    print('expand %s -> %s', iname, oname)
+    print('With %s', defs)
     with open(iname, 'r') as F:
         inp = F.read()
 
@@ -70,12 +68,12 @@ def cexpand(iname, oname, defs={}, dry_run=False):
     out = re.sub(r'^\s*#\s*cmakedefine\s+([^\s]+)(?:\s+(.*))?$', csub, out, 0, re.MULTILINE)
 
     if dry_run:
-        log.info('Would write %s', oname)
+        print('Would write %s', oname)
     else:
-        log.info('Write %s', oname)
-        log.info('>>>>>>>>')
-        log.info('%s', out)
-        log.info('<<<<<<<<')
+        print('Write %s', oname)
+        print('>>>>>>>>')
+        print('%s', out)
+        print('<<<<<<<<')
         with open(oname, 'w') as F:
             F.write(out)
 
@@ -108,7 +106,7 @@ class Expand(Command):
 
     @logexc
     def run(self):
-        log.info("In Expand")
+        print("In Expand")
         self.mkpath(os.path.join(self.build_temp, 'event2'))
         self.mkpath(os.path.join(self.build_lib, 'pvxslibs', 'include', 'pvxs'))
         self.mkpath(os.path.join(self.build_lib, 'pvxslibs', 'dbd'))
@@ -373,7 +371,9 @@ class Expand(Command):
             mangled_type = type.upper().replace(' ','_').replace('*', 'P')
             try:
                 DEFS['EVENT__SIZEOF_'+mangled_type] = str(probe.sizeof(type))
-            except CompileError:
+            except Exception as e:
+                if e.__class__.__name__!='CompileError':
+                    raise # see https://github.com/epics-base/setuptools_dso/issues/45
                 DEFS['EVENT__SIZEOF_'+mangled_type] = '0'
                 DEFS['EVENT__HAVE_'+mangled_type] = None
             else:
@@ -382,7 +382,9 @@ class Expand(Command):
         try:
             DEFS['EVENT__SIZEOF_SSIZE_T'] = str(probe.sizeof('ssize_t'))
             DEFS['EVENT__ssize_t'] = 'ssize_t'
-        except CompileError:
+        except Exception as e:
+            if e.__class__.__name__!='CompileError':
+                raise # see https://github.com/epics-base/setuptools_dso/issues/45
             DEFS['EVENT__SIZEOF_SSIZE_T'] = str(probe.sizeof('SSIZE_T'))
             DEFS['EVENT__ssize_t'] = 'SSIZE_T'
             # libevent CMakeLists.txt defaults to 'int' if neither is available, which seems wrong...
@@ -425,9 +427,9 @@ class Expand(Command):
                 DEFS, dry_run=self.dry_run)
 
         if self.dry_run:
-            log.info('Would create pvxsVCS.h')
+            print('Would create pvxsVCS.h')
         else:
-            log.info('Writing pvxsVCS.h')
+            print('Writing pvxsVCS.h')
             with open(os.path.join(self.build_temp, 'pvxsVCS.h'), 'w') as F:
                 F.write('''
 #ifndef PVXS_VCS_VERSION
@@ -452,7 +454,7 @@ class InstallHeaders(Command):
                                    ('build_temp', 'build_temp'),
                                   )
     def run(self):
-        log.info("In InstallHeaders")
+        print("In InstallHeaders")
 
         for header in glob('src/pvxs/*.h'):
             self.copy_file(header,
@@ -713,7 +715,6 @@ setup(
     license='BSD',
     classifiers = [
         'Development Status :: 5 - Production/Stable',
-        'Programming Language :: Python :: 2.7',
         'Programming Language :: Python :: 3',
         'Programming Language :: Python :: Implementation :: CPython',
         'Intended Audience :: Science/Research',
@@ -725,7 +726,7 @@ setup(
         'Operating System :: Microsoft :: Windows',
     ],
     keywords='epics scada',
-    python_requires='>=2.7',
+    python_requires='>=3.8',
 
     # setup/build time dependencies listed in pyproject.toml
     # cf. PEP 518
