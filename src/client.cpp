@@ -963,8 +963,8 @@ bool ContextImpl::onSearch(evutil_socket_t fd)
         if(err==SOCK_EWOULDBLOCK || err==EAGAIN || err==SOCK_EINTR) {
             // nothing to do here
         } else {
-            log_warn_printf(io, "UDP search RX Error on : %s\n",
-                       evutil_socket_error_to_string(err));
+            log_warn_printf(io, "UDP search RX Error (%d) : %s\n",
+                       err, evutil_socket_error_to_string(err));
         }
         return false; // wait for more I/O
 
