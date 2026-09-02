@@ -231,6 +231,9 @@ struct Server::Pvt
 
     std::weak_ptr<Server::Pvt> internal_self;
 
+    const Config requested;
+    uint64_t ifmapGeneration = 0u;
+
     // "const" after ctor
     Config effective;
 
@@ -248,6 +251,11 @@ struct Server::Pvt
     std::list<std::unique_ptr<UDPListener> > listeners;
     // destination address, and whether last sendto() succeeded
     std::vector<std::pair<SockEndpoint, bool>> beaconDest;
+    PVXS_API static std::vector<std::pair<SockEndpoint, bool>> buildBeaconDest(const Config& conf,
+                                                                               uint16_t udp_port);
+    PVXS_API static bool beaconDestEqual(const std::vector<std::pair<SockEndpoint, bool>>& lhs,
+                                         const std::vector<std::pair<SockEndpoint, bool>>& rhs);
+    void reconfigureBeaconDestIfNeeded();
     std::vector<SockAddr> ignoreList;
 
     std::list<ServIface> interfaces;
