@@ -158,6 +158,28 @@ void testTable()
 
 }
 
+void testTableOrder()
+{
+    testDiag("%s", __func__);
+    TestClient ctxt;
+
+    const char *orders[][2] = {{"A", "B"}, {"B", "A"}, {"event", "timestamp"}, {"timestamp", "event"}};
+
+    std::string prefix = "tbl:TblOrder:";
+    for (auto order: orders) {
+        std::string pv = prefix + order[0] + "-" + order[1];
+        auto val(ctxt.get(pv.c_str()).exec()->wait(5.0));
+        checkUTAG(val, 0);
+
+        unsigned i = 0;
+        std::string value_str = "value";
+        auto value = val["value"];
+        for (auto const &fld: value.ichildren()) {
+            testStrEq(value.nameOf(fld), order[i++]);
+        }
+    }
+}
+
 void testEnum()
 {
     testDiag("%s", __func__);
@@ -801,6 +823,10 @@ MAIN(testqgroup)
         ioc::dbLoadGroup("../image.json", "N=img");
         testdbReadDatabase("table.db", nullptr, "N=tbl:,LBL1=Column A,LBL2=Column B,PO1=0,PO2=1");
         testdbReadDatabase("table.db", nullptr, "N=tbl2:,LBL1=Column B,LBL2=Column A,PO1=1,PO2=0");
+        testdbReadDatabase("tableorder.db", nullptr, "N=tbl:,VALA=A,VALB=B");
+        testdbReadDatabase("tableorder.db", nullptr, "N=tbl:,VALA=B,VALB=A");
+        testdbReadDatabase("tableorder.db", nullptr, "N=tbl:,VALA=event,VALB=timestamp");
+        testdbReadDatabase("tableorder.db", nullptr, "N=tbl:,VALA=timestamp,VALB=event");
         testdbReadDatabase("ntenum.db", nullptr, "P=enm");
         testdbReadDatabase("iq.db", nullptr, "N=iq:");
         testdbReadDatabase("const.db", nullptr, "P=tst:");
@@ -809,6 +835,7 @@ MAIN(testqgroup)
         iocsh("../qgroup.cmd");
         ioc.init();
         testTable();
+        testTableOrder();
         testEnum();
         testImage();
         testIQ();
