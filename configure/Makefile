@@ -17,6 +17,12 @@ LIBEVENT_$(T_A) ?= $(wildcard $(abspath $(INSTALL_LOCATION)/bundle/usr/$(T_A)))
 
 INCLUDES += $(if $(LIBEVENT),-I$(LIBEVENT)/include)
 
+# use libssl in non-default location.  (eg. OSX w/ brew)
+OPENSSL ?= $(OPENSSL_$(T_A))
+OPENSSL_$(T_A) ?=
+
+INCLUDES += $(if $(OPENSSL),-I$(OPENSSL)/include)
+
 TARGETS = $(CONFIG_TARGETS)
 CONFIGS += $(subst ../,,$(wildcard $(CONFIG_INSTALLS)))
 
@@ -29,6 +35,7 @@ install: TOOLCHAIN
 
 TOOLCHAIN: toolchain.c
 	$(CPP) $(CPPFLAGS) $(INCLUDES) ../toolchain.c > $@.tmp
+	$(CPP) $(CPPFLAGS) $(INCLUDES) ../probe-openssl.c > probe-openssl.out && echo "EVENT2_HAS_OPENSSL = YES" >> $@.tmp || echo "No OpenSSL"
 	$(MV) $@.tmp $@
 
 endif
