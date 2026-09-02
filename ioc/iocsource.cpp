@@ -288,9 +288,14 @@ void getProperties(dbChannel* pChannel, db_field_log *pfl, Value& node)
         if(options & DBR_GR_DOUBLE) {
             dlL = meta.lower_disp_limit;
             node["display.limitHigh"] = meta.upper_disp_limit;
-            if(options & DBR_PRECISION) {
-                node["display.precision"] = int32_t(meta.precision.dp);
-            }
+        }
+        if(options & DBR_PRECISION) {
+            // DBR_PRECISION (get_precision) is an rset slot independent of
+            // DBR_GR_DOUBLE (get_graphic_double).  A field that supplies the
+            // former while NULLing the latter (e.g. bo, mbbiDirect, mbboDirect)
+            // has a precision to serve but no display limits; gate it on its
+            // own slot rather than nesting it under the graphic-limits branch.
+            node["display.precision"] = int32_t(meta.precision.dp);
         }
         if(options & DBR_CTRL_DOUBLE) {
             node["control.limitLow"] = meta.lower_ctrl_limit;
