@@ -9,6 +9,9 @@ Release Notes
 - `Value` field traverse syntax change.
   When starting from a Union, a leading "->" to be omitted.
   "->booleanValue" may be replaced with "booleanValue".
+- server: With a `server::ChannelControl`.  Setting an ``onClose()`` function alone is no longer
+  enough for a channel to be considered "claimed".  It is necessary to set some GET/RPC/MONITOR/...
+  handler.
 - tools: The CLI tools are now built only with epics-base >= 3.15 .
 - tools: pvxput now understand JSON syntax.
 
