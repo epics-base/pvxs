@@ -259,7 +259,7 @@ void Connection::handle_CONNECTION_VALIDATION()
 
     Value cred;
     if(selected=="ca") {
-        cred = context->caMethod.cloneEmpty();
+        cred = context->caMethod.clone();
 
         log_info_printf(io, "Server %s 'ca' auth as %s@%s\n", peerName.c_str(),
                         cred["user"].as<std::string>().c_str(),
