@@ -86,9 +86,12 @@ struct SharedPV::Impl : public std::enable_shared_from_this<Impl>
                     Guard G(self->lock);
                     self->subscribers.erase(sub);
                 });
-
-                sub->post(current);
             }
+            // post() may have run while unlocked.  Seed from self->current and
+            // add to subscribers under the same lock so that no post() can
+            // fall between the two.
+            if(self->current)
+                sub->post(self->current.clone());
             self->subscribers.emplace(std::move(sub));
 
         }catch(std::exception& e){
@@ -366,7 +369,7 @@ void SharedPV::open(const Value& initial)
         mpending = std::move(impl->mpending);
 
         impl->current = initial.clone();
-        // make a second copy as 'temp' will be queued
+        // connectSub() types the new monitors with 'temp', and seeds from impl->current
         temp = initial.clone();
 
         // TODO these loops will be really inefficient if we aren't on a worker.
