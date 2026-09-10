@@ -1353,10 +1353,9 @@ void ContextImpl::cacheClean(const std::string& name, Context::cacheAction actio
             continue;
 
         else if(action!=Context::Clean || cur->second.use_count()<=1) {
-            cur->second->garbage = true;
 
             if(action==Context::Clean && !cur->second->garbage) {
-                // mark for next sweep
+                cur->second->garbage = true;
                 log_debug_printf(setup, "Chan GC mark '%s':'%s'\n",
                                  cur->first.first.c_str(), cur->first.second.c_str());
 
