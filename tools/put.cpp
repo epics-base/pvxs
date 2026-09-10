@@ -51,7 +51,7 @@ int REALMAIN(int argc, char *argv[])
         bool verbose = false;
         std::string request;
 
-        GetOpt opts(argc, argv, "hvVdw:r:");
+        GetOpt opts(argc, argv, "hvVdw:r:", true);
         for(auto& pair : opts.arguments) {
             switch(pair.first) {
             case 'h':

@@ -45,12 +45,13 @@ struct ArgVal {
 bool operator==(const ArgVal& rhs, const ArgVal& lhs);
 
 struct GetOpt {
-    GetOpt(int argc, char *argv[], const char *spec);
+    GetOpt(int argc, char *argv[], const char *spec, bool allowNumbers = false);
 
     const char *argv0;
     std::vector<std::string> positional;
     std::vector<std::pair<char, ArgVal>> arguments;
     bool success = false;
+    bool allowNumbers = false; // Treat all numeric arguments (i.e. -10) as positional args
 };
 
 } // namespace pvxs

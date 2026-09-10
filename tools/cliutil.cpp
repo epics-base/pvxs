@@ -12,8 +12,18 @@ bool operator==(const ArgVal& rhs, const ArgVal& lhs) {
     return rhs.defined==lhs.defined && rhs.value==lhs.value;
 }
 
-GetOpt::GetOpt(int argc, char *argv[], const char *spec)
+static inline bool isNumber(const char* s) {
+    try {
+        std::stof(s);
+    } catch (const std::exception& e) {
+        return false;
+    }
+    return true;
+}
+
+GetOpt::GetOpt(int argc, char *argv[], const char *spec, bool allowNumbers)
     :argv0("<program name>")
+    ,allowNumbers(allowNumbers)
 {
     if(argc>=1)
         argv0 = argv[0];
@@ -21,7 +31,7 @@ GetOpt::GetOpt(int argc, char *argv[], const char *spec)
     bool allpos = false; // after "--", treat all remaining as positional
     for(int i=1; i<argc; i++) {
         const char * arg = argv[i];
-        if(!allpos && arg[0]=='-') {
+        if(!allpos && arg[0]=='-' && !(allowNumbers && isNumber(arg))) {
             arg++;
 
             if(arg[0]=='-') {
