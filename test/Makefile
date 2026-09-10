@@ -108,6 +108,10 @@ TESTPROD_HOST += testendian
 testendian_SRCS += testendian.cpp
 TESTS += testendian
 
+TESTPROD_HOST += testgc
+testgc_SRCS += testgc.cpp
+TESTS += testgc
+
 TESTPROD_HOST += testudpfwd
 testudpfwd_SRCS += testudpfwd.cpp
 TESTS += testudpfwd
