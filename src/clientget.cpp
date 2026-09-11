@@ -289,11 +289,13 @@ struct GPROp : public OperationBase
 
         // transient state (because builder callback is synchronous)
         if(state==GPROp::BuildPut) {
-            temp = arg.clone();
 
             builder_busy = true;
             try {
-                temp = builder(std::move(temp));
+                if(builder)
+                    temp = builder(arg.clone());
+                else
+                    temp = arg.cloneEmpty();
                 state = GPROp::Exec;
 
             } catch(std::exception& e) {
