@@ -65,12 +65,14 @@ stage_headers() {
     mkdir -p "$out/pvxs"
     if [ "$target" = libpvxs ]; then
         awk '/^INC[[:space:]]*\+=[[:space:]]*pvxs\// {print $3}' "$src/src/Makefile" | while read -r header; do
-            [ -f "$src/include/$header" ] || { echo "missing public header $header" >&2; exit 64; }
+            header_src="$src/src/$header"
+            [ "$header" != pvxs/versionNum.h ] || header_src="$src/src/O.Common/$header"
+            [ -f "$header_src" ] || { echo "missing public header $header" >&2; exit 64; }
             mkdir -p "$out/$(dirname "$header")"
-            cp "$src/include/$header" "$out/$header"
+            cp "$header_src" "$out/$header"
         done
     else
-        cp "$src/include/pvxs/iochooks.h" "$out/pvxs/iochooks.h"
+        cp "$src/ioc/pvxs/iochooks.h" "$out/pvxs/iochooks.h"
     fi
 }
 
