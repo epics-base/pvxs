@@ -86,23 +86,33 @@ struct Tester {
         mbox.open(initial);
         serv.start();
 
+        std::atomic<bool> current{false};
         std::atomic<unsigned> connd{0u}, discd{0u};
         epicsEvent evt;
 
         auto ctor(cli.connect("mailbox")
-                  .onConnect([&connd, &evt](){
+                  .onConnect([&current, &connd, &evt](){
+                      current = true;
                       connd++;
                       evt.signal();
                   })
-                  .onDisconnect([&discd, &evt](){
+                  .onDisconnect([&current, &discd, &evt](){
+                      current = false;
                       discd++;
                       evt.signal();
                   })
                   .exec());
 
-        cli.hurryUp();
-        evt.wait(5.0);
+        // wait for connected (may see initial disconnect first)
+        while(!current.load()) {
+            if(!evt.wait(5.0)) {
+                testFail("timeout waiting for connect");
+                break;
+            }
+        }
         testEq(connd.load(), 1u)<<" initial connect";
+
+        auto discd_before = discd.load();
 
         // first get
         {
@@ -119,9 +129,9 @@ struct Tester {
             testEq(result["value"].as<int32_t>(), 42)<<" reuse get";
         }
 
-        // still only one connect, no disconnects
+        // still only one connect, no new disconnects since gets started
         testEq(connd.load(), 1u)<<" still connected (reused)";
-        testEq(discd.load(), 0u)<<" no disconnect";
+        testEq(discd.load(), discd_before)<<" no new disconnect";
 
         ctor.reset();
         cli.cacheClear();
@@ -135,35 +145,45 @@ struct Tester {
         mbox.open(initial);
         serv.start();
 
+        std::atomic<bool> current{false};
         std::atomic<unsigned> connd{0u}, discd{0u};
         epicsEvent evt;
 
         auto ctor(cli.connect("mailbox")
-                  .onConnect([&connd, &evt](){
+                  .onConnect([&current, &connd, &evt](){
+                      current = true;
                       connd++;
                       evt.signal();
                   })
-                  .onDisconnect([&discd, &evt](){
+                  .onDisconnect([&current, &discd, &evt](){
+                      current = false;
                       discd++;
                       evt.signal();
                   })
                   .exec());
 
-        cli.hurryUp();
-        evt.wait(5.0);
+        // wait for connected (may see initial disconnect first)
+        while(!current.load()) {
+            if(!evt.wait(5.0)) {
+                testFail("timeout waiting for connect");
+                break;
+            }
+        }
         testEq(connd.load(), 1u)<<" connected";
+
+        auto discd_before = discd.load();
 
         // Disconnect forces immediate sweep + op cancellation
         cli.cacheClear(std::string(), client::Context::Disconnect);
 
         // wait for disconnect callback
-        while(discd.load()==0u) {
+        while(discd.load()==discd_before) {
             if(!evt.wait(5.0)) {
                 testFail("timeout waiting for disconnect");
                 break;
             }
         }
-        testEq(discd.load(), 1u)<<" disconnected after Disconnect action";
+        testEq(discd.load(), discd_before+1u)<<" disconnected after Disconnect action";
 
         ctor.reset();
         cli.cacheClear();
