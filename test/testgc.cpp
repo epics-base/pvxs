@@ -65,9 +65,29 @@ struct Tester {
         }
         // op dropped, channel idle in cache
 
+        // verify channel present in report before sweep
+        {
+            auto rpt(cli.report(false));
+            size_t nMailbox = 0u; // count of "mailbox" channels across all connections
+            for(auto& conn : rpt.connections)
+                for(auto& ch : conn.channels)
+                    if(ch.name=="mailbox") nMailbox++;
+            testEq(nMailbox, 1u)<<" channel in cache before sweep";
+        }
+
         // cacheClear(Clean) calls cacheClean twice internally:
-        // first call marks, second call sweeps
+        // first call marks garbage=true, second call sweeps marked channels
         cli.cacheClear(std::string(), client::Context::Clean);
+
+        // verify channel gone from report after sweep
+        {
+            auto rpt(cli.report(false));
+            size_t nMailbox = 0u;
+            for(auto& conn : rpt.connections)
+                for(auto& ch : conn.channels)
+                    if(ch.name=="mailbox") nMailbox++;
+            testEq(nMailbox, 0u)<<" channel removed after sweep";
+        }
 
         // channel swept, next get must rebuild
         {
@@ -86,10 +106,12 @@ struct Tester {
         mbox.open(initial);
         serv.start();
 
-        std::atomic<bool> current{false};
-        std::atomic<unsigned> connd{0u}, discd{0u};
-        epicsEvent evt;
+        std::atomic<bool> current{false}; // true when channel is currently connected
+        std::atomic<unsigned> connd{0u}; // total connect callback count
+        std::atomic<unsigned> discd{0u}; // total disconnect callback count
+        epicsEvent evt; // signaled on any connect/disconnect callback
 
+        // hold a Connect monitor — keeps the channel alive in cache
         auto ctor(cli.connect("mailbox")
                   .onConnect([&current, &connd, &evt](){
                       current = true;
@@ -112,21 +134,44 @@ struct Tester {
         }
         testEq(connd.load(), 1u)<<" initial connect";
 
+        // snapshot disconnect count before gets, to detect spurious disconnects
         auto discd_before = discd.load();
 
-        // first get
+        // first get — establishes baseline tx bytes on the channel
+        size_t txAfterFirst = 0u; // tx bytes on "mailbox" channel after first get
         {
             auto op(cli.get("mailbox").exec());
             auto result(op->wait(5.0));
             testEq(result["value"].as<int32_t>(), 42)<<" first get";
         }
-        // op dropped, but channel still held by Connect op (ctor)
+        {
+            auto rpt(cli.report(false));
+            size_t nMailbox = 0u; // count of "mailbox" channels across all connections
+            for(auto& conn : rpt.connections)
+                for(auto& ch : conn.channels)
+                    if(ch.name=="mailbox") { nMailbox++; txAfterFirst = ch.tx; }
+            testEq(nMailbox, 1u)<<" one channel after first get";
+            testOk(txAfterFirst > 0u, "tx > 0 after first get (tx=%zu)", txAfterFirst);
+        }
+        // op dropped, but channel still held by Connect monitor (ctor)
 
-        // second get reuses same channel (no disconnect should fire)
+        // second get — should reuse same channel (no disconnect should fire)
         {
             auto op(cli.get("mailbox").exec());
             auto result(op->wait(5.0));
             testEq(result["value"].as<int32_t>(), 42)<<" reuse get";
+        }
+        {
+            auto rpt(cli.report(false));
+            size_t nMailbox = 0u;
+            size_t txAfterSecond = 0u; // tx bytes after second get, must exceed txAfterFirst
+            for(auto& conn : rpt.connections)
+                for(auto& ch : conn.channels)
+                    if(ch.name=="mailbox") { nMailbox++; txAfterSecond = ch.tx; }
+            testEq(nMailbox, 1u)<<" still one channel after reuse";
+            // growing tx on same channel proves both gets shared one channel
+            testOk(txAfterSecond > txAfterFirst,
+                   "tx grew on same channel (%zu > %zu)", txAfterSecond, txAfterFirst);
         }
 
         // still only one connect, no new disconnects since gets started
@@ -145,10 +190,12 @@ struct Tester {
         mbox.open(initial);
         serv.start();
 
-        std::atomic<bool> current{false};
-        std::atomic<unsigned> connd{0u}, discd{0u};
-        epicsEvent evt;
+        std::atomic<bool> current{false}; // true when channel is currently connected
+        std::atomic<unsigned> connd{0u}; // total connect callback count
+        std::atomic<unsigned> discd{0u}; // total disconnect callback count
+        epicsEvent evt; // signaled on any connect/disconnect callback
 
+        // hold a Connect monitor — keeps the channel alive in cache
         auto ctor(cli.connect("mailbox")
                   .onConnect([&current, &connd, &evt](){
                       current = true;
@@ -171,6 +218,7 @@ struct Tester {
         }
         testEq(connd.load(), 1u)<<" connected";
 
+        // snapshot disconnect count before forced disconnect
         auto discd_before = discd.load();
 
         // Disconnect forces immediate sweep + op cancellation
@@ -194,7 +242,7 @@ struct Tester {
 
 MAIN(testgc)
 {
-    testPlan(9);
+    testPlan(15);
     testSetup();
     logger_config_env();
     Tester().testCacheCleanMarkSweep();
