@@ -20,6 +20,7 @@
 #include <pvxs/sharedpv.h>
 #include <pvxs/source.h>
 #include <pvxs/nt.h>
+#include <pvxs/util.h>
 #include "evhelper.h"
 
 namespace {
@@ -634,11 +635,37 @@ void testServerClose()
     testEq(source->closecount, 1u);
 }
 
+void testWhoAmI()
+{
+    testShow()<<__func__;
+
+    auto prototype(nt::NTScalar{TypeCode::String}.create());
+    auto pv(server::SharedPV::buildMailbox());
+    pv.onPut([](server::SharedPV& pv, std::unique_ptr<server::ExecOp>&& op, Value&& val) {
+        testDiag("Poke whoami");
+        auto cred(op->credentials());
+        pv.post(val.cloneEmpty().update("value", cred->account));
+        op->reply();
+    });
+
+    pv.open(prototype);
+    auto serv(server::Config::isolated()
+                  .build()
+                  .addPV("whoami", pv)
+                  .start());
+    auto cli(serv.clientConfig().build());
+
+    cli.put("whoami").exec()->wait(5.0);
+    auto val(cli.get("whoami").exec()->wait(5.0));
+    auto whoami(val["value"].as<std::string>());
+    testTrue(!whoami.empty())<<" whoami \""<<escape(whoami)<<"\"";
+}
+
 } // namespace
 
 MAIN(testget)
 {
-    testPlan(79);
+    testPlan(80);
     testSetup();
     logger_config_env();
     const bool canIPv6 = pvxs::impl::evsocket::canIPv6;
@@ -665,6 +692,7 @@ MAIN(testget)
     testError(ErrorSource::phaseOp);
     testError(ErrorSource::phaseGet);
     testServerClose();
+    testWhoAmI();
     cleanup_for_valgrind();
     return testDone();
 }
