@@ -1,0 +1,8 @@
+# CastXML packaged on the GitHub runner cannot parse libstdc++ with PVXS's
+# default C++11 mode.  This is deliberately recorded as extraction context;
+# the libraries themselves keep PVXS's normal build flags.
+compile:
+  options:
+    - -std=c++17
+assurance:
+  require_complete: true

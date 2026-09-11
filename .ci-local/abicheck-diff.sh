@@ -6,18 +6,17 @@ OLD_REF=${1:-}
 NEW_REF=${2:-HEAD}
 ABICHECK=${ABICHECK:-abicheck}
 JOBS=${ABICHECK_MAKE_JOBS:-2}
-# CastXML bundled with GCC 13 cannot parse libstdc++ in PVXS's C++11 mode.
-# This affects only AST extraction; the binary remains built with PVXS defaults.
-ABICHECK_CASTXML_CXXSTD=${ABICHECK_CASTXML_CXXSTD:-c++17}
 REPORT_ROOT=${ABICHECK_REPORT_ROOT:-compat_reports/abicheck}
 RUN_ROOT=${RUNNER_TEMP:-${TMPDIR:-/tmp}}/pvxs-abicheck-${GITHUB_RUN_ID:-$$}
 
+explicit_old=1
 new_sha=$(git rev-parse "$NEW_REF^{commit}")
 if [ -z "$OLD_REF" ]; then
+    explicit_old=0
     OLD_REF=$(git describe --tags --abbrev=0 "$new_sha")
 fi
 old_sha=$(git rev-parse "$OLD_REF^{commit}")
-if [ "$old_sha" = "$new_sha" ]; then
+if [ "$explicit_old" -eq 0 ] && [ "$old_sha" = "$new_sha" ]; then
     OLD_REF=$(git describe --tags --abbrev=0 "$new_sha^")
     old_sha=$(git rev-parse "$OLD_REF^{commit}")
 fi
@@ -80,12 +79,22 @@ project_compile_db() {
     src=$1
     target=$2
     out=$3
-    python3 - "$src/compile_commands.json" "$target" "$out" <<'PY'
+    python3 - "$src/compile_commands.json" "$src" "$target" "$out" <<'PY'
 import json, pathlib, sys
 entries = json.load(open(sys.argv[1]))
-target, out = sys.argv[2:]
-needle = '/src/' if target == 'libpvxs' else '/ioc/'
-selected = [e for e in entries if needle in pathlib.PurePosixPath(e['file']).as_posix()]
+source_root = pathlib.Path(sys.argv[2]).resolve()
+target, out = sys.argv[3:]
+component_root = (source_root / ('src' if target == 'libpvxs' else 'ioc')).resolve()
+selected = []
+for entry in entries:
+    source = pathlib.Path(entry['file'])
+    if not source.is_absolute():
+        source = pathlib.Path(entry.get('directory') or source_root) / source
+    try:
+        source.resolve().relative_to(component_root)
+    except ValueError:
+        continue
+    selected.append(entry)
 if not selected:
     raise SystemExit(f'no compile commands selected for {target}')
 json.dump(selected, open(out, 'w'), indent=2)
@@ -93,7 +102,13 @@ PY
 }
 
 find_dso() {
-    find "$1/lib" -type f -name "$2.so.*" -print | LC_ALL=C sort | head -n 1
+    matches=$(find "$1/lib" -type f -name "$2.so.*" -print | LC_ALL=C sort)
+    count=$(printf '%s\n' "$matches" | sed '/^$/d' | wc -l)
+    [ "$count" -eq 1 ] || {
+        echo "expected one $2 DSO below $1/lib, found $count" >&2
+        return 64
+    }
+    printf '%s\n' "$matches"
 }
 
 old_id=$(printf '%s' "$old_sha" | cut -c1-12)
@@ -121,18 +136,31 @@ run_one() {
     if "$ABICHECK" compare "$oldso" "$newso" \
       --version "old=$old_sha" --version "new=$new_sha" \
       --header "old=$old_headers" --header "new=$new_headers" \
-      --include "old:pvxs=$OLD_SRC/include" --include "new:pvxs=$NEW_SRC/include" \
+      --include "old:pvxs=$old_headers" --include "new:pvxs=$new_headers" \
       --include "old:epics=$EPICS_BASE/include" --include "new:epics=$EPICS_BASE/include" \
       --include "old:epics-os=$EPICS_BASE/include/os/Linux" --include "new:epics-os=$EPICS_BASE/include/os/Linux" \
       --include "old:epics-gcc=$EPICS_BASE/include/compiler/gcc" --include "new:epics-gcc=$EPICS_BASE/include/compiler/gcc" \
       --depth source --sources "old=$OLD_SRC" --sources "new=$NEW_SRC" \
       --build-info "old=$old_db" --build-info "new=$new_db" \
-      --compiler-option "-std=$ABICHECK_CASTXML_CXXSTD" \
-      --require-complete-analysis --format review --write "json=$base.json" -o "$base.md"
+      --config "$PWD/.ci-local/abicheck.yml" \
+      --format review --write "json=$base.json" -o "$base.md"
     then
         rc=0
     else
         rc=$?
+    fi
+    if [ ! -s "$base.json" ] || [ ! -s "$base.md" ]; then
+        echo "missing comparison reports for $target" >&2
+        rc=64
+    elif ! python3 - "$base.json" <<'PY'
+import json, sys
+report = json.load(open(sys.argv[1]))
+if report.get("analysis_assurance_exit_contribution") not in (0, None):
+    raise SystemExit("analysis assurance is incomplete")
+PY
+    then
+        echo "incomplete analysis assurance for $target" >&2
+        rc=1
     fi
     printf '%s\n' "$rc" > "$RUN_ROOT/$target.exit-code"
     if [ -n "${GITHUB_STEP_SUMMARY:-}" ] && [ -f "$base.md" ]; then cat "$base.md" >> "$GITHUB_STEP_SUMMARY"; fi
