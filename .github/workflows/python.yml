@@ -164,6 +164,10 @@ jobs:
             py: "3.14"
             arch: win_amd64
 
+          - os: windows-latest
+            py: "3.14t"
+            arch: win_amd64
+
           - os: macos-latest
             py: "3.8"
             arch: macosx_11_0_universal2
@@ -190,6 +194,10 @@ jobs:
 
           - os: macos-latest
             py: "3.14"
+            arch: macosx_11_0_universal2
+
+          - os: macos-latest
+            py: "3.14t"
             arch: macosx_11_0_universal2
 
     steps:
