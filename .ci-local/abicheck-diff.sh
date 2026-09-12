@@ -123,8 +123,16 @@ find_dso() {
 old_id=$(printf '%s' "$old_sha" | cut -c1-12)
 new_id=$(printf '%s' "$new_sha" | cut -c1-12)
 status_file="$REPORT_ROOT/summary.json"
-printf '{"old_ref":"%s","old_sha":"%s","new_ref":"%s","new_sha":"%s","targets":[' \
-  "$OLD_REF" "$old_sha" "$NEW_REF" "$new_sha" > "$status_file"
+python3 - "$status_file" "$OLD_REF" "$old_sha" "$NEW_REF" "$new_sha" <<'PY'
+import json, sys
+path, old_ref, old_sha, new_ref, new_sha = sys.argv[1:]
+with open(path, "w") as output:
+    output.write(json.dumps({
+        "old_ref": old_ref, "old_sha": old_sha,
+        "new_ref": new_ref, "new_sha": new_sha,
+    }, separators=(",", ":"))[:-1])
+    output.write(',"targets":[')
+PY
 first=1
 overall=0
 
