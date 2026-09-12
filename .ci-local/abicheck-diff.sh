@@ -70,17 +70,17 @@ stage_headers() {
         [ -f "$generated_headers/versionNum.h" ] || { echo "missing generated version header" >&2; return 64; }
         headers=$(find "$source_headers" -maxdepth 1 -type f -name '*.h' -print | LC_ALL=C sort)
         [ -n "$headers" ] || { echo "no PVXS public headers below $source_headers" >&2; return 64; }
-        mkdir -p "$public/pvxs"
+        mkdir -p "$public/pvxs" || return 64
         while IFS= read -r header_src; do
-            cp "$header_src" "$public/pvxs/$(basename "$header_src")"
+            cp "$header_src" "$public/pvxs/$(basename "$header_src")" || return 64
         done <<EOF
 $headers
 EOF
-        mkdir -p "$support/pvxs"
-        cp "$generated_headers/versionNum.h" "$support/pvxs/versionNum.h"
+        mkdir -p "$support/pvxs" || return 64
+        cp "$generated_headers/versionNum.h" "$support/pvxs/versionNum.h" || return 64
     else
-        mkdir -p "$public/pvxs" "$support"
-        cp "$src/ioc/pvxs/iochooks.h" "$public/pvxs/iochooks.h"
+        mkdir -p "$public/pvxs" "$support" || return 64
+        cp "$src/ioc/pvxs/iochooks.h" "$public/pvxs/iochooks.h" || return 64
     fi
 }
 
@@ -151,7 +151,7 @@ run_one() {
     project_compile_db "$NEW_SRC" "$target" "$new_db" || return $?
     base="$RUN_ROOT/reports/${target}_${old_id}_to_${new_id}"
     published="$REPORT_ROOT/${target}_${old_id}_to_${new_id}"
-    mkdir -p "$(dirname "$base")"
+    mkdir -p "$(dirname "$base")" || return 64
     if "$ABICHECK" compare "$oldso" "$newso" \
       --version "old=$old_sha" --version "new=$new_sha" \
       --header "old=$old_headers/public" --header "new=$new_headers/public" \
@@ -191,10 +191,12 @@ PY
     then
         echo "invalid or incomplete analysis assurance for $target" >&2
         rc=1
-    else
-        cp "$base.json" "$published.json"
-        cp "$base.md" "$published.md"
+    elif cp "$base.json" "$published.json" && cp "$base.md" "$published.md"; then
         : > "$RUN_ROOT/$target.report-ready"
+    else
+        echo "failed to publish comparison reports for $target" >&2
+        rm -f "$published.json" "$published.md" "$RUN_ROOT/$target.report-ready"
+        rc=64
     fi
     printf '%s\n' "$rc" > "$RUN_ROOT/$target.exit-code"
     if [ -n "${GITHUB_STEP_SUMMARY:-}" ] && [ -f "$base.md" ]; then cat "$base.md" >> "$GITHUB_STEP_SUMMARY"; fi
