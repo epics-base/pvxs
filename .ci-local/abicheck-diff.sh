@@ -61,21 +61,26 @@ stage_headers() {
     src=$1
     target=$2
     out=$3
+    public="$out/public"
+    support="$out/support"
     if [ "$target" = libpvxs ]; then
         installed="$src/src/O.Common/pvxs"
-    else
-        installed="$src/ioc/O.Common/pvxs"
-    fi
-    [ -d "$installed" ] || { echo "missing installed public header root $installed" >&2; return 64; }
-    headers=$(find "$installed" -type f -name '*.h' -print | LC_ALL=C sort)
-    [ -n "$headers" ] || { echo "no installed public headers below $installed" >&2; return 64; }
-    while IFS= read -r header_src; do
-        header=${header_src#"$installed"/}
-        mkdir -p "$out/$(dirname "$header")"
-        cp "$header_src" "$out/$header"
-    done <<EOF
+        [ -d "$installed" ] || { echo "missing installed public header root $installed" >&2; return 64; }
+        headers=$(find "$installed" -type f -name '*.h' ! -name versionNum.h -print | LC_ALL=C sort)
+        [ -n "$headers" ] || { echo "no installed public headers below $installed" >&2; return 64; }
+        while IFS= read -r header_src; do
+            header=${header_src#"$installed"/}
+            mkdir -p "$public/$(dirname "$header")"
+            cp "$header_src" "$public/$header"
+        done <<EOF
 $headers
 EOF
+        mkdir -p "$support/pvxs"
+        cp "$installed/versionNum.h" "$support/pvxs/versionNum.h"
+    else
+        mkdir -p "$public/pvxs" "$support"
+        cp "$src/ioc/pvxs/iochooks.h" "$public/pvxs/iochooks.h"
+    fi
 }
 
 project_compile_db() {
@@ -140,8 +145,11 @@ run_one() {
     mkdir -p "$(dirname "$base")"
     if "$ABICHECK" compare "$oldso" "$newso" \
       --version "old=$old_sha" --version "new=$new_sha" \
-      --header "old=$old_headers" --header "new=$new_headers" \
-      --include "old:pvxs=$old_headers" --include "new:pvxs=$new_headers" \
+      --header "old=$old_headers/public" --header "new=$new_headers/public" \
+      --include "old:pvxs=$old_headers/public" --include "new:pvxs=$new_headers/public" \
+      --include "old:pvxs-config=$old_headers/support" --include "new:pvxs-config=$new_headers/support" \
+      --include "old:pvxs-core=$RUN_ROOT/headers-old-libpvxs/public" --include "new:pvxs-core=$RUN_ROOT/headers-new-libpvxs/public" \
+      --include "old:pvxs-core-config=$RUN_ROOT/headers-old-libpvxs/support" --include "new:pvxs-core-config=$RUN_ROOT/headers-new-libpvxs/support" \
       --include "old:epics=$EPICS_BASE/include" --include "new:epics=$EPICS_BASE/include" \
       --include "old:epics-os=$EPICS_BASE/include/os/Linux" --include "new:epics-os=$EPICS_BASE/include/os/Linux" \
       --include "old:epics-gcc=$EPICS_BASE/include/compiler/gcc" --include "new:epics-gcc=$EPICS_BASE/include/compiler/gcc" \
