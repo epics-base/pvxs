@@ -61,18 +61,21 @@ stage_headers() {
     src=$1
     target=$2
     out=$3
-    mkdir -p "$out/pvxs"
     if [ "$target" = libpvxs ]; then
-        awk '/^INC[[:space:]]*\+=[[:space:]]*pvxs\// {print $3}' "$src/src/Makefile" | while read -r header; do
-            header_src="$src/src/$header"
-            [ "$header" != pvxs/versionNum.h ] || header_src="$src/src/O.Common/$header"
-            [ -f "$header_src" ] || { echo "missing public header $header" >&2; exit 64; }
-            mkdir -p "$out/$(dirname "$header")"
-            cp "$header_src" "$out/$header"
-        done
+        installed="$src/src/O.Common/pvxs"
     else
-        cp "$src/ioc/pvxs/iochooks.h" "$out/pvxs/iochooks.h"
+        installed="$src/ioc/O.Common/pvxs"
     fi
+    [ -d "$installed" ] || { echo "missing installed public header root $installed" >&2; return 64; }
+    headers=$(find "$installed" -type f -name '*.h' -print | LC_ALL=C sort)
+    [ -n "$headers" ] || { echo "no installed public headers below $installed" >&2; return 64; }
+    while IFS= read -r header_src; do
+        header=${header_src#"$installed"/}
+        mkdir -p "$out/$(dirname "$header")"
+        cp "$header_src" "$out/$header"
+    done <<EOF
+$headers
+EOF
 }
 
 project_compile_db() {
@@ -132,7 +135,9 @@ run_one() {
     new_db="$NEW_SRC/compile_commands.$target.json"
     project_compile_db "$OLD_SRC" "$target" "$old_db" || return $?
     project_compile_db "$NEW_SRC" "$target" "$new_db" || return $?
-    base="$REPORT_ROOT/${target}_${old_id}_to_${new_id}"
+    base="$RUN_ROOT/reports/${target}_${old_id}_to_${new_id}"
+    published="$REPORT_ROOT/${target}_${old_id}_to_${new_id}"
+    mkdir -p "$(dirname "$base")"
     if "$ABICHECK" compare "$oldso" "$newso" \
       --version "old=$old_sha" --version "new=$new_sha" \
       --header "old=$old_headers" --header "new=$new_headers" \
@@ -154,13 +159,25 @@ run_one() {
         rc=64
     elif ! python3 - "$base.json" <<'PY'
 import json, sys
-report = json.load(open(sys.argv[1]))
-if report.get("analysis_assurance_exit_contribution") not in (0, None):
-    raise SystemExit("analysis assurance is incomplete")
+try:
+    report = json.load(open(sys.argv[1]))
+except (OSError, json.JSONDecodeError) as exc:
+    raise SystemExit(f"invalid JSON report: {exc}")
+if not isinstance(report, dict) or not isinstance(report.get("verdict"), str):
+    raise SystemExit("missing comparison verdict")
+assurance = report.get("analysis_assurance")
+if not isinstance(assurance, dict) or assurance.get("status") != "complete":
+    raise SystemExit("analysis assurance is not complete")
+if report.get("analysis_assurance_exit_contribution") != 0:
+    raise SystemExit("analysis assurance gate is inconsistent")
 PY
     then
-        echo "incomplete analysis assurance for $target" >&2
+        echo "invalid or incomplete analysis assurance for $target" >&2
         rc=1
+    else
+        cp "$base.json" "$published.json"
+        cp "$base.md" "$published.md"
+        : > "$RUN_ROOT/$target.report-ready"
     fi
     printf '%s\n' "$rc" > "$RUN_ROOT/$target.exit-code"
     if [ -n "${GITHUB_STEP_SUMMARY:-}" ] && [ -f "$base.md" ]; then cat "$base.md" >> "$GITHUB_STEP_SUMMARY"; fi
@@ -173,7 +190,7 @@ append_target() {
     base="$REPORT_ROOT/${target}_${old_id}_to_${new_id}"
     [ "$first" -eq 1 ] || printf ',' >> "$status_file"
     first=0
-    if [ -f "$base.json" ]; then
+    if [ -f "$RUN_ROOT/$target.report-ready" ] && [ -f "$base.json" ]; then
         printf '{"target":"%s","exit_code":%s,"report":"%s.json"}' "$target" "$rc" "$(basename "$base")" >> "$status_file"
     else
         printf '{"target":"%s","exit_code":%s,"report":null}' "$target" "$rc" >> "$status_file"
