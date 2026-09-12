@@ -64,19 +64,20 @@ stage_headers() {
     public="$out/public"
     support="$out/support"
     if [ "$target" = libpvxs ]; then
-        installed="$src/src/O.Common/pvxs"
-        [ -d "$installed" ] || { echo "missing installed public header root $installed" >&2; return 64; }
-        headers=$(find "$installed" -type f -name '*.h' ! -name versionNum.h -print | LC_ALL=C sort)
-        [ -n "$headers" ] || { echo "no installed public headers below $installed" >&2; return 64; }
+        source_headers="$src/src/pvxs"
+        generated_headers="$src/src/O.Common/pvxs"
+        [ -d "$source_headers" ] || { echo "missing PVXS public header root $source_headers" >&2; return 64; }
+        [ -f "$generated_headers/versionNum.h" ] || { echo "missing generated version header" >&2; return 64; }
+        headers=$(find "$source_headers" -maxdepth 1 -type f -name '*.h' -print | LC_ALL=C sort)
+        [ -n "$headers" ] || { echo "no PVXS public headers below $source_headers" >&2; return 64; }
+        mkdir -p "$public/pvxs"
         while IFS= read -r header_src; do
-            header=${header_src#"$installed"/}
-            mkdir -p "$public/$(dirname "$header")"
-            cp "$header_src" "$public/$header"
+            cp "$header_src" "$public/pvxs/$(basename "$header_src")"
         done <<EOF
 $headers
 EOF
         mkdir -p "$support/pvxs"
-        cp "$installed/versionNum.h" "$support/pvxs/versionNum.h"
+        cp "$generated_headers/versionNum.h" "$support/pvxs/versionNum.h"
     else
         mkdir -p "$public/pvxs" "$support"
         cp "$src/ioc/pvxs/iochooks.h" "$public/pvxs/iochooks.h"
