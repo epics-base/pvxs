@@ -31,7 +31,7 @@ jobs:
       _PVXS_ABORT_ON_CRIT: 1
       PVXS_LOG: pvxs.*=WARN
       ABICHECK_MAKE_JOBS: "2"
-      ABICHECK_REF: 0ab7da2eba3016bcad86657fb74239c66ef3ffeb
+      ABICHECK_REF: 44f48dda3584559ba0c51eee24ee9bebfeeff74c
 
     steps:
     - uses: actions/checkout@v6
