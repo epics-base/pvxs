@@ -19,7 +19,7 @@ permissions:
 jobs:
   abicheck-shadow:
     runs-on: ubuntu-latest
-    # A full source-evidence scan runs two revisions of both public DSOs.
+    # An L2 build-evidence scan runs two revisions of both public DSOs.
     # Keep this above the measured ~100-minute worst case, not at 45 minutes.
     timeout-minutes: 120
     env:
@@ -65,7 +65,7 @@ jobs:
     - name: Prepare EPICS dependencies
       run: python .ci/cue.py prepare
 
-    - name: Run full source-evidence shadow scan
+    - name: Run L2 build-evidence shadow scan
       run: python .ci/cue.py exec ./.ci-local/abicheck-diff.sh
 
     - name: Upload ABICheck reports

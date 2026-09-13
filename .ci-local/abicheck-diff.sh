@@ -162,7 +162,7 @@ run_one() {
       --include "old:epics=$EPICS_BASE/include" --include "new:epics=$EPICS_BASE/include" \
       --include "old:epics-os=$EPICS_BASE/include/os/Linux" --include "new:epics-os=$EPICS_BASE/include/os/Linux" \
       --include "old:epics-gcc=$EPICS_BASE/include/compiler/gcc" --include "new:epics-gcc=$EPICS_BASE/include/compiler/gcc" \
-      --depth source --sources "old=$OLD_SRC" --sources "new=$NEW_SRC" \
+      --depth build \
       --build-info "old=$old_db" --build-info "new=$new_db" \
       --config "$PWD/.ci-local/abicheck.yml" \
       --format review --write "json=$base.json" -o "$base.md"
