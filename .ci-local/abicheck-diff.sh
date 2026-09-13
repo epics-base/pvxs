@@ -165,7 +165,7 @@ run_one() {
       --depth build \
       --build-info "old=$old_db" --build-info "new=$new_db" \
       --config "$PWD/.ci-local/abicheck.yml" \
-      --format review --write "json=$base.json" -o "$base.md"
+      -o "review=$base.md" -o "json=$base.json"
     then
         rc=0
     else
