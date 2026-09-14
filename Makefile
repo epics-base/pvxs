@@ -8,8 +8,11 @@ DIRS += configure
 DIRS += setup
 setup_DEPEND_DIRS = configure
 
+DIRS += setup2
+setup2_DEPEND_DIRS = setup
+
 DIRS += src
-src_DEPEND_DIRS = setup
+src_DEPEND_DIRS = setup2
 
 DIRS += tools
 tools_DEPEND_DIRS = src
