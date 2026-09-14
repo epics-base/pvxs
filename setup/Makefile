@@ -2,8 +2,7 @@ TOP=..
 
 # step 1 in configure/Makefile
 # step 2. generate cfg/TOOLCHAIN_PVXS.$(T_A)
-#         install cfg/*
-# remaining TOP directories will include generated files
+# step 3 in setup2/Makefile
 _PVXS_BOOTSTRAP = YES
 
 include $(TOP)/configure/CONFIG
@@ -21,9 +20,6 @@ endif
 
 # at this point we have included the generated O.$(T_A)/TOOLCHAIN
 # and use this to generated CONFIG_PVXS_MODULE
-
-CFG += CONFIG_PVXS_MODULE
-CFG += RULES_PVXS_MODULE
 
 ifdef T_A
 CFG += TOOLCHAIN_PVXS.$(T_A)
