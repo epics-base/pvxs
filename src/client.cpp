@@ -1367,12 +1367,19 @@ void ContextImpl::cacheClean(const std::string& name, Context::cacheAction actio
 
                 // explicitly break ref. loop of channel cache
                 chanByName.erase(cur);
+                if(chanByCID.erase(trash->cid)!=1)
+                    log_crit_printf(io, "Inconsistent chanByName vs. chanByCID for %s\n", trash->name.c_str());
 
                 if(action==Context::Disconnect) {
                     trash->disconnect(trash);
                 }
             }
         }
+    }
+
+    if(chanByName.size() != chanByCID.size()) {
+        log_crit_printf(io, "Inconsistent sizes chanByName %zu vs. chanByCID %zu",
+                        chanByName.size(), chanByCID.size());
     }
 }
 

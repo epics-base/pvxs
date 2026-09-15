@@ -90,7 +90,7 @@ struct Tester : public TesterBase
         }
 
         op.reset();
-        cli.cacheClear();
+        cli.cacheClear("", client::Context::Disconnect);
     }
 
     void loopback(bool get)
