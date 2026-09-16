@@ -285,8 +285,14 @@ void ServerConn::handle_CANCEL_REQUEST()
     if(op->state==ServerOp::Executing) {
         op->state = ServerOp::Idle;
 
-        if(op->onCancel)
-            op->onCancel();
+        if(op->onCancel) {
+            try {
+                op->onCancel();
+            }catch(std::exception& e){
+                log_err_printf(connsetup, "IOID %u to \"%s\" remote onCancel() error: %s\n",
+                               unsigned(ioid), chan->name.c_str(), e.what());
+            }
+        }
 
     } else {
         // an allowed race
@@ -492,8 +498,15 @@ void ServerOp::cleanup()
     if(onCancel) {
         decltype(onCancel) fn;
         fn.swap(onCancel);
-        if(state==ServerOp::Executing)
-            fn();
+        if(state==ServerOp::Executing) {
+            try {
+                fn();
+            }catch(std::exception& e){
+                auto ch(chan.lock());
+                log_err_printf(connsetup, "IOID %u to \"%s\" cleanup onCancel() error: %s\n",
+                               unsigned(ioid), ch ? ch->name.c_str() : "<defunct>", e.what());
+            }
+        }
     }
 
     state = ServerOp::Dead;
@@ -517,8 +530,15 @@ void ServerOp::cleanup()
         }
     }
 
-    if(notify)
-        closer("");
+    if(notify) {
+        // no loop to dispatch to, so this one is not caught by evhelper
+        try {
+            closer("");
+        }catch(std::exception& e){
+            log_err_printf(connsetup, "IOID %u onClose() error: %s\n",
+                           unsigned(ioid), e.what());
+        }
+    }
 }
 
 }} // namespace pvxs::impl
