@@ -251,53 +251,34 @@ precise inversion the guard exists to prevent, and it is what the caller here
 was written to avoid. The guard was inert until this pin.
 
 The one local composite Action that remains for a generic reason is
-`.github/actions/abicheck-publish-baseline`. Upstream's
-`publish-baseline.yml` implements a stronger immutability contract but
-captures from `build-output.json` artifacts and cannot publish an
-already-captured baseline-set; extending it with a pre-captured-set input is
-the owed follow-up, tracked upstream. Writing a second publisher here would
-be exactly the competing implementation this integration exists to remove.
+`.github/actions/abicheck-publish-baseline`.
 
-## Validated on a real runner
+abicheck [#1319](https://github.com/abicheck/abicheck/pull/1319) added the
+replacement this was waiting for — `publish-baseline.yml` now takes
+`baseline-set-artifact-prefix` and will publish an already-captured
+baseline-set, validating it against the profile, release tag and generation
+it is being published as. That is strictly stronger than the local action.
 
-First execution of the migrated Actions: `PVXS EPICS` run
-[35130816212](https://github.com/napetrov/pvxs/actions/runs/35130816212) at
-`22ca9d5`, conclusion success.
+It does not yet fit **both** of this integration's publication paths, and
+adopting it for one would leave two publishers, which is the duplication
+this integration exists to remove:
 
-| Step | Result | Duration |
+| Path | Where the set lives | Fits upstream? |
 |---|---|---|
-| Resolve EPICS build context | `EPICS_BASE`/arch resolved, declaration rendered | 0.07 s |
-| `library-spec` resolution | `libpvxs` 15 headers, `libpvxsIoc` 1 header, 4 include roots each | 0.24 s |
-| Capture (both components) | libpvxs 120.9 MB → 2.06 MB zstd; libpvxsIoc 2.35 MB → 94.5 KB | 360 s |
-| `resolve-baseline` `kind: members` | `outcome=resolved`, 2 members, correct `libpvxsIoc` casing | 28.6 s |
-| `verify-baseline-source` | `not_found`, with the rejection printed | 0.86 s |
-| `aggregate` collect / run / validate | 4 declared, 0 collected, 4 missing, 0 unusable | 0.23 / 0.69 / 0.23 s |
+| Bootstrap (`workflow_dispatch`) | artifact in the *same* run, from `bootstrap-build` | **yes** |
+| Tag publication (`workflow_run`) | artifact in the *producing* run | **no** |
 
-The capture resolved the same 15/1 header split from the *same* SONAME alias
-chain the old script filtered by hand: `lib/linux-x86_64/` holds
-`libpvxs.so` → `libpvxs.so.1.5`, and the `libpvxs.so*` glob de-duplicated to
-the one real object rather than analysing the alias twice.
+The blocker is one input. `publish-baseline.yml` downloads the set with
+`actions/download-artifact` using `pattern:` alone, with no `run-id`, so it
+can only see artifacts of the run it is executing in. A `workflow_run`
+publisher is by construction a *different* run from the one that captured
+the set — that separation is the security boundary, not an accident, so
+moving the capture into the publishing run is not an option.
 
-The eligibility check earned its place on this very run. A `push` run for
-the PR's exact base commit on the right branch, from the right workflow,
-did exist — and it had **failed** (an unrelated timing-sensitive test).
-`verify-baseline-source` refused it and said why:
-
-```
-rejected run 35112205613: wrong-conclusion: the source run concluded 'failure'; allowed: success
-no eligible producer run was found. This is a real lifecycle state ..., not an error --
-and not a clean comparison either.
-```
-
-Without that rule a failed run's snapshot would have become the baseline
-this pull request was measured against. Selecting on base SHA alone is not
-enough, and this is the case that shows it.
-
-The aggregate then reported `status=fail`, `coverage=empty`, `0/4`
-analyzed, `compatibility-exit=1`, with `channels` splitting accepted-main
-0/2 and release-contract 0/2 — **and the step still succeeded**, which is
-the advisory contract working: a compatibility/coverage code is carried,
-not swallowed and not turned into a job failure.
+What would close it: a `run-id` (and token) passthrough on the pre-captured
+path, or the ability to hand the workflow an already-downloaded directory.
+Either would let both paths use one publisher and retire this action. That
+is the remaining upstream dependency; it is not worked around here.
 
 ## Known issues (abicheck product bugs, re-measured 2026-09-16 on `0b50f80`)
 
