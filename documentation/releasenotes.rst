@@ -16,6 +16,7 @@ Release Notes
   enough for a channel to be considered "claimed".  It is necessary to set some GET/RPC/MONITOR/...
   handler.
 - ioc: serve ``display.precision`` for boRecord.HIGH and mbbxDirect (Sang Woo Kim)
+- ioc: publish ``$PVAS_SERVER_PORT`` and ``$PVXS_SERVER_PORT`` with the IOC singleton server's TCP port.
 - tools: The CLI tools are now built only with epics-base >= 3.15 .
 - tools: pvxput now understand JSON syntax.
 - tools: CLI tool argument parsing now requires that option flags appear before positional arguments.

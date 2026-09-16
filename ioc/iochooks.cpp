@@ -16,6 +16,9 @@
 #include <memory>
 #include <stdexcept>
 
+#include <stdlib.h>
+
+#include <envDefs.h>
 #include <epicsExport.h>
 #include <epicsExit.h>
 #include <epicsString.h>
@@ -93,6 +96,14 @@ void initialisePvxsServer() {
     Guard G(pvxServer->lock);
     if(!pvxServer->srv) {
         pvxServer->srv = Server(conf);
+
+        std::ostringstream strm;
+        std::string portstr(SB()<<pvxServer->srv.config().tcp_port);
+        // publish our effective TCP port number
+        epicsEnvSet("PVXS_SERVER_PORT", portstr.c_str());
+        // publish with the same name used by pvAccessCPP,
+        // which may later overwrite if it is also loaded.
+        epicsEnvSet("PVAS_SERVER_PORT", portstr.c_str());
     }
 }
 
