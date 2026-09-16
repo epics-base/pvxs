@@ -387,7 +387,11 @@ jobs:
         set -eu
         mkdir -p "$BASELINE_RELEASE_DIR"
         asset="abicheck-baseline-${ABICHECK_PROFILE}.tar.zst"
-        tag=$(gh release list --repo "$GITHUB_REPOSITORY" --limit 1 --json tagName \
+        # gh defaults both exclusions to false, so --limit 1 alone can
+        # select a draft or a pre-release.  The release contract is a
+        # published final release.
+        tag=$(gh release list --repo "$GITHUB_REPOSITORY" --limit 1 \
+                --exclude-drafts --exclude-pre-releases --json tagName \
                 --jq '.[0].tagName // empty')
         if [ -z "$tag" ]; then
           echo "no release to resolve a release-contract baseline from"

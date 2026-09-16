@@ -113,7 +113,13 @@ jobs:
         # to prevent.
         source-run-id: ${{ github.event.workflow_run.id }}
         source-run-attempt: ${{ github.event.workflow_run.run_attempt }}
-        post-on: changes
+        # `always`, not `changes`: a run whose comparison came back clean
+        # must still publish, otherwise the sticky comment left by an
+        # earlier run keeps showing a warning that no longer holds.  An
+        # incomplete analysis already counts as a change, so `changes`
+        # would publish that -- it is specifically the clean resolution it
+        # would silently skip.
+        post-on: always
         detail: standard
         run-label: >-
           run ${{ github.event.workflow_run.id }}

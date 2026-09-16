@@ -77,9 +77,25 @@ runs:
       env:
         TOP: ${{ inputs.top || github.workspace }}
         SPEC_IN: ${{ inputs.component-spec }}
+        WORKSPACE: ${{ github.workspace }}
         SPEC_OUT: ${{ runner.temp }}/abicheck-components.resolved.json
       run: |
         set -eu
+
+        # The declaration belongs to the CHECKOUT, not to the tree being
+        # captured.  The historical bootstrap points `top` at an old
+        # revision that predates this file entirely, so resolving a
+        # relative spec path after `cd "$TOP"` would read a file that is
+        # missing (or, worse, a stale declaration) from that revision.
+        case "$SPEC_IN" in
+          /*) spec_in=$SPEC_IN ;;
+          *)  spec_in=$WORKSPACE/$SPEC_IN ;;
+        esac
+        [ -f "$spec_in" ] || {
+          echo "::error::component declaration $spec_in does not exist"
+          exit 64
+        }
+
         cd "$TOP"
 
         # configure/RELEASE.local is where cue.py records the prepared
@@ -111,7 +127,7 @@ runs:
         # other '$' the declaration might legitimately contain.
         sed -e "s|\${EPICS_BASE}|$EPICS_BASE|g" \
             -e "s|\${EPICS_HOST_ARCH}|$EPICS_HOST_ARCH|g" \
-            "$SPEC_IN" > "$SPEC_OUT"
+            "$spec_in" > "$SPEC_OUT"
         if grep -q '\${' "$SPEC_OUT"; then
           echo "::error::unsubstituted placeholder left in $SPEC_OUT"
           grep -n '\${' "$SPEC_OUT" >&2

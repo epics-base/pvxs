@@ -125,16 +125,32 @@ jobs:
         github-token: ${{ github.token }}
 
   # ── Bootstrap: build a historical release once, here ──────────────────
-  bootstrap:
+  # ── Bootstrap: build a historical release once, here ──────────────────
+  #
+  # Split in two on purpose.  The build job runs the requested revision's
+  # own code (cue.py, its submodules, its makefiles) and therefore holds
+  # NO write scope: `contents: read` only.  It hands the captured
+  # baseline-set to the publishing job as an artifact.
+  #
+  # The publishing job holds `contents: write` but executes none of that
+  # code -- it checks out only the default branch and consumes the
+  # artifact.  Without the split, historical code could overwrite
+  # .github/actions/abicheck-publish-baseline in the shared workspace
+  # before the runner loads it, and that local action is handed
+  # github.token.
+  bootstrap-build:
     if: ${{ github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
     timeout-minutes: 60
     permissions:
-      contents: write
+      contents: read
+    outputs:
+      sha: ${{ steps.tag.outputs.sha }}
     steps:
-    # The trusted tooling (capture action, helper scripts) comes from the
-    # default branch; the revision being captured is checked out
-    # separately. The historical tree's own workflow is never run.
+    # The trusted tooling (capture action, component declaration) comes
+    # from the default branch; the revision being captured is checked out
+    # separately, under historical/.  The historical tree's own workflow is
+    # never run.
     - uses: actions/checkout@v6
       with:
         persist-credentials: false
@@ -174,6 +190,10 @@ jobs:
         python .ci/cue.py exec python .ci-local/libevent.py
         python .ci/cue.py build
 
+    # Captures with the same declaration and the same shared action the
+    # matrix leg uses, so the bootstrap cannot drift from normal capture.
+    # The declaration is read from THIS checkout, not from the historical
+    # revision, which predates it.
     - name: Capture the historical revision
       id: capture
       uses: ./.github/actions/abicheck-capture
@@ -183,6 +203,32 @@ jobs:
         project-ref: ${{ steps.tag.outputs.sha }}
         profile: ${{ env.ABICHECK_PROFILE }}
         abicheck-ref: ${{ env.ABICHECK_REF }}
+
+    - name: Hand the baseline-set to the publishing job
+      uses: actions/upload-artifact@v7
+      with:
+        name: abicheck-bootstrap-${{ env.ABICHECK_PROFILE }}
+        path: ${{ runner.temp }}/baseline-set
+        if-no-files-found: error
+        retention-days: 1
+
+  bootstrap-publish:
+    needs: bootstrap-build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+    # Default branch only.  No historical checkout, no historical code, so
+    # the local action loaded below is the reviewed one.
+    - uses: actions/checkout@v6
+      with:
+        persist-credentials: false
+
+    - uses: actions/download-artifact@v7
+      with:
+        name: abicheck-bootstrap-${{ env.ABICHECK_PROFILE }}
+        path: ${{ runner.temp }}/baseline-set
 
     - name: Publish the baseline-set
       uses: ./.github/actions/abicheck-publish-baseline

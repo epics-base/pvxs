@@ -141,17 +141,26 @@ A release that predates this integration has no capture, and re-dispatching
 the old workflow cannot produce one — the workflow *at that tag* has no
 capture step. `abicheck-baseline.yml`'s `workflow_dispatch` path therefore
 builds the requested revision once, in the trusted default-branch workflow,
-captures it with the same shared action the matrix leg uses, and publishes
-the result. It is a one-time operation per release and never runs on a pull
-request.
+captures it with the same shared action and the same component declaration
+the matrix leg uses, and publishes the result. It is a one-time operation
+per release and never runs on a pull request.
 
-Publication checks that the tag really is a tag (`refs/tags/<name>`,
-resolving annotated tags), that it points at the revision that was built,
-and that the baseline-set's own manifest records the profile it is being
-published as and covers both components. An already-published asset is left
-alone rather than replaced, because a published baseline is an immutable
-reference; replacing one changes the meaning of every comparison already
-made against it.
+That path is **two jobs, deliberately**. The build job runs the requested
+revision's own code — its `cue.py`, its submodules, its makefiles — and so
+holds `contents: read` and nothing else. It hands the captured baseline-set
+to the second job as an artifact. The publishing job holds `contents:
+write` but executes none of that code: it checks out only the default
+branch and consumes the artifact.
+
+Without the split, historical code could overwrite
+`.github/actions/abicheck-publish-baseline` in the shared workspace before
+the runner loads it, and that local action is handed `github.token`.
+`persist-credentials: false` does not prevent that — it stops the historical
+checkout receiving credentials, not a later step loading a tampered local
+action.
+
+The component declaration is read from the default-branch checkout, not
+from the historical tree, which predates the file entirely.
 
 ## Publication
 
