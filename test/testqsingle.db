@@ -65,3 +65,6 @@ record(longin, "test:nsec") {
     field(VAL , "100")
     info(Q:time:tag, "nsec:lsb:8")
 }
+record(bo, "test:precprop") {
+    field(HIGH, "5")
+}

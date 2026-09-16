@@ -148,6 +148,24 @@ void testGetScalar()
               "valueAlarm.highAlarmLimit double = 100\n"
             )<<" fetch VAL w/ meta-data.  delta output";
 
+    val = ctxt.get("test:precprop.HIGH").exec()->wait(5.0);
+    checkUTAG(val, 0);
+    testStrEq(std::string(SB()<<val.format().delta()),
+              "value double = 5\n"
+              "alarm.severity int32_t = 3\n"
+              "alarm.status int32_t = 2\n"
+              "alarm.message string = \"UDF\"\n"
+              "timeStamp.secondsPastEpoch int64_t = 631152000\n"
+              "timeStamp.nanoseconds int32_t = 0\n"
+              "display.description string = \"\"\n"
+              "display.units string = \"s\"\n"
+              "display.precision int32_t = 2\n"
+              "display.form.choices string[] = {7}[\"Default\", \"String\", \"Binary\", \"Decimal\", \"Hex\", \"Exponential\", \"Engineering\"]\n"
+              "control.limitLow double = 0\n"
+              "control.limitHigh double = 100000\n"
+            )<<" precprop.HIGH serves display.precision though bo NULLs "
+              "get_graphic_double; display.limitLow/limitHigh stay absent";
+
     val = ctxt.get("test:ai.DESC").exec()->wait(5.0);
     checkUTAG(val);
     testStrEq(std::string(SB()<<val.format()),
@@ -1043,7 +1061,7 @@ void testiocsh(TestClient& ctxt)
 
 MAIN(testqsingle)
 {
-    testPlan(115);
+    testPlan(116);
     testSetup();
     pvxs::logger_config_env();
     generalTimeRegisterCurrentProvider("test", 1, &testTimeCurrent);

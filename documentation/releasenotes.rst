@@ -17,6 +17,7 @@ Release Notes
 - tools: The CLI tools are now built only with epics-base >= 3.15 .
 - tools: pvxput now understand JSON syntax.
 - tools: CLI tool argument parsing now requires that option flags appear before positional arguments.
+- ioc: serve ``display.precision`` for boRecord.HIGH and mbbxDirect (Sang Woo Kim)
 
 1.5.2 (Jun 2026)
 ----------------
