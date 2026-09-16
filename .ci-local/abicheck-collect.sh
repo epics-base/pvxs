@@ -2,6 +2,10 @@
 # Collect the check reports this run produced and declare the set of checks
 # it was supposed to produce.
 #
+# The expected-target manifest is deliberately written OUTSIDE the report
+# directory: `abicheck aggregate` scans that directory for reports, and a
+# manifest sitting in it is picked up as an extra, unexpected target.
+#
 # Every check is named explicitly by the caller as `<check-id>=<report-path>`.
 # An empty path means "this check was expected but produced no report": it is
 # recorded in the expected-target manifest and deliberately left absent from
@@ -10,11 +14,10 @@
 # no exit code is interpreted in this script.
 set -eu
 
-DEST=${1:?usage: abicheck-collect.sh <dest-dir> <check-id>=<report-path>...}
-shift
-mkdir -p "$DEST"
-
-MANIFEST="$DEST/expected-targets.json"
+DEST=${1:?usage: abicheck-collect.sh <dest-dir> <manifest-path> <check-id>=<report-path>...}
+MANIFEST=${2:?usage: abicheck-collect.sh <dest-dir> <manifest-path> <check-id>=<report-path>...}
+shift 2
+mkdir -p "$DEST" "$(dirname "$MANIFEST")"
 : > "$DEST/.collect-index"
 for spec in "$@"; do
     id=${spec%%=*}

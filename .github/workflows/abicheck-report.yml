@@ -71,7 +71,7 @@ jobs:
     # never inferred is a compatibility outcome from the run's conclusion.
     - name: Verify the producer run and fetch its reports
       id: source
-      uses: abicheck/abicheck/actions/verify-source-run@cb6102d85eaec62874f311646223cfbc1ef3cb25
+      uses: abicheck/abicheck/actions/verify-source-run@9bc92e635fbfae3252189d3bd09059cc28599490
       with:
         source-run-id: ${{ github.event.workflow_run.id }}
         expect-repository: ${{ github.repository }}
@@ -98,7 +98,7 @@ jobs:
     # the other.
     - name: Publish the ABI/API report
       id: publish
-      uses: abicheck/abicheck/actions/report@cb6102d85eaec62874f311646223cfbc1ef3cb25
+      uses: abicheck/abicheck/actions/report@9bc92e635fbfae3252189d3bd09059cc28599490
       with:
         report: ${{ steps.source.outputs.artifact-path }}/aggregate.json
         repository: ${{ github.repository }}

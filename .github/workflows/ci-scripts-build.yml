@@ -340,6 +340,7 @@ jobs:
     env:
       ABICHECK_REF: 3737f9f960ae14a7b24dbb6e9b686e49fb563673
       REPORT_DIR: ${{ github.workspace }}/abicheck-reports
+      EXPECTED_TARGETS: ${{ runner.temp }}/abicheck-expected-targets.json
       CANDIDATE_DIR: ${{ github.workspace }}/abicheck-candidate
       BASELINE_RELEASE_DIR: ${{ github.workspace }}/abicheck-baseline-release
       BASELINE_MAIN_DIR: ${{ github.workspace }}/abicheck-baseline-main
@@ -551,7 +552,7 @@ jobs:
         checks="$checks ${{ steps.rel-core.outputs.check-id || format('libpvxs@{0}#release-contract@headers~release', env.ABICHECK_PROFILE) }}=${{ steps.rel-core.outputs.report-path }}"
         checks="$checks ${{ steps.rel-ioc.outputs.check-id || format('libpvxsIoc@{0}#release-contract@headers~release', env.ABICHECK_PROFILE) }}=${{ steps.rel-ioc.outputs.report-path }}"
         # shellcheck disable=SC2086
-        ./.ci-local/abicheck-collect.sh "$REPORT_DIR" $checks
+        ./.ci-local/abicheck-collect.sh "$REPORT_DIR" "$EXPECTED_TARGETS" $checks
 
     # One aggregate document over both components and both channels.  The
     # publisher renders exactly this; it never re-runs a comparison and
@@ -577,11 +578,16 @@ jobs:
         # decision (0 pass, 1 coverage/quality, 2 API break, 4 ABI break),
         # and this shadow check's gate is advisory -- so a non-zero code is
         # recorded, not swallowed.  64 is a usage error and is ours to fix.
+        # Run from inside the report directory so each target's recorded
+        # report_path is a bare filename beside aggregate.json.  The
+        # publisher reads member reports only from the aggregate document's
+        # own directory and refuses an absolute path, so aggregating with an
+        # absolute directory argument silently costs every per-target detail.
         rc=0
-        abicheck aggregate "$REPORT_DIR" \
-          --manifest "$REPORT_DIR/expected-targets.json" \
-          -o "json=$REPORT_DIR/aggregate.json" \
-          -o "text=$REPORT_DIR/aggregate.txt" || rc=$?
+        ( cd "$REPORT_DIR" && abicheck aggregate . \
+            --manifest "$EXPECTED_TARGETS" \
+            -o "json=aggregate.json" \
+            -o "text=aggregate.txt" ) || rc=$?
         echo "exit-code=$rc" >> "$GITHUB_OUTPUT"
         if [ "$rc" = "64" ]; then
           echo "::error::abicheck aggregate rejected its inputs (usage error)"

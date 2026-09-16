@@ -180,14 +180,17 @@ prominently reporting a detected break. ABICC remains authoritative.
 
 ## Dependency status
 
-The publisher is pinned to abicheck `cb6102d85eaec62874f311646223cfbc1ef3cb25`,
+The publisher is pinned to abicheck `9bc92e635fbfae3252189d3bd09059cc28599490`,
 which carries `actions/verify-source-run` and `actions/report`. That
-revision is immutable but **not yet reviewed or merged** — it is a branch
-tip awaiting its own pull request in abicheck. The PVXS caller's inputs
-have been checked against that revision's declared schema, but no deployed
-publication has been demonstrated, because `workflow_run` only runs the
-default-branch copy of the publisher. This must not go upstream on an
-unreviewed pin.
+revision is immutable and is the head of abicheck PR #1311, which is open
+for review but **not yet merged**, and whose own CI had not finished when
+this pin was taken. The PVXS caller's inputs and outputs have been checked
+against that revision's declared schemas, but no deployed publication has
+been demonstrated, because `workflow_run` only runs the default-branch copy
+of the publisher.
+
+This is a temporary pin on an unmerged revision. Before this goes upstream
+it must be moved to the merged abicheck commit.
 
 ## Known issues (abicheck product bugs, measured 2026-09-16)
 
