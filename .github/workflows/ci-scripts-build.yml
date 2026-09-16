@@ -309,26 +309,10 @@ jobs:
         path: ${{ runner.temp }}/abicheck-candidate
         if-no-files-found: error
 
-    - name: Report a failed ABI capture
+    - name: Note a failed ABI capture
       if: ${{ always() && matrix.abicheck && steps.build-main.outcome == 'success' && steps.abi-capture.outcome != 'success' }}
       run: |
-        set -eu
-        mkdir -p "$RUNNER_TEMP/abicheck-candidate-failure"
-        printf '%s\n' \
-          '{"state":"capture-failed",' \
-          ' "inputs_outcome":"${{ steps.abi-inputs.outcome }}",' \
-          ' "capture_outcome":"${{ steps.abi-capture.outcome }}"}' \
-          > "$RUNNER_TEMP/abicheck-candidate-failure/state.json"
-        echo "::warning::ABI capture did not complete; downstream comparison will report an incomplete analysis, not a clean result."
-
-    - name: Upload ABI capture failure marker
-      if: ${{ always() && matrix.abicheck && steps.build-main.outcome == 'success' && steps.abi-capture.outcome != 'success' }}
-      uses: actions/upload-artifact@v7
-      with:
-        retention-days: 30
-        name: abicheck-candidate-failure-${{ env.ABICHECK_PROFILE }}
-        path: ${{ runner.temp }}/abicheck-candidate-failure
-        if-no-files-found: error
+        echo "::warning::ABI capture did not complete (outcome: ${{ steps.abi-capture.outcome }}); the comparison job will report an incomplete analysis, not a clean result."
 
   # ── ABI/API comparison (advisory; ABICC stays authoritative) ────────────
   #
