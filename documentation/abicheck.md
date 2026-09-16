@@ -232,12 +232,23 @@ prominently reporting a detected break. ABICC remains authoritative.
 ## Dependency status
 
 Every abicheck Action is pinned to one merged, immutable revision:
-`0b50f807c8ea05719e414e78564c31ef32a2ea4e` on abicheck `main` — the squash of
-abicheck [#1315](https://github.com/abicheck/abicheck/pull/1315), which added
-`actions/aggregate`, `actions/verify-baseline-source` and `library-spec`
-resolution, on top of [#1311](https://github.com/abicheck/abicheck/pull/1311)
-(report-only publication and the aggregate-shaped PR comment). Nothing here
-depends on an unmerged revision, a mutable branch, or a placeholder ref.
+`80cf72abb5856eb623a6056fb35d06a66ad26774` on abicheck `main`. It carries
+[#1315](https://github.com/abicheck/abicheck/pull/1315) (`actions/aggregate`,
+`actions/verify-baseline-source`, `library-spec` resolution) on top of
+[#1311](https://github.com/abicheck/abicheck/pull/1311) (report-only
+publication and the aggregate-shaped PR comment), plus
+[#1319](https://github.com/abicheck/abicheck/pull/1319). Nothing here depends
+on an unmerged revision, a mutable branch, or a placeholder ref.
+
+**#1319 is why this pin moved, and it fixed a live defect here.** At the
+previous pin, `actions/report` declared and documented `source-run-id` /
+`source-run-attempt`, and its `run.sh` read `INPUT_SOURCE_RUN_ID` — but
+`action.yml` never forwarded the inputs into the step's environment. The
+values this workflow passes were therefore discarded, and the ordering guard
+silently fell back to `GITHUB_RUN_ID`: the *publisher's* run, which orders by
+when publication was triggered rather than when the analysis ran. That is the
+precise inversion the guard exists to prevent, and it is what the caller here
+was written to avoid. The guard was inert until this pin.
 
 The one local composite Action that remains for a generic reason is
 `.github/actions/abicheck-publish-baseline`. Upstream's

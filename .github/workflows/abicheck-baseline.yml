@@ -48,7 +48,7 @@ permissions:
 
 env:
   ABICHECK_PROFILE: linux-x86_64-gcc-default-base7.0-bundled-libevent
-  ABICHECK_REF: 0b50f807c8ea05719e414e78564c31ef32a2ea4e
+  ABICHECK_REF: 80cf72abb5856eb623a6056fb35d06a66ad26774
   SETUP_PATH: .ci-local
   CMP: gcc
   BCFG: default
@@ -82,7 +82,7 @@ jobs:
     # annotated tag rather than treating the tag object as the commit.
     - name: Verify the producer run
       id: producer
-      uses: abicheck/abicheck/actions/verify-baseline-source@0b50f807c8ea05719e414e78564c31ef32a2ea4e
+      uses: abicheck/abicheck/actions/verify-baseline-source@80cf72abb5856eb623a6056fb35d06a66ad26774
       with:
         mode: producer-run
         workflow: .github/workflows/ci-scripts-build.yml
@@ -93,7 +93,7 @@ jobs:
     - name: Verify the tag identity
       id: tag
       if: ${{ steps.producer.outputs.eligible == 'true' }}
-      uses: abicheck/abicheck/actions/verify-baseline-source@0b50f807c8ea05719e414e78564c31ef32a2ea4e
+      uses: abicheck/abicheck/actions/verify-baseline-source@80cf72abb5856eb623a6056fb35d06a66ad26774
       with:
         mode: tag
         tag: ${{ github.event.workflow_run.head_branch }}

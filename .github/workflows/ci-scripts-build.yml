@@ -263,7 +263,7 @@ jobs:
         # pull_request this is the merge commit, NOT the PR head.
         project-ref: ${{ github.sha }}
         profile: ${{ env.ABICHECK_PROFILE }}
-        abicheck-ref: 0b50f807c8ea05719e414e78564c31ef32a2ea4e
+        abicheck-ref: 80cf72abb5856eb623a6056fb35d06a66ad26774
 
     - name: Record analysis context
       id: abi-context
@@ -294,7 +294,7 @@ jobs:
             "pr_base_sha": os.environ.get("PR_BASE_SHA") or None,
             "pr_base_ref": os.environ.get("PR_BASE_REF") or None,
             "profile": os.environ["ABICHECK_PROFILE"],
-            "abicheck_ref": "0b50f807c8ea05719e414e78564c31ef32a2ea4e",
+            "abicheck_ref": "80cf72abb5856eb623a6056fb35d06a66ad26774",
         }
         with open(os.environ["OUT"], "w") as f:
             json.dump(doc, f, indent=2, sort_keys=True)
@@ -409,7 +409,7 @@ jobs:
       if: ${{ steps.candidate.outcome == 'success' && github.event_name == 'pull_request' }}
       id: base-source
       continue-on-error: true
-      uses: abicheck/abicheck/actions/verify-baseline-source@0b50f807c8ea05719e414e78564c31ef32a2ea4e
+      uses: abicheck/abicheck/actions/verify-baseline-source@80cf72abb5856eb623a6056fb35d06a66ad26774
       with:
         mode: producer-run
         workflow: .github/workflows/ci-scripts-build.yml
@@ -444,7 +444,7 @@ jobs:
     - name: Locate candidate snapshots
       id: snapshots
       if: ${{ steps.candidate.outcome == 'success' }}
-      uses: abicheck/abicheck/actions/resolve-baseline@0b50f807c8ea05719e414e78564c31ef32a2ea4e
+      uses: abicheck/abicheck/actions/resolve-baseline@80cf72abb5856eb623a6056fb35d06a66ad26774
       with:
         kind: members
         baseline-path: ${{ env.CANDIDATE_DIR }}
@@ -457,7 +457,7 @@ jobs:
     - name: 'libpvxs vs accepted-main'
       id: main-core
       if: ${{ always() && steps.snapshots.outcome == 'success' && steps.baseline-main.outcome == 'success' }}
-      uses: abicheck/abicheck/actions/check-target@0b50f807c8ea05719e414e78564c31ef32a2ea4e
+      uses: abicheck/abicheck/actions/check-target@80cf72abb5856eb623a6056fb35d06a66ad26774
       with:
         name: libpvxs
         profile: ${{ env.ABICHECK_PROFILE }}
@@ -477,7 +477,7 @@ jobs:
     - name: 'libpvxsIoc vs accepted-main'
       id: main-ioc
       if: ${{ always() && steps.snapshots.outcome == 'success' && steps.baseline-main.outcome == 'success' }}
-      uses: abicheck/abicheck/actions/check-target@0b50f807c8ea05719e414e78564c31ef32a2ea4e
+      uses: abicheck/abicheck/actions/check-target@80cf72abb5856eb623a6056fb35d06a66ad26774
       with:
         name: libpvxsIoc
         profile: ${{ env.ABICHECK_PROFILE }}
@@ -497,7 +497,7 @@ jobs:
     - name: 'libpvxs vs release-contract'
       id: rel-core
       if: ${{ always() && steps.snapshots.outcome == 'success' && steps.baseline-release.outcome == 'success' }}
-      uses: abicheck/abicheck/actions/check-target@0b50f807c8ea05719e414e78564c31ef32a2ea4e
+      uses: abicheck/abicheck/actions/check-target@80cf72abb5856eb623a6056fb35d06a66ad26774
       with:
         name: libpvxs
         profile: ${{ env.ABICHECK_PROFILE }}
@@ -516,7 +516,7 @@ jobs:
     - name: 'libpvxsIoc vs release-contract'
       id: rel-ioc
       if: ${{ always() && steps.snapshots.outcome == 'success' && steps.baseline-release.outcome == 'success' }}
-      uses: abicheck/abicheck/actions/check-target@0b50f807c8ea05719e414e78564c31ef32a2ea4e
+      uses: abicheck/abicheck/actions/check-target@80cf72abb5856eb623a6056fb35d06a66ad26774
       with:
         name: libpvxsIoc
         profile: ${{ env.ABICHECK_PROFILE }}
@@ -587,7 +587,7 @@ jobs:
     - name: Aggregate both components
       id: aggregate
       if: ${{ always() }}
-      uses: abicheck/abicheck/actions/aggregate@0b50f807c8ea05719e414e78564c31ef32a2ea4e
+      uses: abicheck/abicheck/actions/aggregate@80cf72abb5856eb623a6056fb35d06a66ad26774
       with:
         reports-dir: ${{ env.REPORT_DIR }}
         manifest-path: ${{ env.EXPECTED_TARGETS }}

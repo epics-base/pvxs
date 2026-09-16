@@ -142,7 +142,7 @@ runs:
 
     - name: Capture ABI snapshots (libpvxs, libpvxsIoc)
       id: capture
-      uses: abicheck/abicheck/actions/baseline@0b50f807c8ea05719e414e78564c31ef32a2ea4e
+      uses: abicheck/abicheck/actions/baseline@80cf72abb5856eb623a6056fb35d06a66ad26774
       with:
         library-spec: ${{ steps.epics.outputs.spec }}
         library-root: ${{ inputs.top || github.workspace }}
