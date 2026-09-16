@@ -28,7 +28,7 @@ public:
 
     //! For GET_FIELD, GET, or PUT.  Inform peer of our data-type.
     //! @throws std::runtime_error if the client pvRequest() field mask does not select any fields of prototype.
-    //! @note Synchronizes with server worker thread
+    //! @since UNRELEASED Does not synchronize with server worker thread
     virtual void connect(const Value& prototype) =0;
     //! Indicate that this operation can not be setup
     //! @since 1.2.3 Does not synchronize with server worker thread

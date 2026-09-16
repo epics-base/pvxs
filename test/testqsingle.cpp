@@ -148,6 +148,24 @@ void testGetScalar()
               "valueAlarm.highAlarmLimit double = 100\n"
             )<<" fetch VAL w/ meta-data.  delta output";
 
+    val = ctxt.get("test:precprop.HIGH").exec()->wait(5.0);
+    checkUTAG(val, 0);
+    testStrEq(std::string(SB()<<val.format().delta()),
+              "value double = 5\n"
+              "alarm.severity int32_t = 3\n"
+              "alarm.status int32_t = 2\n"
+              "alarm.message string = \"UDF\"\n"
+              "timeStamp.secondsPastEpoch int64_t = 631152000\n"
+              "timeStamp.nanoseconds int32_t = 0\n"
+              "display.description string = \"\"\n"
+              "display.units string = \"s\"\n"
+              "display.precision int32_t = 2\n"
+              "display.form.choices string[] = {7}[\"Default\", \"String\", \"Binary\", \"Decimal\", \"Hex\", \"Exponential\", \"Engineering\"]\n"
+              "control.limitLow double = 0\n"
+              "control.limitHigh double = 100000\n"
+            )<<" precprop.HIGH serves display.precision though bo NULLs "
+              "get_graphic_double; display.limitLow/limitHigh stay absent";
+
     val = ctxt.get("test:ai.DESC").exec()->wait(5.0);
     checkUTAG(val);
     testStrEq(std::string(SB()<<val.format()),
@@ -991,6 +1009,25 @@ void testMonitorDBE(TestClient& ctxt)
     testEq(val["value"].as<int32_t>(), 43);
 }
 
+void testMonitorNsecMask(TestClient& ctxt)
+{
+    testDiag("%s", __func__);
+
+    TestSubscription sub(ctxt.monitor("test:nsec")
+                         .maskConnected(true)
+                         .maskDisconnected(true));
+
+    auto val(sub.waitForUpdate());
+
+    // nsec:lsb:8 clears the low 8 bits: 102030 -> 101888, userTag -> 142
+    testFldEq(val, "timeStamp.nanoseconds", int32_t(101888));
+#if DBR_UTAG
+    testFldEq(val, "timeStamp.userTag", int32_t(142));
+#else
+    testSkip(1, "no UTAG");
+#endif
+}
+
 void testiocsh(TestClient& ctxt)
 {
     testDiag("%s", __func__);
@@ -1043,7 +1080,7 @@ void testiocsh(TestClient& ctxt)
 
 MAIN(testqsingle)
 {
-    testPlan(115);
+    testPlan(118);
     testSetup();
     pvxs::logger_config_env();
     generalTimeRegisterCurrentProvider("test", 1, &testTimeCurrent);
@@ -1088,6 +1125,7 @@ MAIN(testqsingle)
             testMonitorAIFilt(mctxt);
             testMonitorDBEAlarm(mctxt);
             testMonitorDBE(mctxt);
+            testMonitorNsecMask(mctxt);
             testiocsh(mctxt);
         }
         timeSim = false;

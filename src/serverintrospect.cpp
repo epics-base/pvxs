@@ -73,26 +73,27 @@ struct ServerIntrospectControl final : public server::ConnectOp
 
     virtual void connect(const Value& prototype) override final
     {
-        auto desc = Value::Helper::desc(prototype);
-        if(!desc)
+        if(!prototype)
             throw std::logic_error("Can't reply to GET_FIELD with Null prototype");
         Status sts{Status::Ok};
-        doReply(desc, sts);
+        doReply(prototype, sts);
     }
 
     virtual void error(const std::string &msg) override final
     {
         Status sts{Status::Error, msg};
-        doReply(nullptr, sts);
+        doReply(Value(), sts);
     }
 
-    void doReply(const FieldDesc* type, const Status& sts)
+    void doReply(const Value& prototype, const Status& sts)
     {
         auto serv = server.lock();
         if(!serv)
             return; // soft fail if already completed, canceled, disconnected, ....
 
-        serv->acceptor_loop.call([this, type, &sts](){
+        auto op(this->op);
+        serv->acceptor_loop.dispatch([op, prototype, sts](){
+            auto type = Value::Helper::desc(prototype);
             if(auto oper = op.lock())
                 oper->doReply(type, sts);
         });

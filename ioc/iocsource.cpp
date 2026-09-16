@@ -288,9 +288,9 @@ void getProperties(dbChannel* pChannel, db_field_log *pfl, Value& node)
         if(options & DBR_GR_DOUBLE) {
             dlL = meta.lower_disp_limit;
             node["display.limitHigh"] = meta.upper_disp_limit;
-            if(options & DBR_PRECISION) {
-                node["display.precision"] = int32_t(meta.precision.dp);
-            }
+        }
+        if(options & DBR_PRECISION) {
+            node["display.precision"] = int32_t(meta.precision.dp);
         }
         if(options & DBR_CTRL_DOUBLE) {
             node["control.limitLow"] = meta.lower_ctrl_limit;

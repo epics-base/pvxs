@@ -10,7 +10,7 @@ jobs:
   manylinux:
     name: py${{ matrix.py }} ${{ matrix.ml }}
 
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.runner || 'ubuntu-latest' }}
     strategy:
       fail-fast: false
       matrix:
@@ -19,7 +19,6 @@ jobs:
 
         - ml: manylinux2010_x86_64
           py: cp38-cp38
-          skip: true
 
         - ml: manylinux2014_x86_64
           py: cp39-cp39
@@ -42,6 +41,14 @@ jobs:
 
         - ml: manylinux_2_28_x86_64
           py: cp314-cp314t
+
+        - ml: manylinux_2_28_aarch64
+          py: cp314-cp314
+          runner: ubuntu-24.04-arm
+
+        - ml: manylinux_2_28_aarch64
+          py: cp314-cp314t
+          runner: ubuntu-24.04-arm
 
     steps:
       - uses: actions/checkout@v6
@@ -156,6 +163,10 @@ jobs:
             py: "3.14"
             arch: win_amd64
 
+          - os: windows-latest
+            py: "3.14t"
+            arch: win_amd64
+
           - os: macos-latest
             py: "3.8"
             arch: macosx_11_0_universal2
@@ -182,6 +193,10 @@ jobs:
 
           - os: macos-latest
             py: "3.14"
+            arch: macosx_11_0_universal2
+
+          - os: macos-latest
+            py: "3.14t"
             arch: macosx_11_0_universal2
 
     steps:

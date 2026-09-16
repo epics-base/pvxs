@@ -1353,10 +1353,9 @@ void ContextImpl::cacheClean(const std::string& name, Context::cacheAction actio
             continue;
 
         else if(action!=Context::Clean || cur->second.use_count()<=1) {
-            cur->second->garbage = true;
 
             if(action==Context::Clean && !cur->second->garbage) {
-                // mark for next sweep
+                cur->second->garbage = true;
                 log_debug_printf(setup, "Chan GC mark '%s':'%s'\n",
                                  cur->first.first.c_str(), cur->first.second.c_str());
 
@@ -1368,12 +1367,19 @@ void ContextImpl::cacheClean(const std::string& name, Context::cacheAction actio
 
                 // explicitly break ref. loop of channel cache
                 chanByName.erase(cur);
+                if(chanByCID.erase(trash->cid)!=1)
+                    log_crit_printf(io, "Inconsistent chanByName vs. chanByCID for %s\n", trash->name.c_str());
 
                 if(action==Context::Disconnect) {
                     trash->disconnect(trash);
                 }
             }
         }
+    }
+
+    if(chanByName.size() != chanByCID.size()) {
+        log_crit_printf(io, "Inconsistent sizes chanByName %zu vs. chanByCID %zu",
+                        chanByName.size(), chanByCID.size());
     }
 }
 

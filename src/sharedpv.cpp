@@ -45,9 +45,17 @@ struct SharedPV::Impl : public std::enable_shared_from_this<Impl>
 
     ptr_set<std::weak_ptr<ChannelControl>> channels;
 
+    struct Subscriber {
+        // for an active subscriber, exactly one of mpending or mcontrol will be !NULL
+        std::shared_ptr<MonitorSetupOp> mpending;
+        std::shared_ptr<MonitorControlOp> mcontrol;
+        Subscriber(const std::shared_ptr<MonitorSetupOp>& mpending)
+            :mpending(mpending)
+        {}
+    };
+
     std::set<std::shared_ptr<ConnectOp>> pending;
-    std::set<std::shared_ptr<MonitorSetupOp>> mpending;
-    std::set<std::shared_ptr<MonitorControlOp>> subscribers;
+    std::set<std::shared_ptr<Subscriber>> msubscribers;
 
     Value current;
 
@@ -72,35 +80,34 @@ struct SharedPV::Impl : public std::enable_shared_from_this<Impl>
     static
     void connectSub(Guard& G,
                     const std::shared_ptr<Impl>& self,
-                    const std::shared_ptr<MonitorSetupOp>& conn,
+                    const std::shared_ptr<Impl::Subscriber>& msub,
                     const Value& current)
     {
         G.assertIdenticalMutex(self->lock);
         try {
             std::shared_ptr<MonitorControlOp> sub;
-            {
-                UnGuard U(G);
+            if(msub->mpending) {
 
-                // unlock as connect() and onClose() sync. with the server worker
-                sub = conn->connect(current);
+                auto mpend(std::move(msub->mpending));
 
-                conn->onClose([self, sub](const std::string& msg) {
-                    log_debug_printf(logshared, "%s on %s Monitor onClose\n", sub->peerName().c_str(), sub->name().c_str());
-                    Guard G(self->lock);
-                    self->subscribers.erase(sub);
-                });
+                msub->mcontrol = mpend->connect(current);
 
-                sub->post(current);
+                msub->mcontrol->post(current);
             }
-            self->subscribers.emplace(std::move(sub));
 
         }catch(std::exception& e){
             UnGuard U(G);
-            log_warn_printf(logshared, "%s Client %s: Can't attach() monitor: %s\n",
-                            conn->name().c_str(), conn->peerName().c_str(), e.what());
-            // not re-throwing for consistency
-            // we couldn't deliver an error after pending
-            conn->error(e.what());
+            if(auto& mpending = msub->mpending) {
+                log_warn_printf(logshared, "%s Client %s: Can't attach() pending monitor: %s\n",
+                                mpending->name().c_str(), mpending->peerName().c_str(), e.what());
+                // not re-throwing for consistency
+                // we couldn't deliver an error after pending
+                mpending->error(e.what());
+
+            } else if(auto& mcontrol = msub->mcontrol) {
+                log_warn_printf(logshared, "%s Client %s: Can't attach() active monitor: %s\n",
+                                mcontrol->name().c_str(), mcontrol->peerName().c_str(), e.what());
+            }
         }
     }
 };
@@ -257,24 +264,26 @@ void SharedPV::attach(std::unique_ptr<ChannelControl>&& ctrlop)
 
         log_debug_printf(logshared, "%s on %s Monitor setup\n", op->peerName().c_str(), op->name().c_str());
 
-        std::shared_ptr<MonitorSetupOp> conn(std::move(op));
+        auto subscriber(std::make_shared<Impl::Subscriber>(std::move(op)));
+
+        subscriber->mpending->onClose([self, subscriber](const std::string& msg) {
+            if(auto& msetup = subscriber->mpending) {
+                log_debug_printf(logshared, "%s on %s Monitor onClose1\n",
+                                 msetup->peerName().c_str(), msetup->name().c_str());
+
+            } else if(auto& mcontrol = subscriber->mcontrol) {
+                log_debug_printf(logshared, "%s on %s Monitor onClose2\n",
+                                 mcontrol->peerName().c_str(), mcontrol->name().c_str());
+            }
+            Guard G(self->lock);
+            self->msubscribers.erase(subscriber);
+        });
 
         Guard G(self->lock);
+        self->msubscribers.insert(subscriber);
 
-        if(!self->current) {
-            // no type
-
-            // this onClose will be later replaced if/when the monitor is open()'d
-            conn->onClose([self, conn](const std::string& msg) {
-                log_debug_printf(logshared, "%s on %s Monitor onClose\n", conn->peerName().c_str(), conn->name().c_str());
-                Guard G(self->lock);
-                self->mpending.erase(conn);
-            });
-
-            self->mpending.insert(std::move(conn));
-
-        } else {
-            Impl::connectSub(G, self, conn, self->current.clone());
+        if(self->current) {
+            Impl::connectSub(G, self, subscriber, self->current.clone());
         }
     });
 
@@ -356,7 +365,6 @@ void SharedPV::open(const Value& initial)
         throw std::logic_error("Must specify non-empty initial Struct");
 
     decltype (impl->pending) pending;
-    decltype (impl->mpending) mpending;
 
     Value temp;
     {
@@ -366,7 +374,6 @@ void SharedPV::open(const Value& initial)
             throw std::logic_error("close() first");
 
         pending = std::move(impl->pending);
-        mpending = std::move(impl->mpending);
 
         impl->current = initial.clone();
         // make a second copy as 'temp' will be queued
@@ -375,7 +382,7 @@ void SharedPV::open(const Value& initial)
         // TODO these loops will be really inefficient if we aren't on a worker.
         //      API to batch?
 
-        for(auto& op : mpending) {
+        for(auto& op : impl->msubscribers) {
             Impl::connectSub(G, impl, op, temp);
             // initial open post()'d
         }
@@ -407,7 +414,8 @@ void SharedPV::close()
         if(impl->current)
             impl->current = Value();
 
-        impl->subscribers.clear();
+        // channel close() will also close operations
+        impl->msubscribers.clear();
         channels = std::move(impl->channels);
     }
 
@@ -433,13 +441,14 @@ void SharedPV::post(const Value& val)
 
     impl->current.assign(val);
 
-    if(impl->subscribers.empty())
+    if(impl->msubscribers.empty())
         return;
 
     auto copy(val.clone());
 
-    for(auto& sub : impl->subscribers) {
-        sub->post(copy);
+    for(auto& sub : impl->msubscribers) {
+        if(sub->mcontrol)
+            sub->mcontrol->post(copy);
     }
 }
 
