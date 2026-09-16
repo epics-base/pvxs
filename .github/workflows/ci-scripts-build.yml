@@ -340,7 +340,12 @@ jobs:
     env:
       ABICHECK_REF: 3737f9f960ae14a7b24dbb6e9b686e49fb563673
       REPORT_DIR: ${{ github.workspace }}/abicheck-reports
-      EXPECTED_TARGETS: ${{ runner.temp }}/abicheck-expected-targets.json
+      # Outside REPORT_DIR on purpose -- `abicheck aggregate` scans that
+      # directory, and a manifest inside it is picked up as an extra target.
+      # Not runner.temp: the `runner` context is not available in a job's
+      # env block, and referencing it there makes the whole workflow file
+      # invalid (the run fails instantly with no jobs).
+      EXPECTED_TARGETS: ${{ github.workspace }}/abicheck-expected-targets.json
       CANDIDATE_DIR: ${{ github.workspace }}/abicheck-candidate
       BASELINE_RELEASE_DIR: ${{ github.workspace }}/abicheck-baseline-release
       BASELINE_MAIN_DIR: ${{ github.workspace }}/abicheck-baseline-main
