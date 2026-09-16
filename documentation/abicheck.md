@@ -149,8 +149,20 @@ That path is **two jobs, deliberately**. The build job runs the requested
 revision's own code — its `cue.py`, its submodules, its makefiles — and so
 holds `contents: read` and nothing else. It hands the captured baseline-set
 to the second job as an artifact. The publishing job holds `contents:
-write` but executes none of that code: it checks out only the default
-branch and consumes the artifact.
+write` but executes none of that code: it consumes the artifact and
+nothing else.
+
+"Checks out the default branch" is enforced, not assumed. `workflow_dispatch`
+runs from whichever ref was selected, and a checkout with no `ref:` takes
+*that* ref — so the publishing job both refuses to run unless `github.ref`
+is the default branch, and names the default branch explicitly in its
+checkout. Without that, dispatching from any branch would load
+`./.github/actions/abicheck-publish-baseline` from that branch into the job
+holding `contents: write` and `github.token`.
+
+The build job is deliberately left unrestricted: it is read-only, so
+dispatching it from a branch to exercise the capture is safe, and the
+publish job simply does not run.
 
 Without the split, historical code could overwrite
 `.github/actions/abicheck-publish-baseline` in the shared workspace before

@@ -214,15 +214,22 @@ jobs:
 
   bootstrap-publish:
     needs: bootstrap-build
+    # workflow_dispatch runs from whatever ref was selected, and a checkout
+    # with no `ref:` takes that ref -- so without this guard the local
+    # publishing action below would be loaded from the dispatched branch
+    # into a job holding contents: write and github.token.  Enforced twice
+    # on purpose: refuse to run off the default branch at all, and name the
+    # branch explicitly in the checkout rather than inheriting it.
+    if: >-
+      github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
       contents: write
     steps:
-    # Default branch only.  No historical checkout, no historical code, so
-    # the local action loaded below is the reviewed one.
     - uses: actions/checkout@v6
       with:
+        ref: ${{ github.event.repository.default_branch }}
         persist-credentials: false
 
     - uses: actions/download-artifact@v7
