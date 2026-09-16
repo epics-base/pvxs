@@ -57,7 +57,7 @@ runs:
 
     - name: Package the baseline-set
       id: stage
-      uses: abicheck/abicheck/actions/stage-baseline@bc2ee0cc76ec44ef989043f82c34c2b50b2555bb
+      uses: abicheck/abicheck/actions/stage-baseline@0b50f807c8ea05719e414e78564c31ef32a2ea4e
       with:
         baseline-path: ${{ inputs.baseline-path }}
         asset-name-template: 'abicheck-baseline-{profile}.tar.zst'

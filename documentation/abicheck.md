@@ -38,9 +38,29 @@ leg's own tests so nothing else that needs the checkout is disturbed, and it
 runs even if those tests failed, as long as the build produced an
 installation — an unrelated red test must not hide an ABI finding.
 
-`.ci-local/abicheck-inputs.sh` resolves and validates those inputs and emits
-the capture Action's `libraries` declaration. It contains no build
-orchestration, no report schema and no gate logic.
+`.ci-local/abicheck-components.json` declares the two components by pattern.
+Resolving those patterns — picking the real shared object out of its SONAME
+alias chain, checking it is an ELF `ET_DYN`, agreeing the target machine
+between components, expanding the owned header sets and refusing a stale
+exclusion — belongs to abicheck's `actions/baseline` (`library-spec`), not to
+PVXS.
+
+Two assertions the declaration makes deliberately, because a glob alone would
+lose them:
+
+* `include/pvxs/versionNum.h` is named explicitly as well as matched by the
+  `*.h` glob. A header pattern that matches nothing is a hard error, so a
+  build that did not generate it fails the capture instead of quietly
+  producing a 14-header surface in which every `versionNum` declaration reads
+  as removed.
+* `header_exclude: include/pvxs/iochooks.h` is likewise an error if it matches
+  nothing, so if that header is ever renamed or moved, `libpvxs` cannot
+  silently re-acquire its sibling's declarations.
+
+What is left in `.github/actions/abicheck-capture` is PVXS's own build-system
+knowledge and nothing else: where `cue.py` recorded `EPICS_BASE`, which
+`EPICS_HOST_ARCH` it built for, the native-Linux guard, and rendering those
+two values into the declaration.
 
 ## Ownership
 
@@ -99,8 +119,18 @@ baseline must additionally come from this repository's own
 `ci-scripts-build.yml`, from a push to the pull request's base branch, and
 from a run that **concluded success**. Without the last two, a failed run's
 snapshot could become the baseline — the capture step deliberately still
-runs after a test failure. "No eligible run", "the lookup failed" and "the
-artifact expired" are reported as three different outcomes.
+runs after a test failure. That eligibility decision is
+`actions/verify-baseline-source` (`mode: producer-run`), which also prints
+every candidate it rejected and why, so "no eligible baseline" can say what
+it did see. "No eligible run", "the lookup failed" and "the artifact
+expired" remain three different outcomes; PVXS only fetches the bytes once
+the verifier reports `eligible`.
+
+Tag identity for the release channel is the same Action in `mode: tag`. It
+resolves `refs/tags/<name>` explicitly rather than the commits endpoint
+(which would happily resolve a branch), peels an annotated tag, assumes no
+`v` prefix — PVXS tags are bare versions like `1.5.2` — and requires the tag
+to name the exact commit that was built.
 
 A missing, expired, wrong-profile or incompatible baseline produces an
 explicit unavailable/incomplete outcome. It never produces a clean result.
@@ -168,9 +198,18 @@ a comparison did not run, the expected checks are still declared and
 `abicheck aggregate` produces an aggregate document in which those targets
 are `unavailable`. That is the same shape the publisher reads on the happy
 path, so a producer failure cannot arrive at the publisher as a file it
-does not understand. The document is structurally validated before it is
-handed downstream — its status, coverage, gate blocks and target states —
-rather than merely checked for the presence of a schema key.
+does not understand. `actions/aggregate` validates the document before it is
+handed downstream and separates the axes: `compatibility-exit` carries
+`abicheck aggregate`'s own 0/1/2/4 without failing the step, which is what
+keeps this gate advisory, while a refused declaration, a usage error or a
+document that does not describe a real outcome fails the step. Operational
+loss cannot reach the publisher disguised as an empty finding set.
+
+A report that ran and produced garbage is tracked as `unusable`, separately
+from one that never ran at all. Both stay declared expected, so one
+component's failure never costs the others their diagnostics, and `channels`
+splits the roll-up per baseline channel — "the release comparison is
+missing" is distinguishable from "one component is missing".
 
 Only the checks an event actually has are declared: the accepted-main
 comparisons exist on a pull request, not on a push or tag build.
@@ -183,30 +222,26 @@ prominently reporting a detected break. ABICC remains authoritative.
 
 ## Dependency status
 
-Every abicheck Action and the analysis package itself are pinned to one
-merged revision, `bc2ee0cc76ec44ef989043f82c34c2b50b2555bb` on abicheck
-`main` — the squash of abicheck PR #1311, which added
-`actions/verify-source-run` and `actions/report`. Nothing here depends on
-an unmerged revision any more.
+Every abicheck Action is pinned to one merged, immutable revision:
+`0b50f807c8ea05719e414e78564c31ef32a2ea4e` on abicheck `main` — the squash of
+abicheck [#1315](https://github.com/abicheck/abicheck/pull/1315), which added
+`actions/aggregate`, `actions/verify-baseline-source` and `library-spec`
+resolution, on top of [#1311](https://github.com/abicheck/abicheck/pull/1311)
+(report-only publication and the aggregate-shaped PR comment). Nothing here
+depends on an unmerged revision, a mutable branch, or a placeholder ref.
 
-Two things were checked before moving the pin, not assumed:
+The one local composite Action that remains for a generic reason is
+`.github/actions/abicheck-publish-baseline`. Upstream's
+`publish-baseline.yml` implements a stronger immutability contract but
+captures from `build-output.json` artifacts and cannot publish an
+already-captured baseline-set; extending it with a pre-captured-set input is
+the owed follow-up, tracked upstream. Writing a second publisher here would
+be exactly the competing implementation this integration exists to remove.
 
-- `actions/report`, `actions/verify-source-run`, `actions/baseline`,
-  `actions/check-target` and `actions/stage-baseline` are byte-identical
-  between the revisions this branch previously pinned and `bc2ee0c`, so the
-  move changes no Action interface this caller depends on.
-- The analysis package is not identical — `bc2ee0c` carries four later
-  fixes, among them input resolution for sided `--header`/`--include`
-  values and the demotion of binary churn on exports no public header
-  declares. Both components were therefore re-captured at `--depth headers`
-  on `bc2ee0c` and re-aggregated: schema `1.11`, `status: pass`,
-  `coverage: complete`, 2/2 targets `analyzed`, and the PR comment renders
-  from that aggregate.
-
-## Known issues (abicheck product bugs, re-measured 2026-09-16 on `bc2ee0c`)
+## Known issues (abicheck product bugs, re-measured 2026-09-16 on `0b50f80`)
 
 Re-measured on this branch with abicheck
-`bc2ee0cc76ec44ef989043f82c34c2b50b2555bb` and CastXML 0.7.0, by comparing
+`0b50f807c8ea05719e414e78564c31ef32a2ea4e` and CastXML 0.7.0, by comparing
 each component's snapshot against itself — a byte-identical pair, where the
 only correct answer is "no change".
 

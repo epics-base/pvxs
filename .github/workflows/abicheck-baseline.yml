@@ -48,7 +48,7 @@ permissions:
 
 env:
   ABICHECK_PROFILE: linux-x86_64-gcc-default-base7.0-bundled-libevent
-  ABICHECK_REF: bc2ee0cc76ec44ef989043f82c34c2b50b2555bb
+  ABICHECK_REF: 0b50f807c8ea05719e414e78564c31ef32a2ea4e
   SETUP_PATH: .ci-local
   CMP: gcc
   BCFG: default
@@ -72,54 +72,55 @@ jobs:
       with:
         persist-credentials: false
 
-    - name: Verify the producer run and that it built a real tag
-      id: source
-      env:
-        GH_TOKEN: ${{ github.token }}
-        RUN_ID: ${{ github.event.workflow_run.id }}
-      run: |
-        set -euo pipefail
-        run_json=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID")
-        test "$(jq -r '.repository.full_name' <<<"$run_json")" = "$GITHUB_REPOSITORY"
-        test "$(jq -r '.path' <<<"$run_json")" = ".github/workflows/ci-scripts-build.yml"
-        test "$(jq -r '.event' <<<"$run_json")" = "push"
-        test "$(jq -r '.conclusion' <<<"$run_json")" = "success"
-        head_sha=$(jq -r '.head_sha' <<<"$run_json")
-        tag=$(jq -r '.head_branch' <<<"$run_json")
+    # Two questions, both answered by the shared verifier rather than by
+    # hand-written gh/jq here:
+    #   1. may a baseline be taken from this producer run at all?
+    #   2. is the name it built really a tag, and does that tag name the
+    #      exact commit that was built?
+    # PVXS tags are bare versions ("1.5.2"), not "v"-prefixed; the verifier
+    # assumes no prefix and resolves refs/tags/<name> explicitly, peeling an
+    # annotated tag rather than treating the tag object as the commit.
+    - name: Verify the producer run
+      id: producer
+      uses: abicheck/abicheck/actions/verify-baseline-source@0b50f807c8ea05719e414e78564c31ef32a2ea4e
+      with:
+        mode: producer-run
+        workflow: .github/workflows/ci-scripts-build.yml
+        expect-event: push
+        expect-head-sha: ${{ github.event.workflow_run.head_sha }}
+        expect-head-branch: ${{ github.event.workflow_run.head_branch }}
 
-        # PVXS tags are bare versions ("1.5.2"), not "v"-prefixed, so a
-        # name-shaped guard would exclude every real release. Instead prove
-        # the name IS a tag by resolving refs/tags/<name> explicitly -- the
-        # commits endpoint accepts any revision name and would happily
-        # resolve a branch.
-        if ! ref=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$tag" 2>/dev/null); then
-          echo "run $RUN_ID built '$tag', which is not a tag of this repository; nothing to publish"
-          echo "skip=true" >> "$GITHUB_OUTPUT"
-          exit 0
-        fi
-        obj_sha=$(jq -r '.object.sha' <<<"$ref")
-        if [ "$(jq -r '.object.type' <<<"$ref")" = "tag" ]; then
-          # Annotated tag: peel it to the commit it points at.
-          obj_sha=$(gh api "repos/$GITHUB_REPOSITORY/git/tags/$obj_sha" --jq '.object.sha')
-        fi
-        test "$obj_sha" = "$head_sha"
-        { echo "run-id=$RUN_ID"; echo "tag=$tag"; echo "skip=false"; } >> "$GITHUB_OUTPUT"
+    - name: Verify the tag identity
+      id: tag
+      if: ${{ steps.producer.outputs.eligible == 'true' }}
+      uses: abicheck/abicheck/actions/verify-baseline-source@0b50f807c8ea05719e414e78564c31ef32a2ea4e
+      with:
+        mode: tag
+        tag: ${{ github.event.workflow_run.head_branch }}
+        built-sha: ${{ github.event.workflow_run.head_sha }}
+
+    - name: Note why nothing will be published
+      if: ${{ steps.producer.outputs.eligible != 'true' || steps.tag.outputs.eligible != 'true' }}
+      run: |
+        echo "producer outcome: ${{ steps.producer.outputs.outcome || 'not evaluated' }}"
+        echo "tag outcome:      ${{ steps.tag.outputs.outcome || 'not evaluated' }}"
+        echo "nothing to publish from this run."
 
     - uses: actions/download-artifact@v7
-      if: ${{ steps.source.outputs.skip == 'false' }}
+      if: ${{ steps.tag.outputs.eligible == 'true' }}
       with:
         name: abicheck-candidate-${{ env.ABICHECK_PROFILE }}
         path: ${{ runner.temp }}/baseline-set
-        run-id: ${{ steps.source.outputs.run-id }}
+        run-id: ${{ steps.producer.outputs.run-id }}
         github-token: ${{ github.token }}
 
     - name: Publish the baseline-set
-      if: ${{ steps.source.outputs.skip == 'false' }}
+      if: ${{ steps.tag.outputs.eligible == 'true' }}
       uses: ./.github/actions/abicheck-publish-baseline
       with:
         baseline-path: ${{ runner.temp }}/baseline-set
         profile: ${{ env.ABICHECK_PROFILE }}
-        tag: ${{ steps.source.outputs.tag }}
+        tag: ${{ github.event.workflow_run.head_branch }}
         overwrite: 'false'
         github-token: ${{ github.token }}
 
