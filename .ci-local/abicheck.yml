@@ -1,8 +1,30 @@
-# CastXML packaged on the GitHub runner cannot parse libstdc++ with PVXS's
-# default C++11 mode.  This is deliberately recorded as extraction context;
-# the libraries themselves keep PVXS's normal build flags.
+# Extraction context for the advisory abicheck shadow check.
+#
+# This describes how the PUBLIC HEADERS are parsed for ABI/API extraction.
+# It does not change how PVXS itself is built: the libraries analysed are
+# exactly the ones `cue.py build` produced, with PVXS's normal flags.
 compile:
   options:
+    # PVXS's supported consumer language mode is C++11, and that is what its
+    # own build uses.  Parsing the public headers in C++11 or C++14 against
+    # the runner's libstdc++ 13 is not possible with the supported CastXML
+    # (0.7.0, Clang 20): libstdc++ 13's <bits/char_traits.h> fails with
+    # "statement not allowed in constexpr function" in both modes.  Measured
+    # on 2026-09-16; a conda-forge GCC 16 libstdc++ is worse (it needs C++20
+    # to parse its own <type_traits>).
+    #
+    # This is therefore a deliberate, disclosed deviation of the extraction
+    # context from the consumer language mode, not a silent one, and it is
+    # applied identically to libpvxs and libpvxsIoc so the two components and
+    # both sides of every comparison are interpreted the same way.  Remove it
+    # as soon as a toolchain that parses the headers in C++11 is available.
     - -std=c++17
+    #
+    # Deliberately NOT set here: PVXS_API_BUILDING (a library-build-only
+    # macro) and PVXS_ENABLE_EXPERT_API (an opt-in expert surface).  The
+    # headers are parsed the way an ordinary consumer sees them.
 assurance:
+  # A comparison that could not complete must be reported as incomplete, not
+  # as a clean result.  The shadow gate stays advisory; this controls what
+  # the analysis is allowed to claim, not whether CI goes red.
   require_complete: true

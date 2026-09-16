@@ -17,11 +17,24 @@ on:
   pull_request:
   workflow_dispatch:
 
+# The analysis side is unprivileged on purpose.  A contributor's fork PR
+# builds and analyses here with no write access and no secrets; publishing
+# the result to the PR is a separate, trusted workflow_run job
+# (.github/workflows/abicheck-report.yml).
+permissions:
+  contents: read
+
 env:
   SETUP_PATH: .ci-local
   CMP: gcc
   _PVXS_ABORT_ON_CRIT: 1
   PVXS_LOG: pvxs.*=WARN
+  # Baseline identity is more than a version number: this names the exact
+  # build arrangement the captured snapshots and every baseline they are
+  # compared against must share -- native Linux x86_64, GCC, default
+  # (shared) configuration, EPICS Base 7.0, and PVXS's own bundled
+  # libevent rather than the system one.
+  ABICHECK_PROFILE: linux-x86_64-gcc-default-base7.0-bundled-libevent
 
 jobs:
   native:
@@ -49,6 +62,12 @@ jobs:
             base: "7.0"
             extra: "CMD_CPPFLAGS=-Werror"
             doc: 1
+            # The one configuration that additionally captures ABI/API
+            # evidence for the advisory abicheck shadow check.  Native
+            # Linux, GCC, shared libraries, bundled libevent -- the
+            # profile the published baselines are built for.  Every other
+            # leg is untouched.
+            abicheck: 1
 
           - name: Native Linux (libc++ debug)
             os: ubuntu-latest
@@ -167,6 +186,7 @@ jobs:
     - name: Build libevent
       run: python .ci/cue.py exec python .ci-local/libevent.py
     - name: Build main module
+      id: build-main
       run: python .ci/cue.py build
     - name: Generate Docs
       if: matrix.doc
@@ -215,6 +235,348 @@ jobs:
         name: tapfiles ${{ matrix.name }}
         path: '**/O.*/*.tap'
         if-no-files-found: ignore
+
+    # ── ABI/API evidence capture (advisory; ABICC stays authoritative) ────
+    #
+    # This reuses the build this job has already done.  There is no second
+    # build, no second dependency preparation and no source-tree input: the
+    # capture reads the headers in include/pvxs and the shared objects in
+    # lib/$EPICS_HOST_ARCH that `cue.py build` installed, plus the EPICS
+    # Base include roots `cue.py prepare` had already set up.
+    #
+    # It runs last, after this job's own tests, so nothing else that needs
+    # this checkout is disturbed, and it runs even when those tests failed
+    # (an unrelated red test must not hide an ABI finding) as long as the
+    # build itself produced an installation to look at.
+    #
+    # Depth is L2 -- exported symbols and debug info (L0/L1) plus the public
+    # header AST.  That is a deliberate reduction from the previous
+    # integration, which rebuilt both revisions under Bear to reach L3:
+    # build-drift coverage is NOT part of this check any more.
+    - name: Resolve ABI capture inputs
+      id: abi-inputs
+      if: ${{ always() && matrix.abicheck && steps.build-main.outcome == 'success' }}
+      run: ./.ci-local/abicheck-inputs.sh
+
+    - name: Capture ABI snapshots (libpvxs, libpvxsIoc)
+      id: abi-capture
+      if: ${{ always() && steps.abi-inputs.outcome == 'success' }}
+      uses: abicheck/abicheck/actions/baseline@3737f9f960ae14a7b24dbb6e9b686e49fb563673
+      with:
+        libraries: ${{ steps.abi-inputs.outputs.libraries }}
+        output-dir: ${{ runner.temp }}/abicheck-candidate
+        # The revision actually built and analysed here.  For a pull_request
+        # this is the merge commit, NOT the PR head SHA -- the publisher
+        # reports both, and never conflates them.
+        project-ref: ${{ github.sha }}
+        profile: ${{ env.ABICHECK_PROFILE }}
+        depth: headers
+        build-config: .ci-local/abicheck.yml
+        baseline-generation: '1'
+        generator-action-ref: 3737f9f960ae14a7b24dbb6e9b686e49fb563673
+        # A libpvxs snapshot is ~124 MB of JSON at this depth (measured);
+        # two of them per run is worth compressing before it becomes CI
+        # artifact storage.  The decoded content is identical.
+        snapshot-compression: zstd
+
+    - name: Record analysis context
+      id: abi-context
+      if: ${{ always() && steps.abi-capture.outcome == 'success' }}
+      env:
+        OUT: ${{ runner.temp }}/abicheck-candidate/analysis-context.json
+        PR_NUMBER: ${{ github.event.pull_request.number }}
+        PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        PR_BASE_REF: ${{ github.event.pull_request.base.ref }}
+      run: |
+        set -eu
+        # Diagnostics only.  Everything here is produced by an unprivileged
+        # job, so the trusted publisher re-derives the repository, run and
+        # pull request from the GitHub API and never trusts these values.
+        python3 - <<'EOF'
+        import json, os
+        doc = {
+            "note": "untrusted: produced by the analysis job, re-derive via the API",
+            "repository": os.environ["GITHUB_REPOSITORY"],
+            "run_id": os.environ["GITHUB_RUN_ID"],
+            "run_attempt": os.environ["GITHUB_RUN_ATTEMPT"],
+            "workflow_ref": os.environ["GITHUB_WORKFLOW_REF"],
+            "event": os.environ["GITHUB_EVENT_NAME"],
+            "build_sha": os.environ["GITHUB_SHA"],
+            "pr_number": os.environ.get("PR_NUMBER") or None,
+            "pr_head_sha": os.environ.get("PR_HEAD_SHA") or None,
+            "pr_base_sha": os.environ.get("PR_BASE_SHA") or None,
+            "pr_base_ref": os.environ.get("PR_BASE_REF") or None,
+            "profile": os.environ["ABICHECK_PROFILE"],
+            "abicheck_ref": "3737f9f960ae14a7b24dbb6e9b686e49fb563673",
+        }
+        with open(os.environ["OUT"], "w") as f:
+            json.dump(doc, f, indent=2, sort_keys=True)
+        EOF
+
+    - name: Upload ABI snapshots
+      if: ${{ always() && steps.abi-capture.outcome == 'success' }}
+      uses: actions/upload-artifact@v7
+      with:
+        retention-days: 30
+        name: abicheck-candidate-${{ env.ABICHECK_PROFILE }}
+        path: ${{ runner.temp }}/abicheck-candidate
+        if-no-files-found: error
+
+    - name: Report a failed ABI capture
+      if: ${{ always() && matrix.abicheck && steps.build-main.outcome == 'success' && steps.abi-capture.outcome != 'success' }}
+      run: |
+        set -eu
+        mkdir -p "$RUNNER_TEMP/abicheck-candidate-failure"
+        printf '%s\n' \
+          '{"state":"capture-failed",' \
+          ' "inputs_outcome":"${{ steps.abi-inputs.outcome }}",' \
+          ' "capture_outcome":"${{ steps.abi-capture.outcome }}"}' \
+          > "$RUNNER_TEMP/abicheck-candidate-failure/state.json"
+        echo "::warning::ABI capture did not complete; downstream comparison will report an incomplete analysis, not a clean result."
+
+    - name: Upload ABI capture failure marker
+      if: ${{ always() && matrix.abicheck && steps.build-main.outcome == 'success' && steps.abi-capture.outcome != 'success' }}
+      uses: actions/upload-artifact@v7
+      with:
+        retention-days: 30
+        name: abicheck-candidate-failure-${{ env.ABICHECK_PROFILE }}
+        path: ${{ runner.temp }}/abicheck-candidate-failure
+        if-no-files-found: error
+
+  # ── ABI/API comparison (advisory; ABICC stays authoritative) ────────────
+  #
+  # Consumes the snapshots the selected native leg captured in THIS run.
+  # It never extracts anything itself: both operands are snapshots, so no
+  # compiler, no castxml and no EPICS checkout are needed here.
+  #
+  # `needs: native` waits for the whole matrix -- GitHub cannot depend on a
+  # single leg -- but `if: always()` means an unrelated red leg (a flaky
+  # RTEMS test, an OSX build) never suppresses an available ABI finding.
+  abicheck:
+    name: ABI/API check (advisory)
+    needs: native
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    # Measured: ~4 min for both snapshot-to-snapshot comparisons plus
+    # staging, on a warm runner.  Bounded well above that, but nowhere near
+    # wide enough to let a hung step masquerade as a narrowed scope.
+    timeout-minutes: 25
+    permissions:
+      contents: read
+      # Needed only to list this repository's own default-branch runs when
+      # resolving the accepted-main baseline.  No write scope, no secrets.
+      actions: read
+    env:
+      ABICHECK_REF: 3737f9f960ae14a7b24dbb6e9b686e49fb563673
+      REPORT_DIR: ${{ github.workspace }}/abicheck-reports
+      CANDIDATE_DIR: ${{ github.workspace }}/abicheck-candidate
+      BASELINE_RELEASE_DIR: ${{ github.workspace }}/abicheck-baseline-release
+      BASELINE_MAIN_DIR: ${{ github.workspace }}/abicheck-baseline-main
+    steps:
+    - uses: actions/checkout@v6
+      with:
+        persist-credentials: false
+
+    - name: Download candidate snapshots
+      id: candidate
+      # Narrow, deliberate: a missing artifact is a real outcome this job
+      # must report as an incomplete analysis, not a step that silently
+      # succeeds.  Every later step branches on this outcome explicitly.
+      continue-on-error: true
+      uses: actions/download-artifact@v7
+      with:
+        name: abicheck-candidate-${{ env.ABICHECK_PROFILE }}
+        path: ${{ env.CANDIDATE_DIR }}
+
+    - name: Record a missing candidate capture
+      if: ${{ steps.candidate.outcome != 'success' }}
+      run: |
+        set -eu
+        mkdir -p "$REPORT_DIR"
+        printf '%s\n' '{"state":"candidate-capture-unavailable"}' \
+          > "$REPORT_DIR/abicheck-incomplete.json"
+        echo "::warning::No ABI snapshots were captured for profile $ABICHECK_PROFILE; reporting an incomplete analysis."
+
+    # ── Baseline staging ────────────────────────────────────────────────
+    # Two distinct questions, two distinct channels, never merged:
+    #   accepted-main    what did THIS pull request introduce?
+    #   release-contract what changed since the selected supported release?
+
+    - name: Stage the release-contract baseline
+      if: ${{ steps.candidate.outcome == 'success' }}
+      id: baseline-release
+      continue-on-error: true
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        set -eu
+        mkdir -p "$BASELINE_RELEASE_DIR"
+        asset="abicheck-baseline-${ABICHECK_PROFILE}.tar.zst"
+        tag=$(gh release list --repo "$GITHUB_REPOSITORY" --limit 1 --json tagName \
+                --jq '.[0].tagName // empty')
+        if [ -z "$tag" ]; then
+          echo "no release to resolve a release-contract baseline from"
+          exit 1
+        fi
+        echo "tag=$tag" >> "$GITHUB_OUTPUT"
+        gh release download "$tag" --repo "$GITHUB_REPOSITORY" \
+          --pattern "$asset" --dir "$BASELINE_RELEASE_DIR"
+
+    - name: Stage the accepted-main baseline
+      if: ${{ steps.candidate.outcome == 'success' && github.event_name == 'pull_request' }}
+      id: baseline-main
+      continue-on-error: true
+      env:
+        GH_TOKEN: ${{ github.token }}
+        BASE_SHA: ${{ github.event.pull_request.base.sha }}
+      run: |
+        set -eu
+        # Resolve by explicit revision.  Not "the newest master run", not a
+        # cache restore-keys prefix match: the run whose head_sha is exactly
+        # the commit this pull request is based on.
+        run_id=$(gh api -X GET \
+          "repos/$GITHUB_REPOSITORY/actions/workflows/ci-scripts-build.yml/runs" \
+          -f head_sha="$BASE_SHA" -f status=completed -f event=push \
+          --jq '[.workflow_runs[] | select(.head_sha == env.BASE_SHA)]
+                 | sort_by(.run_number) | last | .id // empty')
+        if [ -z "$run_id" ]; then
+          echo "no completed default-branch run found for base $BASE_SHA"
+          exit 1
+        fi
+        echo "run-id=$run_id" >> "$GITHUB_OUTPUT"
+        mkdir -p "$BASELINE_MAIN_DIR"
+        gh run download "$run_id" --repo "$GITHUB_REPOSITORY" \
+          --name "abicheck-candidate-${ABICHECK_PROFILE}" --dir "$BASELINE_MAIN_DIR"
+
+    # ── Comparison ──────────────────────────────────────────────────────
+    # One check-target invocation per (component, channel).  Every one of
+    # them reads the same two candidate snapshots captured once upstream:
+    # nothing here re-extracts, and nothing re-compares for rendering.
+
+    - name: Locate candidate snapshots
+      id: snapshots
+      if: ${{ steps.candidate.outcome == 'success' }}
+      run: ./.ci-local/abicheck-snapshots.sh "$CANDIDATE_DIR"
+
+    - name: 'libpvxs vs accepted-main'
+      id: main-core
+      if: ${{ always() && steps.snapshots.outcome == 'success' && steps.baseline-main.outcome == 'success' }}
+      uses: abicheck/abicheck/actions/check-target@3737f9f960ae14a7b24dbb6e9b686e49fb563673
+      with:
+        name: libpvxs
+        profile: ${{ env.ABICHECK_PROFILE }}
+        baseline-channel: accepted-main
+        baseline-path: ${{ env.BASELINE_MAIN_DIR }}
+        baseline-required: 'false'
+        expected-project-ref: ${{ github.event.pull_request.base.sha }}
+        expected-baseline-generation: '1'
+        requested-depth: headers
+        gate-mode: advisory
+        new-library: ${{ steps.snapshots.outputs.libpvxs }}
+        build-config: .ci-local/abicheck.yml
+        head-sha: ${{ github.sha }}
+        base-ref: ${{ github.event.pull_request.base.ref }}
+        severity-preset: default
+
+    - name: 'libpvxsIoc vs accepted-main'
+      id: main-ioc
+      if: ${{ always() && steps.snapshots.outcome == 'success' && steps.baseline-main.outcome == 'success' }}
+      uses: abicheck/abicheck/actions/check-target@3737f9f960ae14a7b24dbb6e9b686e49fb563673
+      with:
+        name: libpvxsIoc
+        profile: ${{ env.ABICHECK_PROFILE }}
+        baseline-channel: accepted-main
+        baseline-path: ${{ env.BASELINE_MAIN_DIR }}
+        baseline-required: 'false'
+        expected-project-ref: ${{ github.event.pull_request.base.sha }}
+        expected-baseline-generation: '1'
+        requested-depth: headers
+        gate-mode: advisory
+        new-library: ${{ steps.snapshots.outputs.libpvxsioc }}
+        build-config: .ci-local/abicheck.yml
+        head-sha: ${{ github.sha }}
+        base-ref: ${{ github.event.pull_request.base.ref }}
+        severity-preset: default
+
+    - name: 'libpvxs vs release-contract'
+      id: rel-core
+      if: ${{ always() && steps.snapshots.outcome == 'success' && steps.baseline-release.outcome == 'success' }}
+      uses: abicheck/abicheck/actions/check-target@3737f9f960ae14a7b24dbb6e9b686e49fb563673
+      with:
+        name: libpvxs
+        profile: ${{ env.ABICHECK_PROFILE }}
+        baseline-channel: release-contract
+        baseline-path: ${{ env.BASELINE_RELEASE_DIR }}/abicheck-baseline-${{ env.ABICHECK_PROFILE }}.tar.zst
+        baseline-required: 'false'
+        expected-baseline-generation: '1'
+        requested-depth: headers
+        gate-mode: advisory
+        explicit-id: release
+        new-library: ${{ steps.snapshots.outputs.libpvxs }}
+        build-config: .ci-local/abicheck.yml
+        head-sha: ${{ github.sha }}
+        severity-preset: default
+
+    - name: 'libpvxsIoc vs release-contract'
+      id: rel-ioc
+      if: ${{ always() && steps.snapshots.outcome == 'success' && steps.baseline-release.outcome == 'success' }}
+      uses: abicheck/abicheck/actions/check-target@3737f9f960ae14a7b24dbb6e9b686e49fb563673
+      with:
+        name: libpvxsIoc
+        profile: ${{ env.ABICHECK_PROFILE }}
+        baseline-channel: release-contract
+        baseline-path: ${{ env.BASELINE_RELEASE_DIR }}/abicheck-baseline-${{ env.ABICHECK_PROFILE }}.tar.zst
+        baseline-required: 'false'
+        expected-baseline-generation: '1'
+        requested-depth: headers
+        gate-mode: advisory
+        explicit-id: release
+        new-library: ${{ steps.snapshots.outputs.libpvxsioc }}
+        build-config: .ci-local/abicheck.yml
+        head-sha: ${{ github.sha }}
+        severity-preset: default
+
+    # Every check is named explicitly, whether or not it produced a report.
+    # A check that did not run is declared expected-but-unavailable, so the
+    # aggregate says "incomplete", never "no changes found".
+    - name: Collect check reports
+      if: ${{ always() && steps.candidate.outcome == 'success' }}
+      run: |
+        ./.ci-local/abicheck-collect.sh "$REPORT_DIR" \
+          "${{ steps.main-core.outputs.check-id || format('libpvxs@{0}#accepted-main@headers', env.ABICHECK_PROFILE) }}=${{ steps.main-core.outputs.report-path }}" \
+          "${{ steps.main-ioc.outputs.check-id || format('libpvxsIoc@{0}#accepted-main@headers', env.ABICHECK_PROFILE) }}=${{ steps.main-ioc.outputs.report-path }}" \
+          "${{ steps.rel-core.outputs.check-id || format('libpvxs@{0}#release-contract@headers~release', env.ABICHECK_PROFILE) }}=${{ steps.rel-core.outputs.report-path }}" \
+          "${{ steps.rel-ioc.outputs.check-id || format('libpvxsIoc@{0}#release-contract@headers~release', env.ABICHECK_PROFILE) }}=${{ steps.rel-ioc.outputs.report-path }}"
+
+    # One aggregate document over both components and both channels.  The
+    # publisher renders exactly this; it never re-runs a comparison and
+    # never classifies a verdict of its own.
+    - name: Aggregate both components
+      id: aggregate
+      if: ${{ always() && steps.candidate.outcome == 'success' }}
+      run: |
+        set -eu
+        python -m pip install --disable-pip-version-check -q \
+          "git+https://github.com/abicheck/abicheck@${ABICHECK_REF}"
+        # A non-zero exit here is a compatibility/coverage outcome, not an
+        # operational failure: the gate for this shadow check is advisory.
+        # What must not happen is a missing or empty aggregate document.
+        abicheck aggregate "$REPORT_DIR" \
+          --manifest "$REPORT_DIR/expected-targets.json" \
+          -o "json=$REPORT_DIR/aggregate.json" \
+          -o "text=$REPORT_DIR/aggregate.txt" || true
+        python3 -c "import json,sys; d=json.load(open(sys.argv[1])); sys.exit(0 if isinstance(d, dict) and 'aggregate_schema_version' in d else 'aggregate document is not a valid aggregate report')" \
+          "$REPORT_DIR/aggregate.json"
+
+    - name: Upload ABI reports
+      if: ${{ always() }}
+      uses: actions/upload-artifact@v7
+      with:
+        retention-days: 30
+        name: abicheck-reports-${{ env.ABICHECK_PROFILE }}
+        path: ${{ env.REPORT_DIR }}
+        if-no-files-found: error
 
   docker:
     name: ${{ matrix.name }}

@@ -1,0 +1,108 @@
+# Publish the release-contract ABI baseline-set for the selected profile.
+#
+# The snapshots themselves are not produced here: they are the same capture
+# ci-scripts-build.yml already performed for the tagged build.  This workflow
+# packages that capture and attaches it to the release, so later pull
+# requests have something to compare against without rebuilding history.
+#
+# Trust boundary: it publishes ONLY from a tag build of this repository --
+# never from a pull request, and never from a fork.  A snapshot produced by
+# contributor code can never reach the release-contract channel.
+#
+# The accepted-main channel needs nothing here.  A pull request resolves it
+# by downloading the ci-scripts-build.yml run for its own base commit, keyed
+# by that exact SHA (see the `Stage the accepted-main baseline` step there),
+# and check-target rejects a baseline whose recorded project_ref is not that
+# commit.
+
+name: ABI baseline
+
+on:
+  workflow_run:
+    workflows: ["PVXS EPICS"]
+    types: [completed]
+  # One-time bootstrap for a historical release that predates this check:
+  # build that tag once by hand (workflow_dispatch on PVXS EPICS at the tag),
+  # then publish the resulting capture here.  The result is retained as a
+  # release asset; it is never rebuilt per pull request, and a missing one is
+  # reported as a missing baseline rather than silently replaced.
+  workflow_dispatch:
+    inputs:
+      run-id:
+        description: 'PVXS EPICS run id whose captured snapshots to publish.'
+        required: true
+        type: string
+      tag:
+        description: 'Release tag to attach the baseline-set to.'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+env:
+  ABICHECK_PROFILE: linux-x86_64-gcc-default-base7.0-bundled-libevent
+  ABICHECK_REF: 3737f9f960ae14a7b24dbb6e9b686e49fb563673
+
+jobs:
+  publish:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.event == 'push' &&
+       github.event.workflow_run.conclusion == 'success' &&
+       startsWith(github.event.workflow_run.head_branch, 'v'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      actions: read
+      # The single write scope in this integration, and only here: attaching
+      # the packaged baseline-set to an existing release of this repository.
+      contents: write
+    steps:
+    - name: Resolve the producer run
+      id: source
+      env:
+        GH_TOKEN: ${{ github.token }}
+        RUN_ID: ${{ inputs.run-id || github.event.workflow_run.id }}
+        TAG: ${{ inputs.tag }}
+      run: |
+        set -euo pipefail
+        run_json=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID")
+        test "$(jq -r '.repository.full_name' <<<"$run_json")" = "$GITHUB_REPOSITORY"
+        test "$(jq -r '.path' <<<"$run_json")" = ".github/workflows/ci-scripts-build.yml"
+        event=$(jq -r '.event' <<<"$run_json")
+        case "$event" in
+          push|workflow_dispatch) ;;
+          *) echo "::error::run $RUN_ID was triggered by '$event'; only a tag build may publish a baseline"; exit 1 ;;
+        esac
+        head_sha=$(jq -r '.head_sha' <<<"$run_json")
+        tag=${TAG:-$(jq -r '.head_branch' <<<"$run_json")}
+        # The tag must exist and must point at the commit that was built.
+        tag_sha=$(gh api "repos/$GITHUB_REPOSITORY/commits/$tag" --jq '.sha')
+        test "$tag_sha" = "$head_sha"
+        { echo "run-id=$RUN_ID"; echo "tag=$tag"; echo "sha=$head_sha"; } >> "$GITHUB_OUTPUT"
+
+    - uses: actions/download-artifact@v7
+      with:
+        name: abicheck-candidate-${{ env.ABICHECK_PROFILE }}
+        path: ${{ runner.temp }}/baseline-set
+        run-id: ${{ steps.source.outputs.run-id }}
+        github-token: ${{ github.token }}
+
+    - name: Package the baseline-set
+      id: stage
+      uses: abicheck/abicheck/actions/stage-baseline@3737f9f960ae14a7b24dbb6e9b686e49fb563673
+      with:
+        baseline-path: ${{ runner.temp }}/baseline-set
+        asset-name-template: 'abicheck-baseline-{profile}.tar.zst'
+        profile: ${{ env.ABICHECK_PROFILE }}
+
+    - name: Attach to the release
+      env:
+        GH_TOKEN: ${{ github.token }}
+        TAG: ${{ steps.source.outputs.tag }}
+        ASSET: ${{ steps.stage.outputs.archive-path }}
+      run: |
+        set -euo pipefail
+        test -s "$ASSET"
+        gh release upload "$TAG" "$ASSET" --repo "$GITHUB_REPOSITORY" --clobber
