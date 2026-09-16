@@ -89,8 +89,12 @@ struct Tester : public TesterBase
             testSkip(2, "timeout");
         }
 
+        auto before(cli.report());
         op.reset();
         cli.cacheClear("", client::Context::Disconnect);
+        auto after(cli.report());
+        testEq(before.connections.size(), 1u);
+        testEq(after.connections.size(), 0u);
     }
 
     void loopback(bool get)
@@ -562,7 +566,7 @@ void testCancel()
 
 MAIN(testput)
 {
-    testPlan(52);
+    testPlan(58);
     testSetup();
     logger_config_env();
     Tester().loopback(false);
