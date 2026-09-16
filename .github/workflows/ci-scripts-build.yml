@@ -263,7 +263,7 @@ jobs:
         # pull_request this is the merge commit, NOT the PR head.
         project-ref: ${{ github.sha }}
         profile: ${{ env.ABICHECK_PROFILE }}
-        abicheck-ref: 3737f9f960ae14a7b24dbb6e9b686e49fb563673
+        abicheck-ref: bc2ee0cc76ec44ef989043f82c34c2b50b2555bb
 
     - name: Record analysis context
       id: abi-context
@@ -294,7 +294,7 @@ jobs:
             "pr_base_sha": os.environ.get("PR_BASE_SHA") or None,
             "pr_base_ref": os.environ.get("PR_BASE_REF") or None,
             "profile": os.environ["ABICHECK_PROFILE"],
-            "abicheck_ref": "3737f9f960ae14a7b24dbb6e9b686e49fb563673",
+            "abicheck_ref": "bc2ee0cc76ec44ef989043f82c34c2b50b2555bb",
         }
         with open(os.environ["OUT"], "w") as f:
             json.dump(doc, f, indent=2, sort_keys=True)
@@ -338,7 +338,7 @@ jobs:
       # resolving the accepted-main baseline.  No write scope, no secrets.
       actions: read
     env:
-      ABICHECK_REF: 3737f9f960ae14a7b24dbb6e9b686e49fb563673
+      ABICHECK_REF: bc2ee0cc76ec44ef989043f82c34c2b50b2555bb
       REPORT_DIR: ${{ github.workspace }}/abicheck-reports
       # Outside REPORT_DIR on purpose -- `abicheck aggregate` scans that
       # directory, and a manifest inside it is picked up as an extra target.
@@ -461,7 +461,7 @@ jobs:
     - name: 'libpvxs vs accepted-main'
       id: main-core
       if: ${{ always() && steps.snapshots.outcome == 'success' && steps.baseline-main.outcome == 'success' }}
-      uses: abicheck/abicheck/actions/check-target@3737f9f960ae14a7b24dbb6e9b686e49fb563673
+      uses: abicheck/abicheck/actions/check-target@bc2ee0cc76ec44ef989043f82c34c2b50b2555bb
       with:
         name: libpvxs
         profile: ${{ env.ABICHECK_PROFILE }}
@@ -481,7 +481,7 @@ jobs:
     - name: 'libpvxsIoc vs accepted-main'
       id: main-ioc
       if: ${{ always() && steps.snapshots.outcome == 'success' && steps.baseline-main.outcome == 'success' }}
-      uses: abicheck/abicheck/actions/check-target@3737f9f960ae14a7b24dbb6e9b686e49fb563673
+      uses: abicheck/abicheck/actions/check-target@bc2ee0cc76ec44ef989043f82c34c2b50b2555bb
       with:
         name: libpvxsIoc
         profile: ${{ env.ABICHECK_PROFILE }}
@@ -501,7 +501,7 @@ jobs:
     - name: 'libpvxs vs release-contract'
       id: rel-core
       if: ${{ always() && steps.snapshots.outcome == 'success' && steps.baseline-release.outcome == 'success' }}
-      uses: abicheck/abicheck/actions/check-target@3737f9f960ae14a7b24dbb6e9b686e49fb563673
+      uses: abicheck/abicheck/actions/check-target@bc2ee0cc76ec44ef989043f82c34c2b50b2555bb
       with:
         name: libpvxs
         profile: ${{ env.ABICHECK_PROFILE }}
@@ -520,7 +520,7 @@ jobs:
     - name: 'libpvxsIoc vs release-contract'
       id: rel-ioc
       if: ${{ always() && steps.snapshots.outcome == 'success' && steps.baseline-release.outcome == 'success' }}
-      uses: abicheck/abicheck/actions/check-target@3737f9f960ae14a7b24dbb6e9b686e49fb563673
+      uses: abicheck/abicheck/actions/check-target@bc2ee0cc76ec44ef989043f82c34c2b50b2555bb
       with:
         name: libpvxsIoc
         profile: ${{ env.ABICHECK_PROFILE }}

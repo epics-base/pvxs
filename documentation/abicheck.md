@@ -183,40 +183,66 @@ prominently reporting a detected break. ABICC remains authoritative.
 
 ## Dependency status
 
-The publisher is pinned to abicheck `2324460fd3c2276f12cbce657b3ca00ad1d1449d`,
-which carries `actions/verify-source-run` and `actions/report`. That
-revision is immutable and is the head of abicheck PR #1311, which is open
-for review but **not yet merged**.
+Every abicheck Action and the analysis package itself are pinned to one
+merged revision, `bc2ee0cc76ec44ef989043f82c34c2b50b2555bb` on abicheck
+`main` — the squash of abicheck PR #1311, which added
+`actions/verify-source-run` and `actions/report`. Nothing here depends on
+an unmerged revision any more.
 
-The pin was moved here from an earlier revision of the same PR because six
-intervening commits fixed defects in the parts this integration depends on
-— among them the PR-head/merge-commit association check, the behaviour of a
-refused artifact, and shell-value handling. Staying on the older revision
-would have meant pinning to known-defective run-selection code. The PVXS caller's inputs and outputs have been checked
-against that revision's declared schemas, but no deployed publication has
-been demonstrated, because `workflow_run` only runs the default-branch copy
-of the publisher.
+Two things were checked before moving the pin, not assumed:
 
-This is a temporary pin on an unmerged revision. Before this goes upstream
-it must be moved to the merged abicheck commit.
+- `actions/report`, `actions/verify-source-run`, `actions/baseline`,
+  `actions/check-target` and `actions/stage-baseline` are byte-identical
+  between the revisions this branch previously pinned and `bc2ee0c`, so the
+  move changes no Action interface this caller depends on.
+- The analysis package is not identical — `bc2ee0c` carries four later
+  fixes, among them input resolution for sided `--header`/`--include`
+  values and the demotion of binary churn on exports no public header
+  declares. Both components were therefore re-captured at `--depth headers`
+  on `bc2ee0c` and re-aggregated: schema `1.11`, `status: pass`,
+  `coverage: complete`, 2/2 targets `analyzed`, and the PR comment renders
+  from that aggregate.
 
-## Known issues (abicheck product bugs, measured 2026-09-16)
+## Known issues (abicheck product bugs, re-measured 2026-09-16 on `bc2ee0c`)
 
-Reproduced on this branch with abicheck
-`3737f9f960ae14a7b24dbb6e9b686e49fb563673` and CastXML 0.7.0, by comparing a
-snapshot against itself (a byte-identical pair, verdict `NO_CHANGE`):
+Re-measured on this branch with abicheck
+`bc2ee0cc76ec44ef989043f82c34c2b50b2555bb` and CastXML 0.7.0, by comparing
+each component's snapshot against itself — a byte-identical pair, where the
+only correct answer is "no change".
 
-1. **Include-context headers become export obligations.** 123 EPICS Base
-   symbols (`epicsMutex::lock()`, `epicsEvent::wait()`, `errVerbose`, …) are
-   charged to `libpvxs` as its own missing exports, and `pvxs::version_str()`
-   and friends are charged to `libpvxsIoc`. Both are reached only through
-   `-I` include roots.
-2. **Persistent hygiene findings are reported as changes.** An unchanged
-   library reports 505 (`libpvxs`) and 339 (`libpvxsIoc`) findings, almost
-   all `exported_not_public` template guard variables that are identical on
-   both sides.
+What the merged revision fixed: nothing these two produce now gates or is
+presented as a change. Both self-comparisons return verdict `NO_CHANGE`
+with `0` gating findings, and the rendered PR comment says so explicitly —
+"♻️ 845 pre-existing cross-source hygiene findings present on both sides —
+not introduced by this change", with an audit line reading `845 detected ·
+0 gating · 845 non gating`.
 
-Together these would make an unchanged pull request produce an 844-finding
-comment, 126 of them false. Both are fixes owed by abicheck, not by
-suppressions here. This integration must not be enabled for anything beyond
-shadow reporting until they are fixed.
+What is still wrong, at the detection layer:
+
+1. **Include-context headers are still charged to the component.** EPICS
+   Base symbols (`epicsMutex::lock()`, `epicsEvent::wait()`, `errVerbose`,
+   …) and libstdc++ internals still appear in `libpvxs`'s own itemized
+   list, and `pvxs::version_str()`/`version_int()`/`version_abi_int()` —
+   declared in `pvxs/version.h`, which `libpvxs` owns — appear in
+   `libpvxsIoc`'s. All are reached only through `-I` include roots, not
+   through the component's own declared public surface.
+2. **Persistent hygiene findings are still detected on an unchanged pair.**
+   An unchanged `libpvxs` detects 505 findings and `libpvxsIoc` 340, listed
+   as 505 and 340 "Modifications" in the per-component review rendering,
+   although both fold to zero gating findings.
+
+So the effect on a pull-request comment is now bounded and honestly
+labelled, but the underlying attribution is still wrong and the full
+per-component report is still 845 items of noise. Both remain fixes owed by
+abicheck, not by suppressions here. This integration stays advisory until
+they are fixed.
+
+### Capture flake worth watching
+
+One `abicheck dump` invocation in this re-measurement failed with "CastXML
+of unknown version was found", from the same CastXML 0.7.0 binary that a
+`--version` probe and an immediately following dump both accepted. It has
+been seen once and did not reproduce on retry. If a capture leg fails that
+way in CI, it is this, not a real toolchain problem — but the leg fails
+loudly rather than degrading to "no findings", which is the intended
+behaviour.

@@ -59,7 +59,7 @@ runs:
 
     - name: Capture ABI snapshots (libpvxs, libpvxsIoc)
       id: capture
-      uses: abicheck/abicheck/actions/baseline@3737f9f960ae14a7b24dbb6e9b686e49fb563673
+      uses: abicheck/abicheck/actions/baseline@bc2ee0cc76ec44ef989043f82c34c2b50b2555bb
       with:
         libraries: ${{ steps.inputs.outputs.libraries }}
         output-dir: ${{ inputs.output-dir }}

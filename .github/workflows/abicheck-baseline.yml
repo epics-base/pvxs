@@ -48,7 +48,7 @@ permissions:
 
 env:
   ABICHECK_PROFILE: linux-x86_64-gcc-default-base7.0-bundled-libevent
-  ABICHECK_REF: 3737f9f960ae14a7b24dbb6e9b686e49fb563673
+  ABICHECK_REF: bc2ee0cc76ec44ef989043f82c34c2b50b2555bb
   SETUP_PATH: .ci-local
   CMP: gcc
   BCFG: default
