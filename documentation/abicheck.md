@@ -144,7 +144,10 @@ made against it.
   is the ephemeral merge commit, not the PR head, and the comment shows the
   analysed one. They are never substituted for each other.
 * Publication is bound to the producer attempt that triggered it, and
-  concurrency is keyed per pull request and profile.
+  concurrency is keyed per pull request and profile. The sticky comment's
+  ordering guard is given the *producer's* run id and attempt, not the
+  publisher's: ordering by the publisher would let a late re-run of an
+  older commit overwrite a newer result.
 * It never checks out, installs, imports or executes pull-request code or
   pull-request-built binaries, and it runs no analysis.
 * A publication failure fails visibly and is never reported as a clean
@@ -180,11 +183,16 @@ prominently reporting a detected break. ABICC remains authoritative.
 
 ## Dependency status
 
-The publisher is pinned to abicheck `9bc92e635fbfae3252189d3bd09059cc28599490`,
+The publisher is pinned to abicheck `2324460fd3c2276f12cbce657b3ca00ad1d1449d`,
 which carries `actions/verify-source-run` and `actions/report`. That
 revision is immutable and is the head of abicheck PR #1311, which is open
-for review but **not yet merged**, and whose own CI had not finished when
-this pin was taken. The PVXS caller's inputs and outputs have been checked
+for review but **not yet merged**.
+
+The pin was moved here from an earlier revision of the same PR because six
+intervening commits fixed defects in the parts this integration depends on
+— among them the PR-head/merge-commit association check, the behaviour of a
+refused artifact, and shell-value handling. Staying on the older revision
+would have meant pinning to known-defective run-selection code. The PVXS caller's inputs and outputs have been checked
 against that revision's declared schemas, but no deployed publication has
 been demonstrated, because `workflow_run` only runs the default-branch copy
 of the publisher.

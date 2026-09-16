@@ -71,7 +71,7 @@ jobs:
     # never inferred is a compatibility outcome from the run's conclusion.
     - name: Verify the producer run and fetch its reports
       id: source
-      uses: abicheck/abicheck/actions/verify-source-run@9bc92e635fbfae3252189d3bd09059cc28599490
+      uses: abicheck/abicheck/actions/verify-source-run@2324460fd3c2276f12cbce657b3ca00ad1d1449d
       with:
         source-run-id: ${{ github.event.workflow_run.id }}
         expect-repository: ${{ github.repository }}
@@ -98,13 +98,21 @@ jobs:
     # the other.
     - name: Publish the ABI/API report
       id: publish
-      uses: abicheck/abicheck/actions/report@9bc92e635fbfae3252189d3bd09059cc28599490
+      uses: abicheck/abicheck/actions/report@2324460fd3c2276f12cbce657b3ca00ad1d1449d
       with:
         report: ${{ steps.source.outputs.artifact-path }}/aggregate.json
         repository: ${{ github.repository }}
         pr-number: ${{ steps.source.outputs.pr-number }}
         sha: ${{ steps.source.outputs.tested-sha }}
         profile: ${{ env.ABICHECK_PROFILE }}
+        # Order the sticky comment by the PRODUCER's run, not this
+        # publisher's.  Left unset these default to the publisher's own run
+        # id, which orders by when publication was triggered -- so a late
+        # re-run of an older commit would look newer than the current
+        # result and overwrite it, which is the inversion the guard exists
+        # to prevent.
+        source-run-id: ${{ github.event.workflow_run.id }}
+        source-run-attempt: ${{ github.event.workflow_run.run_attempt }}
         post-on: changes
         detail: standard
         run-label: >-
