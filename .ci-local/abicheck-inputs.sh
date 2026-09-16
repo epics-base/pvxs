@@ -5,7 +5,7 @@
 # shape, and prints `key=value` lines (also appended to $GITHUB_OUTPUT when
 # running under GitHub Actions).
 #
-# Public-surface ownership (see .github/workflows/abicheck-analyse.yml):
+# Public-surface ownership (see documentation/abicheck.md):
 #
 #   libpvxs     owns every installed include/pvxs/*.h except iochooks.h
 #   libpvxsIoc  owns include/pvxs/iochooks.h only; the core headers are

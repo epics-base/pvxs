@@ -89,7 +89,13 @@ runs:
             echo "::notice::$name is already published for $TAG; leaving the existing immutable asset in place"
             exit 0
           fi
+          # gh refuses an asset name that already exists unless --clobber
+          # is given, so the explicit-overwrite path has to pass it.  It is
+          # deliberately confined to this branch: the default path above
+          # never replaces a published baseline.
           echo "::warning::replacing the existing $name for $TAG at explicit request"
+          gh release upload "$TAG" "$ASSET" --repo "$GITHUB_REPOSITORY" --clobber
+          exit 0
         fi
 
         gh release upload "$TAG" "$ASSET" --repo "$GITHUB_REPOSITORY"
