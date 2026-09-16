@@ -238,6 +238,47 @@ already-captured baseline-set; extending it with a pre-captured-set input is
 the owed follow-up, tracked upstream. Writing a second publisher here would
 be exactly the competing implementation this integration exists to remove.
 
+## Validated on a real runner
+
+First execution of the migrated Actions: `PVXS EPICS` run
+[35130816212](https://github.com/napetrov/pvxs/actions/runs/35130816212) at
+`22ca9d5`, conclusion success.
+
+| Step | Result | Duration |
+|---|---|---|
+| Resolve EPICS build context | `EPICS_BASE`/arch resolved, declaration rendered | 0.07 s |
+| `library-spec` resolution | `libpvxs` 15 headers, `libpvxsIoc` 1 header, 4 include roots each | 0.24 s |
+| Capture (both components) | libpvxs 120.9 MB → 2.06 MB zstd; libpvxsIoc 2.35 MB → 94.5 KB | 360 s |
+| `resolve-baseline` `kind: members` | `outcome=resolved`, 2 members, correct `libpvxsIoc` casing | 28.6 s |
+| `verify-baseline-source` | `not_found`, with the rejection printed | 0.86 s |
+| `aggregate` collect / run / validate | 4 declared, 0 collected, 4 missing, 0 unusable | 0.23 / 0.69 / 0.23 s |
+
+The capture resolved the same 15/1 header split from the *same* SONAME alias
+chain the old script filtered by hand: `lib/linux-x86_64/` holds
+`libpvxs.so` → `libpvxs.so.1.5`, and the `libpvxs.so*` glob de-duplicated to
+the one real object rather than analysing the alias twice.
+
+The eligibility check earned its place on this very run. A `push` run for
+the PR's exact base commit on the right branch, from the right workflow,
+did exist — and it had **failed** (an unrelated timing-sensitive test).
+`verify-baseline-source` refused it and said why:
+
+```
+rejected run 35112205613: wrong-conclusion: the source run concluded 'failure'; allowed: success
+no eligible producer run was found. This is a real lifecycle state ..., not an error --
+and not a clean comparison either.
+```
+
+Without that rule a failed run's snapshot would have become the baseline
+this pull request was measured against. Selecting on base SHA alone is not
+enough, and this is the case that shows it.
+
+The aggregate then reported `status=fail`, `coverage=empty`, `0/4`
+analyzed, `compatibility-exit=1`, with `channels` splitting accepted-main
+0/2 and release-contract 0/2 — **and the step still succeeded**, which is
+the advisory contract working: a compatibility/coverage code is carried,
+not swallowed and not turned into a job failure.
+
 ## Known issues (abicheck product bugs, re-measured 2026-09-16 on `0b50f80`)
 
 Re-measured on this branch with abicheck
