@@ -2,6 +2,9 @@ name: Release artifacts
 
 on: [push, pull_request, workflow_dispatch]
 
+permissions:
+  contents: read
+
 jobs:
   artifacts:
     runs-on: ubuntu-latest
@@ -50,3 +53,109 @@ jobs:
         name: abi-diff
         path: 'compat_reports'
         if-no-files-found: ignore
+
+  abicheck:
+    runs-on: ubuntu-26.04
+    env:
+      SETUP_PATH: .ci-local
+      SET: defaults
+      CMP: gcc
+      BCFG: default
+      BASE: "7.0"
+      _PVXS_ABORT_ON_CRIT: 1
+      PVXS_LOG: pvxs.*=WARN
+
+    steps:
+    - uses: actions/checkout@v6
+      with:
+        submodules: true
+        fetch-depth: 0
+        fetch-tags: true
+
+    - name: Scratch
+      run: |
+        set -x
+        git log -n1
+        git tag -l
+        git describe --always HEAD
+        git describe --tags HEAD
+
+    - name: "apt-get install"
+      run: |
+        sudo apt-get update
+        sudo apt-get -y install libcrypt-dev libreadline-dev libevent-dev \
+         castxml
+
+    - uses: actions/setup-python@v6
+      with:
+        python-version: 3.13
+
+    - name: Install abicheck
+      run: |
+        pip install abicheck
+        abicheck --version
+
+    - name: Prepare and compile dependencies
+      run: python .ci/cue.py prepare
+
+    - name: Build main module
+      run: python .ci/cue.py build
+
+    - name: abicheck dump current
+      run: |
+        abicheck dump \
+        lib/linux-*/libpvxs.so.* \
+        -I${HOME}/.cache/base-7.0/include \
+        -I${HOME}/.cache/base-7.0/include/os/Linux \
+        -I${HOME}/.cache/base-7.0/include/compiler/gcc \
+        -H include/ \
+        > /tmp/pvxs-CUR.json
+
+        abicheck dump \
+        lib/linux-*/libpvxsIoc.so.* \
+        -I${HOME}/.cache/base-7.0/include \
+        -I${HOME}/.cache/base-7.0/include/os/Linux \
+        -I${HOME}/.cache/base-7.0/include/compiler/gcc \
+        -I include/ \
+        -H include/pvxs/iochooks.h \
+        > /tmp/pvxsIoc-CUR.json
+
+    - name: Clean
+      run: make distclean
+
+    - name: Roll-back to previous release
+      run: |
+        # find previous tag,
+        NEW="$(git describe --tags HEAD)"
+        OLD="$(git describe --tags --abbrev=0 "$NEW")"
+        [ "$OLD" = "$NEW" ] && OLD="$(git describe --tags --abbrev=0 "$NEW"~)"
+        git reset --hard "$OLD"
+        git log -n1
+
+    - name: Build main module (again)
+      run: python .ci/cue.py build
+
+    - name: abicheck dump previous
+      run: |
+        abicheck dump \
+        lib/linux-*/libpvxs.so.* \
+        -I${HOME}/.cache/base-7.0/include \
+        -I${HOME}/.cache/base-7.0/include/os/Linux \
+        -I${HOME}/.cache/base-7.0/include/compiler/gcc \
+        -H include/ \
+        > /tmp/pvxs-PREV.json
+
+        abicheck dump \
+        lib/linux-*/libpvxsIoc.so.* \
+        -I${HOME}/.cache/base-7.0/include \
+        -I${HOME}/.cache/base-7.0/include/os/Linux \
+        -I${HOME}/.cache/base-7.0/include/compiler/gcc \
+        -I include/ \
+        -H include/pvxs/iochooks.h \
+        > /tmp/pvxsIoc-PREV.json
+
+    - name: abidump report libpvxs
+      run: abicheck compare /tmp/pvxs-PREV.json /tmp/pvxs-CUR.json
+
+    - name: abidump report libpvxsIoc
+      run: abicheck compare /tmp/pvxsIoc-PREV.json /tmp/pvxsIoc-CUR.json
