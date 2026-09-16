@@ -1,0 +1,95 @@
+name: 'PVXS ABI baseline publication'
+description: >-
+  Package a baseline-set and attach it to a release, after checking that
+  the set really describes the profile it is being published as.
+
+  Shared by abicheck-baseline.yml's automatic and bootstrap paths so the
+  eligibility rules exist once.
+
+inputs:
+  baseline-path:
+    description: 'Baseline-set directory (manifest.json plus snapshots).'
+    required: true
+  profile:
+    description: 'Profile this set is being published as.'
+    required: true
+  tag:
+    description: 'Release tag to attach the asset to.'
+    required: true
+  overwrite:
+    description: >
+      Replace an existing asset of the same name. A published baseline is
+      an immutable reference: replacing it silently changes the meaning of
+      every comparison already made against it.
+    required: false
+    default: 'false'
+  github-token:
+    description: 'Token with contents: write for the release upload.'
+    required: true
+
+runs:
+  using: 'composite'
+  steps:
+    # actions/stage-baseline packages whatever it is given and explicitly
+    # does not check the manifest's own profile against the name it is
+    # published under, so a mismatch would produce an asset that
+    # resolve-baseline later rejects as wrong_profile for every consumer.
+    # Check it here, before anything is uploaded.
+    - name: Check the set describes the profile it is published as
+      shell: bash
+      env:
+        BASELINE_PATH: ${{ inputs.baseline-path }}
+        EXPECTED_PROFILE: ${{ inputs.profile }}
+      run: |
+        set -euo pipefail
+        manifest="$BASELINE_PATH/manifest.json"
+        test -s "$manifest" || { echo "::error::no manifest.json in $BASELINE_PATH"; exit 1; }
+        actual=$(jq -r '.profile // empty' "$manifest")
+        if [ "$actual" != "$EXPECTED_PROFILE" ]; then
+          echo "::error::baseline-set records profile '$actual' but is being published as '$EXPECTED_PROFILE'"
+          exit 1
+        fi
+        libs=$(jq -r '[.artifacts[].library] | sort | join(",")' "$manifest")
+        if [ "$libs" != "libpvxs,libpvxsIoc" ]; then
+          echo "::error::baseline-set covers '$libs', expected both libpvxs and libpvxsIoc"
+          exit 1
+        fi
+
+    - name: Package the baseline-set
+      id: stage
+      uses: abicheck/abicheck/actions/stage-baseline@3737f9f960ae14a7b24dbb6e9b686e49fb563673
+      with:
+        baseline-path: ${{ inputs.baseline-path }}
+        asset-name-template: 'abicheck-baseline-{profile}.tar.zst'
+        profile: ${{ inputs.profile }}
+
+    - name: Attach to the release
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+        TAG: ${{ inputs.tag }}
+        ASSET: ${{ steps.stage.outputs.archive-path }}
+        OVERWRITE: ${{ inputs.overwrite }}
+      run: |
+        set -euo pipefail
+        test -s "$ASSET"
+        name=$(basename "$ASSET")
+
+        if ! gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+          echo "::error::no release exists for tag $TAG; create the release before publishing its baseline"
+          exit 1
+        fi
+
+        existing=$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" \
+                     --json assets --jq "[.assets[].name] | index(\"$name\") // empty")
+        if [ -n "$existing" ]; then
+          if [ "$OVERWRITE" != "true" ]; then
+            # Re-running publication for a release that already has its
+            # baseline is a no-op, not a silent replacement.
+            echo "::notice::$name is already published for $TAG; leaving the existing immutable asset in place"
+            exit 0
+          fi
+          echo "::warning::replacing the existing $name for $TAG at explicit request"
+        fi
+
+        gh release upload "$TAG" "$ASSET" --repo "$GITHUB_REPOSITORY"

@@ -253,31 +253,17 @@ jobs:
     # header AST.  That is a deliberate reduction from the previous
     # integration, which rebuilt both revisions under Bear to reach L3:
     # build-drift coverage is NOT part of this check any more.
-    - name: Resolve ABI capture inputs
-      id: abi-inputs
-      if: ${{ always() && matrix.abicheck && steps.build-main.outcome == 'success' }}
-      run: ./.ci-local/abicheck-inputs.sh
-
     - name: Capture ABI snapshots (libpvxs, libpvxsIoc)
       id: abi-capture
-      if: ${{ always() && steps.abi-inputs.outcome == 'success' }}
-      uses: abicheck/abicheck/actions/baseline@3737f9f960ae14a7b24dbb6e9b686e49fb563673
+      if: ${{ always() && matrix.abicheck && steps.build-main.outcome == 'success' }}
+      uses: ./.github/actions/abicheck-capture
       with:
-        libraries: ${{ steps.abi-inputs.outputs.libraries }}
         output-dir: ${{ runner.temp }}/abicheck-candidate
-        # The revision actually built and analysed here.  For a pull_request
-        # this is the merge commit, NOT the PR head SHA -- the publisher
-        # reports both, and never conflates them.
+        # The revision actually built and analysed here.  For a
+        # pull_request this is the merge commit, NOT the PR head.
         project-ref: ${{ github.sha }}
         profile: ${{ env.ABICHECK_PROFILE }}
-        depth: headers
-        build-config: .ci-local/abicheck.yml
-        baseline-generation: '1'
-        generator-action-ref: 3737f9f960ae14a7b24dbb6e9b686e49fb563673
-        # A libpvxs snapshot is ~124 MB of JSON at this depth (measured);
-        # two of them per run is worth compressing before it becomes CI
-        # artifact storage.  The decoded content is identical.
-        snapshot-compression: zstd
+        abicheck-ref: 3737f9f960ae14a7b24dbb6e9b686e49fb563673
 
     - name: Record analysis context
       id: abi-context
@@ -389,14 +375,10 @@ jobs:
         name: abicheck-candidate-${{ env.ABICHECK_PROFILE }}
         path: ${{ env.CANDIDATE_DIR }}
 
-    - name: Record a missing candidate capture
+    - name: Note a missing candidate capture
       if: ${{ steps.candidate.outcome != 'success' }}
       run: |
-        set -eu
-        mkdir -p "$REPORT_DIR"
-        printf '%s\n' '{"state":"candidate-capture-unavailable"}' \
-          > "$REPORT_DIR/abicheck-incomplete.json"
-        echo "::warning::No ABI snapshots were captured for profile $ABICHECK_PROFILE; reporting an incomplete analysis."
+        echo "::warning::No ABI snapshots were captured for profile $ABICHECK_PROFILE; every check will aggregate as unavailable."
 
     # ── Baseline staging ────────────────────────────────────────────────
     # Two distinct questions, two distinct channels, never merged:
@@ -430,24 +412,51 @@ jobs:
       env:
         GH_TOKEN: ${{ github.token }}
         BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        BASE_REF: ${{ github.event.pull_request.base.ref }}
       run: |
-        set -eu
-        # Resolve by explicit revision.  Not "the newest master run", not a
-        # cache restore-keys prefix match: the run whose head_sha is exactly
-        # the commit this pull request is based on.
-        run_id=$(gh api -X GET \
-          "repos/$GITHUB_REPOSITORY/actions/workflows/ci-scripts-build.yml/runs" \
-          -f head_sha="$BASE_SHA" -f status=completed -f event=push \
-          --jq '[.workflow_runs[] | select(.head_sha == env.BASE_SHA)]
-                 | sort_by(.run_number) | last | .id // empty')
+        set -euo pipefail
+        # A baseline is eligible only if ALL of these hold.  Selecting by
+        # exact base SHA alone is not enough: a push run at that SHA can
+        # come from any branch and can have failed, and the capture step
+        # deliberately still runs after a test failure -- so without these
+        # filters a failed run's snapshot could become the baseline this
+        # pull request is measured against.
+        #
+        #   * produced by this repository's own ci-scripts-build.yml
+        #   * triggered by a push to the pull request's own base branch
+        #   * head_sha exactly the commit this pull request is based on
+        #   * concluded success
+        #
+        # "No eligible run" and "the lookup itself failed" are different
+        # outcomes and are reported differently.
+        if ! runs=$(gh api -X GET \
+              "repos/$GITHUB_REPOSITORY/actions/workflows/ci-scripts-build.yml/runs" \
+              -f head_sha="$BASE_SHA" -f status=completed -f event=push \
+              -f branch="$BASE_REF" --paginate); then
+          echo "::warning::baseline lookup failed for base $BASE_SHA (GitHub API error); reporting an unavailable baseline, not a clean result"
+          echo "state=lookup-failed" >> "$GITHUB_OUTPUT"
+          exit 1
+        fi
+        run_id=$(jq -r --arg sha "$BASE_SHA" --arg ref "$BASE_REF" '
+          [ .workflow_runs[]
+            | select(.head_sha == $sha)
+            | select(.head_branch == $ref)
+            | select(.conclusion == "success") ]
+          | sort_by(.run_number) | last | .id // empty' <<<"$runs")
         if [ -z "$run_id" ]; then
-          echo "no completed default-branch run found for base $BASE_SHA"
+          echo "no successful $BASE_REF run found for base $BASE_SHA"
+          echo "state=not-found" >> "$GITHUB_OUTPUT"
           exit 1
         fi
         echo "run-id=$run_id" >> "$GITHUB_OUTPUT"
+        echo "state=resolved" >> "$GITHUB_OUTPUT"
         mkdir -p "$BASELINE_MAIN_DIR"
-        gh run download "$run_id" --repo "$GITHUB_REPOSITORY" \
-          --name "abicheck-candidate-${ABICHECK_PROFILE}" --dir "$BASELINE_MAIN_DIR"
+        if ! gh run download "$run_id" --repo "$GITHUB_REPOSITORY" \
+             --name "abicheck-candidate-${ABICHECK_PROFILE}" --dir "$BASELINE_MAIN_DIR"; then
+          echo "::warning::baseline run $run_id has no abicheck-candidate-$ABICHECK_PROFILE artifact (expired or never produced)"
+          echo "state=artifact-unavailable" >> "$GITHUB_OUTPUT"
+          exit 1
+        fi
 
     # ── Comparison ──────────────────────────────────────────────────────
     # One check-target invocation per (component, channel).  Every one of
@@ -537,37 +546,69 @@ jobs:
         head-sha: ${{ github.sha }}
         severity-preset: default
 
-    # Every check is named explicitly, whether or not it produced a report.
-    # A check that did not run is declared expected-but-unavailable, so the
-    # aggregate says "incomplete", never "no changes found".
+    # Every check this event was supposed to produce is named explicitly,
+    # whether or not it produced a report.  A check that did not run is
+    # declared expected-but-unavailable, so the aggregate says "incomplete"
+    # rather than "no changes found".
+    #
+    # The accepted-main checks exist only on a pull request: there is no PR
+    # base to compare against on a push or tag build, and declaring them
+    # there would manufacture unavailable checks for a question the event
+    # never asked.
     - name: Collect check reports
-      if: ${{ always() && steps.candidate.outcome == 'success' }}
+      if: ${{ always() }}
       run: |
-        ./.ci-local/abicheck-collect.sh "$REPORT_DIR" \
-          "${{ steps.main-core.outputs.check-id || format('libpvxs@{0}#accepted-main@headers', env.ABICHECK_PROFILE) }}=${{ steps.main-core.outputs.report-path }}" \
-          "${{ steps.main-ioc.outputs.check-id || format('libpvxsIoc@{0}#accepted-main@headers', env.ABICHECK_PROFILE) }}=${{ steps.main-ioc.outputs.report-path }}" \
-          "${{ steps.rel-core.outputs.check-id || format('libpvxs@{0}#release-contract@headers~release', env.ABICHECK_PROFILE) }}=${{ steps.rel-core.outputs.report-path }}" \
-          "${{ steps.rel-ioc.outputs.check-id || format('libpvxsIoc@{0}#release-contract@headers~release', env.ABICHECK_PROFILE) }}=${{ steps.rel-ioc.outputs.report-path }}"
+        set -eu
+        checks=""
+        if [ "${{ github.event_name }}" = "pull_request" ]; then
+          checks="$checks ${{ steps.main-core.outputs.check-id || format('libpvxs@{0}#accepted-main@headers', env.ABICHECK_PROFILE) }}=${{ steps.main-core.outputs.report-path }}"
+          checks="$checks ${{ steps.main-ioc.outputs.check-id || format('libpvxsIoc@{0}#accepted-main@headers', env.ABICHECK_PROFILE) }}=${{ steps.main-ioc.outputs.report-path }}"
+        fi
+        checks="$checks ${{ steps.rel-core.outputs.check-id || format('libpvxs@{0}#release-contract@headers~release', env.ABICHECK_PROFILE) }}=${{ steps.rel-core.outputs.report-path }}"
+        checks="$checks ${{ steps.rel-ioc.outputs.check-id || format('libpvxsIoc@{0}#release-contract@headers~release', env.ABICHECK_PROFILE) }}=${{ steps.rel-ioc.outputs.report-path }}"
+        # shellcheck disable=SC2086
+        ./.ci-local/abicheck-collect.sh "$REPORT_DIR" $checks
 
     # One aggregate document over both components and both channels.  The
     # publisher renders exactly this; it never re-runs a comparison and
     # never classifies a verdict of its own.
+    # One aggregate document over every check this event declared.  The
+    # publisher renders exactly this; it never re-runs a comparison and
+    # never classifies a verdict of its own.
+    #
+    # This runs even when no candidate was captured: an aggregate over
+    # entirely unavailable targets is the canonical way to say "the
+    # analysis did not complete", and it is the same document shape the
+    # publisher reads on the happy path.  There is no second, divergent
+    # incomplete-state file.
     - name: Aggregate both components
       id: aggregate
-      if: ${{ always() && steps.candidate.outcome == 'success' }}
+      if: ${{ always() }}
       run: |
-        set -eu
+        set -euo pipefail
         python -m pip install --disable-pip-version-check -q \
           "git+https://github.com/abicheck/abicheck@${ABICHECK_REF}"
-        # A non-zero exit here is a compatibility/coverage outcome, not an
-        # operational failure: the gate for this shadow check is advisory.
-        # What must not happen is a missing or empty aggregate document.
+
+        # abicheck aggregate's exit code is a compatibility/coverage
+        # decision (0 pass, 1 coverage/quality, 2 API break, 4 ABI break),
+        # and this shadow check's gate is advisory -- so a non-zero code is
+        # recorded, not swallowed.  64 is a usage error and is ours to fix.
+        rc=0
         abicheck aggregate "$REPORT_DIR" \
           --manifest "$REPORT_DIR/expected-targets.json" \
           -o "json=$REPORT_DIR/aggregate.json" \
-          -o "text=$REPORT_DIR/aggregate.txt" || true
-        python3 -c "import json,sys; d=json.load(open(sys.argv[1])); sys.exit(0 if isinstance(d, dict) and 'aggregate_schema_version' in d else 'aggregate document is not a valid aggregate report')" \
-          "$REPORT_DIR/aggregate.json"
+          -o "text=$REPORT_DIR/aggregate.txt" || rc=$?
+        echo "exit-code=$rc" >> "$GITHUB_OUTPUT"
+        if [ "$rc" = "64" ]; then
+          echo "::error::abicheck aggregate rejected its inputs (usage error)"
+          exit 1
+        fi
+
+        # Validate the document we are about to hand downstream, rather
+        # than checking that one key exists.  A file that does not describe
+        # a real aggregate outcome is an operational failure of this job,
+        # never an empty finding set.
+        ./.ci-local/abicheck-validate-aggregate.sh "$REPORT_DIR/aggregate.json"
 
     - name: Upload ABI reports
       if: ${{ always() }}

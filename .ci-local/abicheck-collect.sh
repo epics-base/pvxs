@@ -20,10 +20,19 @@ for spec in "$@"; do
     id=${spec%%=*}
     path=${spec#*=}
     [ -n "$id" ] || { echo "empty check id in '$spec'" >&2; exit 64; }
+    case "$id" in
+        */*|*..*)
+            echo "check id '$id' contains a path separator" >&2; exit 64 ;;
+    esac
     if [ -n "$path" ] && [ -f "$path" ]; then
-        # abicheck aggregate discovers reports by filename prefix.
-        safe=$(printf '%s' "$id" | tr -c 'A-Za-z0-9._-' '_')
-        cp "$path" "$DEST/abi-report-$safe.json"
+        # abicheck aggregate matches a report to its expected target by the
+        # report's own "target_id" when it has one, and otherwise by the
+        # file stem after the "abi-report-" prefix.  The check id is
+        # therefore written VERBATIM: sanitising its '@', '#' and '~'
+        # separators away would make the stem stop matching the expected
+        # id, and every report would silently aggregate as an unavailable
+        # target.
+        cp "$path" "$DEST/abi-report-$id.json"
         printf '%s\tpresent\n' "$id" >> "$DEST/.collect-index"
     else
         printf '%s\tmissing\n' "$id" >> "$DEST/.collect-index"

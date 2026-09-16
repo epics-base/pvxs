@@ -1,0 +1,74 @@
+name: 'PVXS ABI capture'
+description: >-
+  Capture ABI/API evidence for libpvxs and libpvxsIoc from an installation
+  that a normal PVXS build has already produced. Performs no build, no
+  comparison and no reporting: it resolves the installed headers and shared
+  objects, then calls abicheck's own baseline Action once for both
+  components.
+
+  Used by the selected matrix leg of ci-scripts-build.yml (the candidate
+  capture) and by abicheck-baseline.yml's one-time historical bootstrap, so
+  the two produce identical baseline-sets from one definition.
+
+inputs:
+  top:
+    description: >
+      Root of the built PVXS tree to capture from. Defaults to the current
+      working directory; the historical bootstrap builds into its own
+      directory and points this at it.
+    required: false
+    default: ''
+  output-dir:
+    description: 'Directory to write the baseline-set into.'
+    required: true
+  project-ref:
+    description: >
+      The revision actually built and analysed, recorded in the manifest.
+      For a pull_request build this is the merge commit, not the PR head.
+    required: true
+  profile:
+    description: 'Build-profile identifier recorded in the manifest.'
+    required: true
+  baseline-generation:
+    description: 'Scanner-compatibility generation recorded in the manifest.'
+    required: false
+    default: '1'
+  build-config:
+    description: 'Path to the abicheck extraction config.'
+    required: false
+    default: '.ci-local/abicheck.yml'
+  abicheck-ref:
+    description: 'Immutable abicheck revision the capture runs from.'
+    required: true
+
+outputs:
+  baseline-path:
+    description: 'The baseline-set directory that was written.'
+    value: ${{ steps.capture.outputs.baseline-path }}
+  content-digest:
+    description: "Digest over the manifest's artifact list."
+    value: ${{ steps.capture.outputs.content-digest }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Resolve ABI capture inputs
+      id: inputs
+      shell: bash
+      run: ./.ci-local/abicheck-inputs.sh ${{ inputs.top }}
+
+    - name: Capture ABI snapshots (libpvxs, libpvxsIoc)
+      id: capture
+      uses: abicheck/abicheck/actions/baseline@3737f9f960ae14a7b24dbb6e9b686e49fb563673
+      with:
+        libraries: ${{ steps.inputs.outputs.libraries }}
+        output-dir: ${{ inputs.output-dir }}
+        project-ref: ${{ inputs.project-ref }}
+        profile: ${{ inputs.profile }}
+        depth: headers
+        build-config: ${{ inputs.build-config }}
+        baseline-generation: ${{ inputs.baseline-generation }}
+        generator-action-ref: ${{ inputs.abicheck-ref }}
+        # A libpvxs snapshot is ~124 MB of JSON at this depth (measured).
+        # The decoded content is identical either way.
+        snapshot-compression: zstd

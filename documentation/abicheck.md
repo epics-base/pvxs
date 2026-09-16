@@ -94,13 +94,34 @@ arrangement, including PVXS's bundled libevent rather than the system one, so
 a baseline from a different arrangement resolves as `wrong_profile` rather
 than being silently compared.
 
+Selection by base SHA alone is not sufficient, so an accepted-main
+baseline must additionally come from this repository's own
+`ci-scripts-build.yml`, from a push to the pull request's base branch, and
+from a run that **concluded success**. Without the last two, a failed run's
+snapshot could become the baseline — the capture step deliberately still
+runs after a test failure. "No eligible run", "the lookup failed" and "the
+artifact expired" are reported as three different outcomes.
+
 A missing, expired, wrong-profile or incompatible baseline produces an
 explicit unavailable/incomplete outcome. It never produces a clean result.
 
-For a historical release with no usable evidence, build that tag once with
-`workflow_dispatch` and publish the capture with
-`abicheck-baseline.yml`'s own `workflow_dispatch` inputs. The result is
-retained; nothing is rebuilt per pull request.
+### Bootstrapping a historical release
+
+A release that predates this integration has no capture, and re-dispatching
+the old workflow cannot produce one — the workflow *at that tag* has no
+capture step. `abicheck-baseline.yml`'s `workflow_dispatch` path therefore
+builds the requested revision once, in the trusted default-branch workflow,
+captures it with the same shared action the matrix leg uses, and publishes
+the result. It is a one-time operation per release and never runs on a pull
+request.
+
+Publication checks that the tag really is a tag (`refs/tags/<name>`,
+resolving annotated tags), that it points at the revision that was built,
+and that the baseline-set's own manifest records the profile it is being
+published as and covers both components. An already-published asset is left
+alone rather than replaced, because a published baseline is an immutable
+reference; replacing one changes the meaning of every comparison already
+made against it.
 
 ## Publication
 
@@ -111,17 +132,23 @@ retained; nothing is rebuilt per pull request.
   run under `pull_request_target`.
 * The publisher runs from the default branch on `workflow_run`, with only
   `actions: read` and `pull-requests: write`.
-* It verifies the producer run's repository, workflow path, event, run id and
-  attempt; resolves the pull request through the API rather than trusting
-  anything in the artifact; distinguishes the pull request head SHA from the
-  merge commit that was actually built and verifies their association;
-  downloads only from that exact run; and treats every byte of the artifact
-  as untrusted data.
+* It delegates to two reviewed abicheck Actions rather than growing its own
+  logic: `actions/verify-source-run` establishes which run this is, which
+  pull request it belongs to and which commit was actually analysed — all
+  from the GitHub API, never from the artifact — and extracts the artifact
+  under size, entry-count and compression-ratio caps;
+  `actions/report` renders the producer's canonical aggregate document and
+  maintains the sticky comment.
+* The pull request head SHA and the commit that was actually analysed are
+  separate coordinates. For a `pull_request` producer the analysed commit
+  is the ephemeral merge commit, not the PR head, and the comment shows the
+  analysed one. They are never substituted for each other.
+* Publication is bound to the producer attempt that triggered it, and
+  concurrency is keyed per pull request and profile.
 * It never checks out, installs, imports or executes pull-request code or
   pull-request-built binaries, and it runs no analysis.
 * A publication failure fails visibly and is never reported as a clean
-  compatibility result. A failed or missing analysis is published as an
-  explicit incomplete state.
+  compatibility result. A compatibility verdict never fails the publisher.
 
 A trusted reporter does not make contributor-produced report contents trusted
 evidence. Origin and assurance are preserved; what is enforced is who the
@@ -131,11 +158,36 @@ result is delivered to and what executes while delivering it.
 publisher on the default branch. Until a maintainer merges it there, no pull
 request — including the one introducing it — will publish a comment.
 
+## Incomplete analyses
+
+There is one document shape, not two. When no candidate capture exists, or
+a comparison did not run, the expected checks are still declared and
+`abicheck aggregate` produces an aggregate document in which those targets
+are `unavailable`. That is the same shape the publisher reads on the happy
+path, so a producer failure cannot arrive at the publisher as a file it
+does not understand. The document is structurally validated before it is
+handed downstream — its status, coverage, gate blocks and target states —
+rather than merely checked for the presence of a schema key.
+
+Only the checks an event actually has are declared: the accepted-main
+comparisons exist on a pull request, not on a push or tag build.
+
 ## Gate policy
 
 Advisory (`gate-mode: advisory`) during shadow adoption. Gate status and
 compatibility are reported separately: the check can be green while
 prominently reporting a detected break. ABICC remains authoritative.
+
+## Dependency status
+
+The publisher is pinned to abicheck `cb6102d85eaec62874f311646223cfbc1ef3cb25`,
+which carries `actions/verify-source-run` and `actions/report`. That
+revision is immutable but **not yet reviewed or merged** — it is a branch
+tip awaiting its own pull request in abicheck. The PVXS caller's inputs
+have been checked against that revision's declared schema, but no deployed
+publication has been demonstrated, because `workflow_run` only runs the
+default-branch copy of the publisher. This must not go upstream on an
+unreviewed pin.
 
 ## Known issues (abicheck product bugs, measured 2026-09-16)
 

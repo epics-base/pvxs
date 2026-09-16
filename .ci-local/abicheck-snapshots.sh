@@ -49,6 +49,11 @@ for entry in manifest.get("artifacts", []):
     # second, silently-divergent verifier.  resolve-baseline (invoked by
     # check-target for the baseline side) is the component that validates
     # baseline-set identity.
+    if name in found:
+        # Two entries for one component is an ambiguous set, not a
+        # last-one-wins choice: silently overwriting would pick a snapshot
+        # nobody selected.
+        raise SystemExit(f"baseline-set declares {name} more than once")
     found[name] = path
 
 missing = sorted(set(wanted) - set(found))
