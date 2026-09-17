@@ -241,6 +241,38 @@ Advisory (`gate-mode: advisory`) during shadow adoption. Gate status and
 compatibility are reported separately: the check can be green while
 prominently reporting a detected break. ABICC remains authoritative.
 
+## What this branch's CI has actually analysed so far
+
+Nothing, and that is worth stating plainly rather than leaving a reviewer to
+infer it from a green check.
+
+On every run of this branch to date the aggregate reports
+`status=fail coverage=empty, 0/4 target(s) analyzed`, with
+`channels: {accepted-main: {analyzed: 0, unavailable: 2},
+release-contract: {analyzed: 0, unavailable: 2}}`. The job still concludes
+success, because the gate is advisory and operational loss is reported as
+loss rather than as a clean result — that part is working as designed.
+
+Both channels are unavailable for reasons outside this pull request:
+
+| Channel | Why unavailable | What would change it |
+|---|---|---|
+| accepted-main | The base branch's own `ci-scripts-build.yml` run concluded `failure`, so `verify-baseline-source` refuses it by name: `rejected run 35112205613: wrong-conclusion: the source run concluded 'failure'; allowed: success` | One green `ci-scripts-build.yml` run on the base branch |
+| release-contract | No `abicheck-baseline-<profile>.tar.zst` release asset exists yet | The historical bootstrap in `abicheck-baseline.yml`, dispatched on the default branch |
+
+So what this branch demonstrates on real runners is the *candidate* half —
+the build reuse, the declarative component resolution, the capture, and
+`resolve-baseline` returning `outcome=resolved` with two members — plus the
+eligibility and aggregation machinery behaving correctly when there is
+nothing to compare against. The comparison half has been exercised only
+against locally constructed snapshot pairs, not against a baseline this
+repository published. Do not read a green advisory check here as evidence
+that a real ABI comparison ran.
+
+Neither prerequisite is something this pull request can satisfy on its own,
+and neither is worked around: no baseline is fabricated, no comparison is
+skipped quietly, and the missing coverage is reported as missing.
+
 ## Dependency status
 
 Every abicheck Action is pinned to one merged, immutable revision:
