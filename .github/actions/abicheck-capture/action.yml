@@ -1,27 +1,24 @@
 name: 'PVXS ABI capture'
 description: >-
-  Capture ABI/API evidence for libpvxs and libpvxsIoc from an installation
-  that a normal PVXS build has already produced. Performs no build, no
-  comparison and no reporting.
+  Capture ABI/API evidence for libpvxs and libpvxsIoc from an installation a
+  normal PVXS build has already produced. Performs no build, no comparison
+  and no reporting.
 
   What is PVXS-specific lives here: where the EPICS dependency was prepared
-  and which host architecture it built for. Everything else -- selecting the
-  real shared object out of its SONAME alias chain, checking it is an ELF
-  ET_DYN, agreeing the target machine between components, expanding the owned
-  header sets and refusing a stale exclusion -- belongs to abicheck's own
-  baseline Action, which reads the component declaration in
-  .ci-local/abicheck-components.json.
+  and which host architecture it built for. Selecting the real shared object
+  out of its SONAME alias chain, ELF/machine agreement, expanding the owned
+  header sets, refusing a stale exclusion and binding the two build-decided
+  values into the declaration all belong to abicheck's baseline Action,
+  which reads .ci-local/abicheck-components.json.
 
-  Used by the selected matrix leg of ci-scripts-build.yml (the candidate
-  capture) and by abicheck-baseline.yml's one-time historical bootstrap, so
-  the two produce identical baseline-sets from one definition.
+  Shared by ci-scripts-build.yml's candidate capture and
+  abicheck-baseline.yml's historical bootstrap, so the two cannot drift.
 
 inputs:
   top:
     description: >
-      Root of the built PVXS tree to capture from. Defaults to the workspace;
-      the historical bootstrap builds into its own directory and points this
-      at it.
+      Root of the built PVXS tree to capture from. Defaults to the
+      workspace; the historical bootstrap points this at its own checkout.
     required: false
     default: ''
   output-dir:
@@ -68,9 +65,6 @@ outputs:
 runs:
   using: 'composite'
   steps:
-    # The only project-specific knowledge left: where cue.py put EPICS Base
-    # and which host arch it built for.  These are build-system facts, not
-    # ABI facts, so abicheck deliberately hard-codes neither.
     - name: Resolve EPICS build context
       id: epics
       shell: bash
@@ -79,36 +73,18 @@ runs:
         SPEC_IN: ${{ inputs.component-spec }}
         CFG_IN: ${{ inputs.build-config }}
         WORKSPACE: ${{ github.workspace }}
-        SPEC_OUT: ${{ runner.temp }}/abicheck-components.resolved.json
       run: |
         set -eu
 
-        # The declaration belongs to the CHECKOUT, not to the tree being
-        # captured.  The historical bootstrap points `top` at an old
-        # revision that predates this file entirely, so resolving a
-        # relative spec path after `cd "$TOP"` would read a file that is
-        # missing (or, worse, a stale declaration) from that revision.
-        case "$SPEC_IN" in
-          /*) spec_in=$SPEC_IN ;;
-          *)  spec_in=$WORKSPACE/$SPEC_IN ;;
-        esac
-        [ -f "$spec_in" ] || {
-          echo "::error::component declaration $spec_in does not exist"
-          exit 64
-        }
-
-        # Same reasoning for the extraction config.  It resolved correctly
-        # only by accident: a `uses:` step runs with cwd = workspace, so a
-        # relative path happened to land in the trusted checkout.  Make the
-        # trusted origin explicit rather than depending on the runner's cwd.
-        case "$CFG_IN" in
-          "")  cfg_in= ;;
-          /*)  cfg_in=$CFG_IN ;;
-          *)   cfg_in=$WORKSPACE/$CFG_IN ;;
-        esac
-        if [ -n "$cfg_in" ] && [ ! -f "$cfg_in" ]; then
-          echo "::error::extraction config $cfg_in does not exist"
-          exit 64
+        # Both trusted inputs belong to the CHECKOUT, not to the tree being
+        # captured: the bootstrap points `top` at a revision that predates
+        # them, so a relative path resolved after `cd "$TOP"` would read a
+        # missing or stale file from that revision.
+        case "$SPEC_IN" in /*) spec=$SPEC_IN ;; *) spec=$WORKSPACE/$SPEC_IN ;; esac
+        case "$CFG_IN" in '') cfg= ;; /*) cfg=$CFG_IN ;; *) cfg=$WORKSPACE/$CFG_IN ;; esac
+        [ -f "$spec" ] || { echo "::error::component declaration $spec does not exist"; exit 64; }
+        if [ -n "$cfg" ] && [ ! -f "$cfg" ]; then
+          echo "::error::extraction config $cfg does not exist"; exit 64
         fi
 
         cd "$TOP"
@@ -128,81 +104,32 @@ runs:
         if [ -z "$EPICS_HOST_ARCH" ] && [ -x "$EPICS_BASE/startup/EpicsHostArch" ]; then
           EPICS_HOST_ARCH=$("$EPICS_BASE/startup/EpicsHostArch")
         fi
+        # This capture is declared for a native Linux install layout only.
         case "$EPICS_HOST_ARCH" in
           linux-*) ;;
-          *)
-            echo "::error::this capture is declared for a native Linux host arch, got '${EPICS_HOST_ARCH:-<unset>}'"
-            exit 64
-            ;;
+          *) echo "::error::expected a native Linux host arch, got '${EPICS_HOST_ARCH:-<unset>}'"
+             exit 64 ;;
         esac
 
-        # Bind the two build-system values into the declaration.
-        #
-        # This is a JSON document, so the binding is done by a JSON reader
-        # and writer.  Textual substitution is not JSON escaping: measured
-        # against the real declaration, `sed` mangles a value containing
-        # `&` (which means "the whole match" in a replacement), emits
-        # invalid JSON for one containing `"`, drops a backslash, and fails
-        # outright on one containing the `|` delimiter.  EPICS_BASE is a
-        # path from configure/RELEASE.local, so it is not ours to constrain.
-        #
-        # Exactly two names are bound and any other ${...} is refused, so
-        # this stays a two-variable binding rather than growing into a
-        # local templating language.
-        SPEC_IN_ABS=$spec_in EPICS_BASE=$EPICS_BASE \
-        EPICS_HOST_ARCH=$EPICS_HOST_ARCH SPEC_OUT=$SPEC_OUT \
-        python3 - <<'PY'
-        import json, os, re, sys
-
-        bind = {
-            "EPICS_BASE": os.environ["EPICS_BASE"],
-            "EPICS_HOST_ARCH": os.environ["EPICS_HOST_ARCH"],
-        }
-        placeholder = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}")
-
-        def sub(text):
-            def one(m):
-                name = m.group(1)
-                if name not in bind:
-                    sys.exit(
-                        "::error::%s is not a value this capture binds; "
-                        "known: %s" % (name, ", ".join(sorted(bind)))
-                    )
-                return bind[name]
-            return placeholder.sub(one, text)
-
-        def walk(node):
-            if isinstance(node, str):
-                return sub(node)
-            if isinstance(node, list):
-                return [walk(v) for v in node]
-            if isinstance(node, dict):
-                return {walk(k): walk(v) for k, v in node.items()}
-            return node
-
-        with open(os.environ["SPEC_IN_ABS"]) as f:
-            try:
-                spec = json.load(f)
-            except json.JSONDecodeError as exc:
-                sys.exit("::error::%s is not valid JSON: %s"
-                         % (os.environ["SPEC_IN_ABS"], exc))
-
-        with open(os.environ["SPEC_OUT"], "w") as f:
-            json.dump(walk(spec), f, indent=2, sort_keys=True)
-        PY
-
-        echo "epics-base=$EPICS_BASE" >> "$GITHUB_OUTPUT"
-        echo "host-arch=$EPICS_HOST_ARCH" >> "$GITHUB_OUTPUT"
-        echo "spec=$SPEC_OUT" >> "$GITHUB_OUTPUT"
-        echo "build-config=$cfg_in" >> "$GITHUB_OUTPUT"
-        echo "resolved component declaration:"
-        cat "$SPEC_OUT"
+        {
+          echo "epics-base=$EPICS_BASE"
+          echo "host-arch=$EPICS_HOST_ARCH"
+          echo "spec=$spec"
+          echo "build-config=$cfg"
+        } >> "$GITHUB_OUTPUT"
 
     - name: Capture ABI snapshots (libpvxs, libpvxsIoc)
       id: capture
-      uses: abicheck/abicheck/actions/baseline@80cf72abb5856eb623a6056fb35d06a66ad26774
+      uses: abicheck/abicheck/actions/baseline@e38c3f91b8f956f7c8fa51b60d17fc4030969dec
       with:
         library-spec: ${{ steps.epics.outputs.spec }}
+        # Binding is abicheck's: it walks the document as JSON and inserts
+        # each value literally, so a path containing `&`, a quote or a
+        # backslash is not mangled the way a textual pass would.  The two
+        # names below are the whole allowlist; any other ${...} is refused.
+        library-spec-bindings: |
+          EPICS_BASE=${{ steps.epics.outputs.epics-base }}
+          EPICS_HOST_ARCH=${{ steps.epics.outputs.host-arch }}
         library-root: ${{ inputs.top || github.workspace }}
         output-dir: ${{ inputs.output-dir }}
         project-ref: ${{ inputs.project-ref }}
