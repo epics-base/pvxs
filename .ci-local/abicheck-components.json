@@ -1,0 +1,32 @@
+[
+  {
+    "name": "libpvxs",
+    "artifact": "lib/${EPICS_HOST_ARCH}/libpvxs.so*",
+    "header": [
+      "include/pvxs/*.h",
+      "include/pvxs/versionNum.h"
+    ],
+    "header_exclude": [
+      "include/pvxs/iochooks.h"
+    ],
+    "include": [
+      "include",
+      "${EPICS_BASE}/include",
+      "${EPICS_BASE}/include/os/Linux",
+      "${EPICS_BASE}/include/compiler/gcc"
+    ]
+  },
+  {
+    "name": "libpvxsIoc",
+    "artifact": "lib/${EPICS_HOST_ARCH}/libpvxsIoc.so*",
+    "header": [
+      "include/pvxs/iochooks.h"
+    ],
+    "include": [
+      "include",
+      "${EPICS_BASE}/include",
+      "${EPICS_BASE}/include/os/Linux",
+      "${EPICS_BASE}/include/compiler/gcc"
+    ]
+  }
+]

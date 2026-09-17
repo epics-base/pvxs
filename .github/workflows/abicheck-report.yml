@@ -1,0 +1,169 @@
+# Trusted publisher for the advisory ABI/API check.
+#
+# The analysis runs unprivileged in ci-scripts-build.yml, under the
+# contributor's own pull request, including from forks: that job has
+# `contents: read` and no secrets, so it cannot comment and must not be able
+# to. This workflow is the other half, and it is two reviewed Actions:
+#
+#   actions/verify-source-run  establishes WHICH run this is, WHICH pull
+#                              request it belongs to, and WHAT commit was
+#                              actually analysed -- from the GitHub API,
+#                              never from the artifact -- and hands back the
+#                              verified report it extracted under
+#                              size/entry/ratio caps.
+#   actions/report             renders the producer's canonical aggregate
+#                              document and maintains the sticky comment.
+#                              No analysis, no compiler, no build query.
+#
+# Neither makes the contributor's report contents trusted evidence. Origin
+# and assurance are preserved; what is enforced is the recipient and the
+# execution boundary.
+#
+# DEPLOYMENT PREREQUISITE: workflow_run only ever runs the copy of this file
+# on the default branch. Until a maintainer has merged it there, nothing in
+# a pull request -- including the pull request that adds this file --
+# publishes a comment. That is by design.
+#
+# KNOWN BLOCKER: at the pinned revision actions/report cannot be loaded at
+# all; see documentation/abicheck.md ("Current limitations").
+
+name: ABI/API report
+
+on:
+  workflow_run:
+    workflows: ["PVXS EPICS"]
+    types: [completed]
+
+permissions:
+  actions: read
+  pull-requests: write
+
+concurrency:
+  # One publication at a time per pull request and profile. Keyed on the
+  # producer's head branch because the PR number is only known after
+  # verification. Superseded runs are NOT cancelled: ordering is enforced by
+  # the publisher's own producer-run freshness guard, which cancellation
+  # alone cannot do.
+  group: >-
+    abicheck-report-${{ github.event.workflow_run.head_repository.full_name }}-${{
+    github.event.workflow_run.head_branch }}-linux-x86_64-gcc-default-base7.0-bundled-libevent
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    # Only a pull-request-triggered producer has a pull request to report to.
+    # A push/tag run publishes baselines instead (abicheck-baseline.yml).
+    if: ${{ github.event.workflow_run.event == 'pull_request' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      ABICHECK_PROFILE: linux-x86_64-gcc-default-base7.0-bundled-libevent
+    steps:
+    # ONE acquisition. The artifact is downloaded and extracted once, the
+    # producer's recorded analysis context is read out of it by the same
+    # bounded reader, and the commit it names is verified against the pull
+    # request through the API before it can reach a step output.
+    #
+    # `allowed-conclusions` is deliberately empty: a producer run that failed
+    # for an unrelated reason (a flaky platform test) still has a real ABI
+    # result, and a failed analysis must be published as an explicit
+    # incomplete state rather than withheld. What is never inferred is a
+    # compatibility outcome from the run's conclusion.
+    - name: Verify the producer run and acquire its report
+      id: source
+      uses: abicheck/abicheck/actions/verify-source-run@e38c3f91b8f956f7c8fa51b60d17fc4030969dec
+      with:
+        source-run-id: ${{ github.event.workflow_run.id }}
+        expect-repository: ${{ github.repository }}
+        expect-workflow: .github/workflows/ci-scripts-build.yml
+        expect-event: pull_request
+        # Bind to the attempt that triggered this publication, not to
+        # whatever attempt the API reports by the time we ask.
+        expect-run-attempt: ${{ github.event.workflow_run.run_attempt }}
+        allowed-conclusions: ''
+        artifact-name: abicheck-reports-${{ env.ABICHECK_PROFILE }}
+        destination: ${{ runner.temp }}/abicheck-reports
+        # On a pull_request run the analysis builds an ephemeral merge commit
+        # that no API endpoint names, so only the producer can say what was
+        # analysed: actions/aggregate records it in the aggregate document's
+        # own analysis_context block, and this reads it back out.
+        provenance-from: aggregate.json
+        # An artifact recording no context is refused rather than falling
+        # back to the PR head, which names a tree the analysis never saw.
+        require-provenance: 'true'
+        # The document to render, returned together with the identity it was
+        # checked under -- not a path reassembled from artifact-path.
+        report-from: aggregate.json
+        github-token: ${{ github.token }}
+
+    - name: Refuse to publish an unverified run
+      if: ${{ steps.source.outputs.verified != 'true' }}
+      env:
+        REFUSAL: ${{ steps.source.outputs.refusal-code }}
+      run: |
+        echo "::error::refusing to publish: $REFUSAL"
+        exit 1
+
+    # A verified run whose report member is missing is an explicit
+    # unavailable-analysis answer, never a clean result.
+    - name: Refuse a verified run with no report
+      if: ${{ steps.source.outputs.report-available != 'true' }}
+      run: |
+        echo "::error::the producer run produced no aggregate document; nothing is published, and this is not a clean result"
+        exit 1
+
+    - name: Publish the ABI/API report
+      id: publish
+      uses: abicheck/abicheck/actions/report@e38c3f91b8f956f7c8fa51b60d17fc4030969dec
+      with:
+        report: ${{ steps.source.outputs.report-path }}
+        repository: ${{ github.repository }}
+        pr-number: ${{ steps.source.outputs.pr-number }}
+        # The commit really analysed, as verified above -- never the raw
+        # producer claim, and never the PR head substituted for the merge
+        # commit.
+        sha: ${{ steps.source.outputs.tested-sha }}
+        profile: ${{ env.ABICHECK_PROFILE }}
+        # Order the sticky comment by the PRODUCER's run. Left unset these
+        # default to this publisher's own run id, which orders by when
+        # publication was triggered, so a late re-run of an older commit
+        # would look newer and overwrite the current result.
+        source-run-id: ${{ github.event.workflow_run.id }}
+        source-run-attempt: ${{ github.event.workflow_run.run_attempt }}
+        # A resolved result is cleared in place and a material analysis
+        # limitation posts, so `changes` does not leave a stale warning
+        # standing. A different notification policy is a project decision,
+        # not a workaround.
+        post-on: changes
+        detail: standard
+        run-label: >-
+          run ${{ github.event.workflow_run.id }}
+          (attempt ${{ github.event.workflow_run.run_attempt }})
+        report-url: ${{ github.event.workflow_run.html_url }}
+        job-summary: 'true'
+        github-token: ${{ github.token }}
+
+    # A publication failure is an operational failure of this workflow and is
+    # reported as one. It is never allowed to look like a clean compatibility
+    # result, and a compatibility verdict never fails this workflow -- this
+    # is a reporting job, not a gate.
+    - name: Report the publication outcome
+      if: ${{ always() && steps.source.outputs.verified == 'true' }}
+      env:
+        POSTED: ${{ steps.publish.outputs.posted }}
+        SKIPPED: ${{ steps.publish.outputs.skipped-reason }}
+        PR: ${{ steps.source.outputs.pr-number }}
+        TESTED: ${{ steps.source.outputs.tested-sha }}
+        TESTED_SOURCE: ${{ steps.source.outputs.tested-sha-source }}
+        PROVENANCE: ${{ steps.source.outputs.provenance }}
+        PR_HEAD: ${{ steps.source.outputs.pr-head-sha }}
+        FORK: ${{ steps.source.outputs.from-fork }}
+        OUTCOME: ${{ steps.publish.outcome }}
+      run: |
+        set -eu
+        echo "posted=$POSTED skipped-reason=$SKIPPED"
+        echo "pr=$PR tested-sha=$TESTED source=$TESTED_SOURCE provenance=$PROVENANCE pr-head=$PR_HEAD from-fork=$FORK"
+        if [ "$OUTCOME" != "success" ]; then
+          echo "::error::the ABI/API report could not be published (the analysis result itself is unaffected)"
+          exit 1
+        fi
