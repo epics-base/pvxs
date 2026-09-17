@@ -377,6 +377,13 @@ void UDPCollector::process_one(const uint8_t *buf, size_t nrx, origin_t origin,
         } else {
             replyDest = server;
         }
+        if((origin==Broadcast || origin==Forwarding)
+                && peerVersion >= 3
+                && (flags&pva_search_flags::ReplySrcPort))
+        {
+            // peer requests reply to (apparent) sender port
+            port = origSrc.port();
+        }
         replyDest.setPort(port);
 
         if(!M.good())
@@ -391,8 +398,9 @@ void UDPCollector::process_one(const uint8_t *buf, size_t nrx, origin_t origin,
             *save_flags &= ~pva_search_flags::Unicast;
             // recipient of forwarded message must use, and trust, replyAddr in body :(
             {
-                FixedBuf R(M.be, save_replyAddr, 16u);
+                FixedBuf R(M.be, save_replyAddr, 16u + 2u);
                 to_wire(R, replyDest);
+                to_wire(R, port);
                 assert(R.good());
             }
             forwardM(buf, nrx);
