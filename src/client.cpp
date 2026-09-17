@@ -699,19 +699,23 @@ ContextImpl::~ContextImpl() {}
 
 void ContextImpl::startNS()
 {
-    if(nameServers.empty()) // vector size const after ctor, contents remain mutable
+    bool hasHostnames = std::any_of(searchDest.begin(), searchDest.end(),
+                                    [](const SearchDest& sd){ return !sd.hostname.empty(); });
+
+    if(nameServers.empty() && !hasHostnames)
         return;
 
-    tcp_loop.call([this]() {
-        // start connections to name servers
+    tcp_loop.call([this, hasHostnames]() {
         for(auto& ns : nameServers) {
             ns.conn = Connection::build(shared_from_this(), ns.addr);
             ns.conn->nameserver = true;
             log_debug_printf(io, "Connecting to nameserver %s\n", ns.conn->peerName.c_str());
         }
 
-        if(event_add(nsChecker.get(), &tcpNSCheckInterval))
-            log_err_printf(setup, "Error enabling TCP search reconnect timer\n%s", "");
+        if(!nameServers.empty()) {
+            if(event_add(nsChecker.get(), &tcpNSCheckInterval))
+                log_err_printf(setup, "Error enabling TCP search reconnect timer\n%s", "");
+        }
 
         if(event_add(dnsRecheckTimer.get(), &dnsRecheckInterval))
             log_err_printf(setup, "Error enabling DNS recheck timer\n%s", "");
