@@ -80,11 +80,39 @@ void testconflict(const char* addr)
     testNotEq(iconf.tcp_port, fconf.tcp_port)<<"w/ "<<addr;
 }
 
+// as testconflict(), but configured as a user would.
+// $EPICS_PVAS_INTF_ADDR_LIST fills in $EPICS_PVAS_SERVER_PORT for each interface
+// which does not name a port, so the interfaces arrive here carrying the port
+// which is about to be found in use.  All of them must still follow the fallback.
+void testconflictifaces(const char* addr1, const char* addr2)
+{
+    testDiag("%s(\"%s\", \"%s\")", __func__, addr1, addr2);
+
+    evsocket otherserver(AF_INET, SOCK_STREAM, 0);
+    otherserver.bind(SockAddr::any(AF_INET));
+    otherserver.listen(4);
+
+    server::Config::defs_t defs;
+    defs["EPICS_PVAS_SERVER_PORT"] = SB()<<otherserver.sockname().port();
+    defs["EPICS_PVAS_BROADCAST_PORT"] = "0"; // choose randomly
+    defs["EPICS_PVAS_INTF_ADDR_LIST"] = SB()<<addr1<<' '<<addr2;
+
+    server::Config iconf;
+    iconf.applyDefs(defs);
+
+    auto serv(iconf.build());
+    auto fconf(serv.config());
+    testShow()<<"Server Config\n"<<fconf;
+
+    testNotEq(0u, fconf.udp_port);
+    testNotEq(iconf.tcp_port, fconf.tcp_port);
+}
+
 } // namespace
 
 MAIN(testwild)
 {
-    testPlan(18);
+    testPlan(20);
     testSetup();
     logger_config_env();
     SockAttach attach;
@@ -98,8 +126,10 @@ MAIN(testwild)
     }
     if(evsocket::ipstack==evsocket::Linsock) {
         testconflict("127.0.0.1");
+        // 127.0.0.0/8 is entirely local, so a second loopback address is available.
+        testconflictifaces("127.0.0.1", "127.0.0.2");
     } else {
-        testSkip(2, "Can bind both 0.0.0.0 and 127.0.0.1 to the same port");
+        testSkip(4, "Can bind both 0.0.0.0 and 127.0.0.1 to the same port, and have one loopback address");
     }
     testconflict("0.0.0.0");
     if(canIPv6) {

@@ -141,7 +141,9 @@ void testDefs()
         testEq(conf.tcp_port, 5678);
         testFalse(conf.auto_beacon);
         testEq(conf.beaconDestinations, std::vector<std::string>({"1.2.1.2:1234", "4.3.2.1:1234"}));
-        testEq(conf.interfaces, std::vector<std::string>({"1.1.1.1:5678", "1.2.3.4:5678"}));
+        // server INTF list round-trips port-less, matching the client path above
+        // (a port-less interface follows the server's bound TCP port at bind time).
+        testEq(conf.interfaces, std::vector<std::string>({"1.1.1.1", "1.2.3.4"}));
     }
 }
 
