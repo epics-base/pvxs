@@ -413,11 +413,6 @@ jobs:
         expected-project-ref: ${{ github.sha }}
         expected-baseline-generation: '1'
 
-    # The accepted-main checks exist only on a pull request: there is no PR
-    # base to compare against on a push or tag build, and declaring them
-    # there would manufacture unavailable checks for a question the event
-    # never asked. That event policy is the `if:` below, and it is the only
-    # place it is stated.
     - name: 'libpvxs vs accepted-main'
       id: main-core
       if: ${{ always() && steps.snapshots.outcome == 'success' && github.event_name == 'pull_request' }}
@@ -497,23 +492,52 @@ jobs:
         severity-preset: default
 
     # Each id below is check-target's OWN canonical check-id output. This
-    # step selects; it never constructs a target@profile#channel@depth
-    # string and never reconstructs the expected set. A step the event did
-    # not ask for contributes no id and is not declared; a step that ran but
-    # produced no report is declared with an empty report, so it aggregates
-    # as unavailable rather than vanishing.
+    # step is the single declaration of what the run was SUPPOSED to
+    # produce, and it is deliberately independent of whether any comparison
+    # ran.  Deriving the ids from check-target's own check-id outputs looks
+    # tidier but loses the expected set in exactly the case that matters: if
+    # the candidate download or snapshot resolution fails, every comparison
+    # step is skipped, emits no id, and the run would then declare -- and
+    # report -- a shorter set of checks than it actually had.
+    #
+    # An entry whose `report` is empty is a declared check that produced
+    # nothing, which aggregates as unavailable rather than vanishing.
+    # Nothing here classifies a result; the ids are cross-checked upstream,
+    # where a report recording its own target_id is authoritative and a
+    # declaration disagreeing with it is refused rather than relabelled.
     - name: Declare the checks this event asked for
       id: declare
       if: ${{ always() }}
       env:
-        DECLARED: |
-          [{"id": "${{ steps.main-core.outputs.check-id }}", "report": "${{ steps.main-core.outputs.report-path }}"},
-           {"id": "${{ steps.main-ioc.outputs.check-id }}", "report": "${{ steps.main-ioc.outputs.report-path }}"},
-           {"id": "${{ steps.rel-core.outputs.check-id }}", "report": "${{ steps.rel-core.outputs.report-path }}"},
-           {"id": "${{ steps.rel-ioc.outputs.check-id }}", "report": "${{ steps.rel-ioc.outputs.report-path }}"}]
+        # The accepted-main checks exist only on a pull request: there is no
+        # PR base on a push or tag build, and declaring them there would
+        # manufacture a missing check for a question nobody asked.
+        PR_EVENT: ${{ github.event_name == 'pull_request' }}
+        MAIN_CORE: ${{ steps.main-core.outputs.report-path }}
+        MAIN_IOC: ${{ steps.main-ioc.outputs.report-path }}
+        REL_CORE: ${{ steps.rel-core.outputs.report-path }}
+        REL_IOC: ${{ steps.rel-ioc.outputs.report-path }}
       run: |
         set -eu
-        python3 -c 'import json,os; print("checks=" + json.dumps([c for c in json.loads(os.environ["DECLARED"]) if c["id"]]))' >> "$GITHUB_OUTPUT"
+        python3 - <<'PY' >> "$GITHUB_OUTPUT"
+        import json, os
+        p = os.environ["ABICHECK_PROFILE"]
+        checks = []
+        if os.environ["PR_EVENT"] == "true":
+            checks += [
+                {"id": f"libpvxs@{p}#accepted-main@headers",
+                 "report": os.environ["MAIN_CORE"]},
+                {"id": f"libpvxsIoc@{p}#accepted-main@headers",
+                 "report": os.environ["MAIN_IOC"]},
+            ]
+        checks += [
+            {"id": f"libpvxs@{p}#release-contract@headers~release",
+             "report": os.environ["REL_CORE"]},
+            {"id": f"libpvxsIoc@{p}#release-contract@headers~release",
+             "report": os.environ["REL_IOC"]},
+        ]
+        print("checks=" + json.dumps(checks))
+        PY
 
     # One aggregate document over every declared check. The publisher
     # renders exactly this; it never re-runs a comparison and never

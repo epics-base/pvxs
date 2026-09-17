@@ -158,9 +158,11 @@ defect, not change — and part of why this stays advisory.
 
 The analysis is unprivileged and cannot comment. `abicheck-report.yml` is a
 separate trusted `workflow_run` publisher built from two reviewed Actions:
-`verify-source-run` establishes which run, which pull request and which
-commit was actually analysed — from the API, never from the artifact — and
-`report` renders the document as one sticky comment per PR and profile,
+`verify-source-run` establishes the producer run and the pull request it
+belongs to through the API, reads the commit actually analysed out of
+`aggregate.json`, and then verifies that commit's association with the pull
+request through the API; `report` renders the document as one sticky comment
+per PR and profile,
 covering both components with the baseline channels separately labelled.
 
 The artifact is acquired **once**: `provenance-from` reads the producer's
