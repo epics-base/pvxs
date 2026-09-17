@@ -1414,6 +1414,34 @@ void ContextImpl::onDNSRecheck()
             sd.dest.addr = resolved;
         }
     }
+
+    for(auto& ns : nameServers) {
+        if(ns.hostname.empty())
+            continue;
+
+        SockAddr resolved;
+        try {
+            resolved.setAddress(ns.hostname.c_str(), ns.addr.port());
+        } catch(std::exception& e) {
+            log_warn_printf(io, "DNS resolution failed for nameserver '%s': %s\n",
+                ns.hostname.c_str(), e.what());
+            continue;
+        }
+
+        if(resolved != ns.addr) {
+            log_info_printf(io, "Nameserver %s re-resolved: %s -> %s\n",
+                ns.hostname.c_str(), ns.addr.tostring().c_str(),
+                resolved.tostring().c_str());
+            ns.addr = resolved;
+
+            if(ns.conn)
+                ns.conn->cleanup();
+            ns.conn = Connection::build(shared_from_this(), ns.addr);
+            ns.conn->nameserver = true;
+            log_debug_printf(io, "Reconnecting nameserver %s after DNS change\n",
+                ns.conn->peerName.c_str());
+        }
+    }
 }
 
 void ContextImpl::onDNSRecheckS(evutil_socket_t fd, short evt, void *raw)
