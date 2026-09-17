@@ -892,4 +892,36 @@ done:
     }
 }
 
-}}
+}
+
+bool isHostname(const std::string& s)
+{
+    // strip port suffix and brackets to test the host part only
+    std::string host(s);
+
+    if(!host.empty() && host.front() == '[') {
+        // bracketed IPv6: [::1]:port or [::1]
+        auto bracket = host.find(']');
+        if(bracket != std::string::npos)
+            host = host.substr(1, bracket - 1);
+    } else {
+        // for non-bracketed: only strip port if there's exactly one colon (host:port)
+        auto first_colon = host.find(':');
+        auto last_colon = host.rfind(':');
+        if(first_colon != std::string::npos && first_colon == last_colon)
+            host = host.substr(0, first_colon);
+    }
+
+    if(host.empty())
+        return false;
+
+    in_addr dummy4;
+    in6_addr dummy6;
+    if(evutil_inet_pton(AF_INET, host.c_str(), &dummy4) == 1)
+        return false;
+    if(evutil_inet_pton(AF_INET6, host.c_str(), &dummy6) == 1)
+        return false;
+    return true;
+}
+
+}

@@ -149,7 +149,8 @@ namespace {
 constexpr double tmoScale = 4.0/3.0; // 40 second idle timeout / 30 configured
 
 void split_addr_into(const char* name, std::vector<std::string>& out, const std::string& inp,
-                     uint16_t defaultPort, bool required=false)
+                     uint16_t defaultPort, bool required=false,
+                     std::map<std::string, std::string>* hostnameMap=nullptr)
 {
     size_t pos=0u;
 
@@ -166,7 +167,12 @@ void split_addr_into(const char* name, std::vector<std::string>& out, const std:
                 SockEndpoint ep(temp);
                 if(ep.addr.port()==0)
                     ep.addr.setPort(defaultPort);
-                out.push_back(SB()<<ep);
+                auto resolved = (SB()<<ep).str();
+                out.push_back(resolved);
+
+                if(hostnameMap && isHostname(temp)) {
+                    (*hostnameMap)[resolved] = temp;
+                }
 
             } catch(std::exception& e){
                 if(required)
@@ -578,11 +584,13 @@ void _fromDefs(Config& self, const std::map<std::string, std::string>& defs, boo
     }
 
     if(pickone({"EPICS_PVA_ADDR_LIST"})) {
-        split_addr_into(pickone.name.c_str(), self.addressList, pickone.val, self.udp_port);
+        split_addr_into(pickone.name.c_str(), self.addressList, pickone.val, self.udp_port,
+                        false, &self.addressHostnames);
     }
 
     if(pickone({"EPICS_PVA_NAME_SERVERS"})) {
-        split_addr_into(pickone.name.c_str(), self.nameServers, pickone.val, self.tcp_port);
+        split_addr_into(pickone.name.c_str(), self.nameServers, pickone.val, self.tcp_port,
+                        false, &self.nameServerHostnames);
     }
 
     if(pickone({"EPICS_PVA_AUTO_ADDR_LIST"})) {

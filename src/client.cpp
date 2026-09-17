@@ -68,6 +68,8 @@ constexpr timeval beaconCleanInterval{180, 0};
 // special interval to attempt to reconnect to disconnected name servers
 constexpr timeval tcpNSCheckInterval{10, 0};
 
+constexpr timeval dnsRecheckInterval{30, 0};
+
 // searchSequenceID in CMD_SEARCH is redundant.
 // So we use a static value and instead rely on IDs for individual PVs
 constexpr uint32_t search_seq{0x66696e64}; // "find"
@@ -217,13 +219,18 @@ void Channel::disconnect(const std::shared_ptr<Channel>& self)
                          name.c_str());
 
     } else if(context->state==ContextImpl::Running) { // reconnect to specific server
+        if(!forcedServerHostname.empty()) {
+            forcedServer.setAddress(forcedServerHostname.c_str(), forcedServer.port());
+            log_info_printf(io, "Forced server re-resolved for '%s': %s\n",
+                name.c_str(), forcedServer.tostring().c_str());
+        }
+
         conn = Connection::build(context, forcedServer, true);
 
         conn->pending[cid] = self;
         state = Connecting;
 
         conn->createChannels();
-
     }
 }
 
@@ -382,6 +389,9 @@ std::shared_ptr<Channel> Channel::build(const std::shared_ptr<ContextImpl>& cont
 
         } else { // bypass search and connect so a specific server
             chan->forcedServer = forceServer;
+            if(isHostname(server)) {
+                chan->forcedServerHostname = server;
+            }
             chan->conn = Connection::build(context, forceServer);
 
             chan->conn->pending[chan->cid] = chan;
@@ -564,6 +574,8 @@ ContextImpl::ContextImpl(const Config& conf, const evbase& tcp_loop)
                   event_new(tcp_loop.base, -1, EV_TIMEOUT|EV_PERSIST, &ContextImpl::cacheCleanS, this))
     ,nsChecker(__FILE__, __LINE__,
                event_new(tcp_loop.base, -1, EV_TIMEOUT|EV_PERSIST, &ContextImpl::onNSCheckS, this))
+    ,dnsRecheckTimer(__FILE__, __LINE__,
+                     event_new(tcp_loop.base, -1, EV_TIMEOUT|EV_PERSIST, &ContextImpl::onDNSRecheckS, this))
 {
     searchBuckets.resize(nBuckets);
 
@@ -614,8 +626,15 @@ ContextImpl::ContextImpl(const Config& conf, const evbase& tcp_loop)
         if(isucast && ep.addr.family()==AF_INET && bcasts.find(ep.addr)!=bcasts.end())
             isucast = false;
 
-        log_info_printf(io, "Searching to %s%s\n", std::string(SB()<<ep).c_str(), (isucast?" unicast":""));
-        searchDest.emplace_back(ep, isucast);
+        std::string hostname;
+        auto hit = effective.addressHostnames.find(addr);
+        if(hit != effective.addressHostnames.end())
+            hostname = hit->second;
+
+        log_info_printf(io, "Searching to %s%s%s\n", std::string(SB()<<ep).c_str(),
+                        (isucast?" unicast":""),
+                        (hostname.empty()?"":(std::string(" hostname=")+hostname).c_str()));
+        searchDest.emplace_back(ep, isucast, std::move(hostname));
     }
 
     for(auto& addr : effective.nameServers) {
@@ -624,10 +643,17 @@ ContextImpl::ContextImpl(const Config& conf, const evbase& tcp_loop)
             saddr.setAddress(addr.c_str(), effective.tcp_port);
         }catch(std::runtime_error& e) {
             log_err_printf(setup, "%s  Ignoring...\n", e.what());
+            continue;
         }
 
-        log_info_printf(io, "Searching to TCP %s\n", saddr.tostring().c_str());
-        nameServers.emplace_back(saddr, nullptr);
+        std::string nsHostname;
+        auto hit = effective.nameServerHostnames.find(addr);
+        if(hit != effective.nameServerHostnames.end())
+            nsHostname = hit->second;
+
+        log_info_printf(io, "Searching to TCP %s%s\n", saddr.tostring().c_str(),
+                        (nsHostname.empty()?"":(std::string(" hostname=")+nsHostname).c_str()));
+        nameServers.push_back({saddr, nullptr, std::move(nsHostname)});
     }
 
     if(searchDest.empty() && nameServers.empty())
@@ -679,14 +705,16 @@ void ContextImpl::startNS()
     tcp_loop.call([this]() {
         // start connections to name servers
         for(auto& ns : nameServers) {
-            const auto& serv = ns.first;
-            ns.second = Connection::build(shared_from_this(), serv);
-            ns.second->nameserver = true;
-            log_debug_printf(io, "Connecting to nameserver %s\n", ns.second->peerName.c_str());
+            ns.conn = Connection::build(shared_from_this(), ns.addr);
+            ns.conn->nameserver = true;
+            log_debug_printf(io, "Connecting to nameserver %s\n", ns.conn->peerName.c_str());
         }
 
         if(event_add(nsChecker.get(), &tcpNSCheckInterval))
             log_err_printf(setup, "Error enabling TCP search reconnect timer\n%s", "");
+
+        if(event_add(dnsRecheckTimer.get(), &dnsRecheckInterval))
+            log_err_printf(setup, "Error enabling DNS recheck timer\n%s", "");
     });
 }
 
@@ -705,6 +733,7 @@ void ContextImpl::close()
         (void)event_del(searchRx6.get());
         (void)event_del(beaconCleaner.get());
         (void)event_del(cacheCleaner.get());
+        (void)event_del(dnsRecheckTimer.get());
 
         auto conns(std::move(connByAddr));
         // explicitly break ref. loop of channel cache
@@ -1224,7 +1253,7 @@ void ContextImpl::tickSearch(SearchKind kind, bool poked)
         pport[0] = pport[1] = 0;
 
         for(auto& pair : nameServers) {
-            auto& serv = pair.second;
+            auto& serv = pair.conn;
 
             if(!serv->ready || !serv->connection())
                 continue;
@@ -1323,12 +1352,33 @@ void ContextImpl::tickBeaconCleanS(evutil_socket_t fd, short evt, void *raw)
 void ContextImpl::onNSCheck()
 {
     for(auto& ns : nameServers) {
-        if(ns.second && ns.second->state != ConnBase::Disconnected) // hold-off, connecting, or connected
+        if(ns.conn && ns.conn->state != ConnBase::Disconnected)
             continue;
 
-        ns.second = Connection::build(shared_from_this(), ns.first);
-        ns.second->nameserver = true;
-        log_debug_printf(io, "Reconnecting nameserver %s\n", ns.second->peerName.c_str());
+        if(ns.hostname.empty()) {
+            ns.conn = Connection::build(shared_from_this(), ns.addr);
+            ns.conn->nameserver = true;
+            log_debug_printf(io, "Reconnecting nameserver %s\n", ns.conn->peerName.c_str());
+        } else {
+            SockAddr resolved;
+            try {
+                resolved.setAddress(ns.hostname.c_str(), ns.addr.port());
+            } catch(std::exception& e) {
+                log_warn_printf(io, "DNS resolution failed for nameserver '%s': %s\n",
+                    ns.hostname.c_str(), e.what());
+                continue;
+            }
+            if(resolved != ns.addr) {
+                log_info_printf(io, "Nameserver %s re-resolved: %s -> %s\n",
+                    ns.hostname.c_str(), ns.addr.tostring().c_str(),
+                    resolved.tostring().c_str());
+                ns.addr = resolved;
+            }
+            ns.conn = Connection::build(shared_from_this(), ns.addr);
+            ns.conn->nameserver = true;
+            log_debug_printf(io, "Reconnecting nameserver %s (%s)\n",
+                ns.conn->peerName.c_str(), ns.hostname.c_str());
+        }
     }
 }
 
@@ -1338,6 +1388,40 @@ void ContextImpl::onNSCheckS(evutil_socket_t fd, short evt, void *raw)
         static_cast<ContextImpl*>(raw)->onNSCheck();
     }catch(std::exception& e){
         log_exc_printf(io, "Unhandled error in TCP nameserver timer callback: %s\n", e.what());
+    }
+}
+
+void ContextImpl::onDNSRecheck()
+{
+    for(auto& sd : searchDest) {
+        if(sd.hostname.empty())
+            continue;
+
+        SockAddr resolved;
+        try {
+            resolved.setAddress(sd.hostname.c_str(), sd.dest.addr.port());
+        } catch(std::exception& e) {
+            log_warn_printf(io, "DNS resolution failed for search dest '%s': %s\n",
+                sd.hostname.c_str(), e.what());
+            continue;
+        }
+
+        if(resolved != sd.dest.addr) {
+            log_info_printf(io, "Search dest %s re-resolved: %s -> %s\n",
+                sd.hostname.c_str(),
+                sd.dest.addr.tostring().c_str(),
+                resolved.tostring().c_str());
+            sd.dest.addr = resolved;
+        }
+    }
+}
+
+void ContextImpl::onDNSRecheckS(evutil_socket_t fd, short evt, void *raw)
+{
+    try {
+        static_cast<ContextImpl*>(raw)->onDNSRecheck();
+    }catch(std::exception& e){
+        log_exc_printf(io, "Unhandled error in DNS recheck timer callback: %s\n", e.what());
     }
 }
 

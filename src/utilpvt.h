@@ -318,6 +318,9 @@ struct InstCounter {
 #define DEFINE_INST_COUNTER2(KLASS, NAME) std::atomic<size_t> KLASS::cnt_ ## NAME {0u}
 #define DEFINE_INST_COUNTER(KLASS) DEFINE_INST_COUNTER2(KLASS, KLASS)
 
+PVXS_API
+bool isHostname(const std::string& s);
+
 } // namespace pvxs
 
 #endif // UTILPVT_H
