@@ -7,11 +7,28 @@ compile:
   options:
     # PVXS's supported consumer language mode is C++11, and that is what its
     # own build uses.  Parsing the public headers in C++11 or C++14 against
-    # the runner's libstdc++ 13 is not possible with the supported CastXML
-    # (0.7.0, Clang 20): libstdc++ 13's <bits/char_traits.h> fails with
-    # "statement not allowed in constexpr function" in both modes.  Measured
-    # on 2026-09-16; a conda-forge GCC 16 libstdc++ is worse (it needs C++20
-    # to parse its own <type_traits>).
+    # libstdc++ 13 is not possible through abicheck's extraction pipeline.
+    #
+    # Re-measured 2026-09-17 on the toolchain CI actually selects -- CastXML
+    # 0.6.20260105-g9864b1e with bundled Clang 21.1.8 (the pin from
+    # abicheck's own action/install-castxml.sh), GCC 13.3.0, libstdc++ 13 --
+    # by running `abicheck dump` over this component's real declared header
+    # set, once per mode:
+    #
+    #   -std=c++11  FAILS  /usr/include/c++/13/bits/char_traits.h:125:7:
+    #                      constexpr function's return type 'void' is not a
+    #                      literal type
+    #   -std=c++14  FAILS  /usr/include/c++/13/bits/new_allocator.h:147:31:
+    #                      call to '__builtin_operator_new' selects non-usual
+    #                      allocation function
+    #   -std=c++17  OK     120,702,081 bytes of snapshot
+    #
+    # An earlier version of this comment blamed CastXML 0.7.0 / Clang 20 and
+    # quoted one error for both modes.  That was measured in a local
+    # experiment on a toolchain CI does not use, and it was wrong twice over:
+    # the limitation is not specific to that CastXML, and C++11 and C++14
+    # fail for two different reasons.  The limitation is real on the
+    # toolchain that matters; the recorded reason for it was not.
     #
     # This is therefore a deliberate, disclosed deviation of the extraction
     # context from the consumer language mode, not a silent one, and it is

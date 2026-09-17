@@ -266,37 +266,117 @@ Advisory (`gate-mode: advisory`) during shadow adoption. Gate status and
 compatibility are reported separately: the check can be green while
 prominently reporting a detected break. ABICC remains authoritative.
 
-## What this branch's CI has actually analysed so far
+## What has actually been compared
 
-Nothing, and that is worth stating plainly rather than leaving a reviewer to
-infer it from a green check.
+Two different questions, kept apart on purpose: what this branch's **CI** has
+analysed, and what has been **measured locally** on real builds.
 
-On every run of this branch to date the aggregate reports
-`status=fail coverage=empty, 0/4 target(s) analyzed`, with
-`channels: {accepted-main: {analyzed: 0, unavailable: 2},
-release-contract: {analyzed: 0, unavailable: 2}}`. The job still concludes
-success, because the gate is advisory and operational loss is reported as
-loss rather than as a clean result — that part is working as designed.
+### In CI: nothing yet, and the green advisory check does not say otherwise
 
-Both channels are unavailable for reasons outside this pull request:
+Every run of this branch reports `status=fail coverage=empty,
+0/4 target(s) analyzed`, `channels: {accepted-main: {analyzed: 0,
+unavailable: 2}, release-contract: {analyzed: 0, unavailable: 2}}`. The job
+concludes success because the gate is advisory and operational loss is
+reported as loss. Since this branch also renders that state into the job
+summary, a reader no longer has to open `aggregate.json` to discover it:
+
+```
+ABI/API comparison not performed: 0/4 checks completed.
+Baselines unavailable; no compatibility verdict was produced.
+```
+
+Both channels are unavailable for reasons this pull request cannot fix, and
+one of them is structural rather than transient:
 
 | Channel | Why unavailable | What would change it |
 |---|---|---|
-| accepted-main | The base branch's own `ci-scripts-build.yml` run concluded `failure`, so `verify-baseline-source` refuses it by name: `rejected run 35112205613: wrong-conclusion: the source run concluded 'failure'; allowed: success` | One green `ci-scripts-build.yml` run on the base branch |
-| release-contract | No `abicheck-baseline-<profile>.tar.zst` release asset exists yet | The historical bootstrap in `abicheck-baseline.yml`, dispatched on the default branch |
+| accepted-main | The pull request's base commit `b5024df` is on `master`, whose `ci-scripts-build.yml` contains **no abicheck integration at all** — so no push run of that revision ever produced, or could produce, a candidate artifact. `verify-baseline-source` additionally refuses master's one run by name (`rejected run 35112205613: wrong-conclusion: the source run concluded 'failure'`), but fixing that run would not help: the artifact it would need does not exist in that revision's workflow. | This integration reaching the default branch, after which the base commit of the next pull request has a real capture. |
+| release-contract | The fork has tags (`1.5.2`, `1.5.1`, …) but **zero GitHub Releases**, so there is no release to carry an asset and nothing for `resolve-baseline` to fetch. | An authorized one-time bootstrap: create the release for the selected tag, then dispatch `abicheck-baseline.yml` for it. |
 
-So what this branch demonstrates on real runners is the *candidate* half —
-the build reuse, the declarative component resolution, the capture, and
-`resolve-baseline` returning `outcome=resolved` with two members — plus the
-eligibility and aggregation machinery behaving correctly when there is
-nothing to compare against. The comparison half has been exercised only
-against locally constructed snapshot pairs, not against a baseline this
-repository published. Do not read a green advisory check here as evidence
-that a real ABI comparison ran.
+Neither is worked around. No baseline is fabricated, no comparison is
+quietly skipped, and the missing coverage is reported as missing.
 
-Neither prerequisite is something this pull request can satisfy on its own,
-and neither is worked around: no baseline is fabricated, no comparison is
-skipped quietly, and the missing coverage is reported as missing.
+### Locally: four real comparisons, on real builds
+
+To show the comparison path actually works — rather than only that the
+plumbing is wired — all three revisions were built and captured with the
+same declaration and the same pinned toolchain CI selects (CastXML
+`0.6.20260105-g9864b1e`, bundled Clang `21.1.8`, GCC 13.3.0, EPICS Base 7.0,
+bundled libevent at the identical submodule commit in all three revisions,
+so the profile really is constant).
+
+| Check | Old side | Verdict | Gating | Public +/−/mod |
+|---|---|---|---|---|
+| libpvxs vs accepted-main | base `b5024df` | **COMPATIBLE** | 0 | 0 / 0 / 0 |
+| libpvxsIoc vs accepted-main | base `b5024df` | **COMPATIBLE** | 0 | 0 / 0 / 0 |
+| libpvxs vs release-contract | tag `1.5.2` (`8e00eae`) | **BREAKING** | 2 | 1 / 2 / 0 |
+| libpvxsIoc vs release-contract | tag `1.5.2` (`8e00eae`) | **COMPATIBLE** | 0 | 0 / 0 / 0 |
+
+**The two channels disagree, and that is the point.** Against its own base
+this pull request introduces nothing — as it should, since it changes no
+runtime source. Against release 1.5.2 `libpvxs` is breaking, because two
+weak typeinfo symbols for a lambda inside
+`SharedPV::Impl::connectSub(...)` are present in 1.5.2 and gone afterwards.
+That was confirmed independently of abicheck with `nm -D`: both symbols are
+in 1.5.2's binary and absent from **both** the base and the head binary — so
+the removal happened somewhere between 1.5.2 and `master`, and is not this
+pull request's doing. A release-relative finding is drift since the release,
+never automatically a change this pull request introduced.
+
+### Controls
+
+| Control | Result |
+|---|---|
+| Independent rebuild, same revision | COMPATIBLE, 0 gating, 100% binary compatibility |
+| Disposable public break (`testAfterShutdown()` removed from the binary) | detected `func_removed`, severity `breaking`, `artifact_proven`, gating 1, exit 4 |
+| Disposable compatible addition (`abicheckProbe(long)`) | detected `func_added`, severity `compatible`, non-gating |
+| Snapshot independence | comparison succeeded in 1s after the source and install trees were deleted, with no re-extraction |
+| Test mutations in shared source | none: the controls lived in a throwaway worktree, and `HEAD` still declares `testAfterShutdown()` and knows nothing of `abicheckProbe` |
+
+The break control also produced an unplanned `exported_not_public` finding
+for the helper the control renamed, which is the tool correctly objecting to
+a symbol exported without a public declaration.
+
+### What the risk-change counts actually mean
+
+Every comparison above also reports 339–517 non-gating `risk` changes. The
+independent-rebuild control puts a number on how much of that is signal:
+rebuilding **the same revision** and comparing it against itself still
+produces **339** risk changes for `libpvxsIoc`. That is the noise floor of
+the known upstream attribution defect (dependency and sibling symbols
+attributed to the component), not change. It is why this integration stays
+advisory, and why those counts are reported but not gated.
+
+### Measured separately
+
+| Stage | Time |
+|---|---|
+| Build (per revision, EPICS Base and libevent already present) | 46–50 s |
+| Capture `libpvxs` (15 headers, ~120 MB snapshot) | 67 s |
+| Capture `libpvxsIoc` (1 header, ~2.3 MB snapshot) | 7 s |
+| Compare `libpvxs` | 131–133 s |
+| Compare `libpvxsIoc` | 2 s |
+| Compare from snapshots after the trees were deleted | 1 s |
+
+The abicheck job's earlier ≈1-minute wall time is not a comparison
+benchmark: that job performed **zero** comparisons. Snapshot compression
+changes stored bytes, not extraction time.
+
+### A measurement error worth recording
+
+The first run of this exercise reported `libpvxsIoc` **BREAKING against its
+own base**, which is impossible for a pull request that changes no runtime
+source. The cause was not the tool: the shared checkout's *installed*
+`include/` tree (a gitignored build output) still held an earlier session's
+disposable controls — `testAfterShutdown()` deleted and `abicheckProbe(long)`
+added — while its source and binary were clean. The candidate snapshot was
+therefore taken from a stale, mutated install tree.
+
+The finding was real for the inputs given; the inputs were wrong. Every
+number above was re-measured from freshly built worktrees, and the stale
+install tree has been refreshed. The git source was never affected. This is
+the concrete reason capture must be pinned to the build that produced it
+rather than to whatever happens to be lying in an install directory.
 
 ## Dependency status
 
@@ -337,9 +417,13 @@ this integration exists to remove:
 | Bootstrap (`workflow_dispatch`) | artifact in the *same* run, from `bootstrap-build` | **yes** |
 | Tag publication (`workflow_run`) | artifact in the *producing* run | **no** |
 
-The blocker is one input. `publish-baseline.yml` downloads the set with
-`actions/download-artifact` using `pattern:` alone, with no `run-id`, so it
-can only see artifacts of the run it is executing in. A `workflow_run`
+The blocker is one input, and it is unchanged as of abicheck `main`
+(`db3b12c`): `publish-baseline.yml` downloads the set with
+`actions/download-artifact` using `pattern:`/`name:` alone, with no `run-id`
+and no token, so it can only see artifacts of the run it is executing in.
+Re-checked at both this pin and `main` — `actions/` and
+`publish-baseline.yml` are byte-identical between the two, so there is
+nothing newer to adopt and no reason to move the pin for it. A `workflow_run`
 publisher is by construction a *different* run from the one that captured
 the set — that separation is the security boundary, not an accident, so
 moving the capture into the publishing run is not an option.
