@@ -91,11 +91,67 @@ jobs:
         echo "::error::refusing to publish: ${{ steps.source.outputs.refusal-code }}"
         exit 1
 
-    # `sha` is the commit that was ACTUALLY analysed.  For a pull_request
-    # producer that is the ephemeral merge commit, not the pull request
-    # head -- verify-source-run returns them as separate coordinates and
-    # has already verified their association.  Do not substitute one for
-    # the other.
+    # The first pass verified the RUN and handed back its artifact, but with
+    # no `tested-sha` input it reported the run's own head SHA -- on a
+    # pull_request run that is the pull request HEAD, not the ephemeral
+    # merge commit the analysis actually built and captured.  Publishing
+    # that would name a commit this analysis never looked at.
+    #
+    # So read the producer's claim, then verify it.  The file comes out of
+    # an artifact an unprivileged (possibly fork) job produced, so it is
+    # validated as a full hex SHA before it becomes a step output: a bare
+    # `echo "sha=$(cat file)"` would let a newline in that file forge any
+    # other output of this privileged job.
+    - name: Read the analysed commit the producer claims
+      id: tested
+      run: |
+        set -euo pipefail
+        f="${{ steps.source.outputs.artifact-path }}/tested-sha.txt"
+        if [ ! -f "$f" ]; then
+          echo "::notice::no tested-sha.txt in the reports artifact; the publisher will fall back to the run head SHA"
+          exit 0
+        fi
+        sha="$(head -c 100 "$f" | tr -d '[:space:]')"
+        case "$sha" in
+          *[!0-9a-fA-F]*|'') echo "::error::tested-sha.txt is not a commit SHA"; exit 1 ;;
+        esac
+        [ ${#sha} -eq 40 ] || [ ${#sha} -eq 64 ] || {
+          echo "::error::tested-sha.txt must hold a full SHA, got ${#sha} characters"; exit 1; }
+        printf 'sha=%s\n' "$sha" >> "$GITHUB_OUTPUT"
+
+    # Establish that the claimed commit really belongs to this pull request
+    # -- verify-source-run accepts it only as the PR head or a merge of it,
+    # and returns `unverified-tested-sha` / `unassociated-tested-sha`
+    # otherwise.  Passing the claim straight to `report` would display a SHA
+    # nothing had checked.
+    - name: Verify the analysed commit belongs to this pull request
+      id: tested-verified
+      if: ${{ steps.tested.outputs.sha != '' }}
+      uses: abicheck/abicheck/actions/verify-source-run@80cf72abb5856eb623a6056fb35d06a66ad26774
+      with:
+        source-run-id: ${{ github.event.workflow_run.id }}
+        expect-repository: ${{ github.repository }}
+        expect-workflow: .github/workflows/ci-scripts-build.yml
+        expect-event: pull_request
+        expect-run-attempt: ${{ github.event.workflow_run.run_attempt }}
+        allowed-conclusions: ''
+        artifact-name: abicheck-reports-${{ env.ABICHECK_PROFILE }}
+        destination: ${{ runner.temp }}/abicheck-reports-verified
+        tested-sha: ${{ steps.tested.outputs.sha }}
+        github-token: ${{ github.token }}
+
+    - name: Refuse a commit that does not belong to this pull request
+      if: ${{ steps.tested.outputs.sha != '' && steps.tested-verified.outputs.verified != 'true' }}
+      run: |
+        echo "::error::refusing to publish: ${{ steps.tested-verified.outputs.refusal-code }}"
+        exit 1
+
+    # `sha` is the commit that was ACTUALLY analysed: the verified merge
+    # commit when the producer recorded one, and otherwise the run head SHA
+    # that the first pass verified.  Either way it is a value
+    # verify-source-run has tied to this pull request -- never the raw
+    # producer claim, and never the PR head substituted for the merge
+    # commit.
     - name: Publish the ABI/API report
       id: publish
       uses: abicheck/abicheck/actions/report@80cf72abb5856eb623a6056fb35d06a66ad26774
@@ -103,7 +159,7 @@ jobs:
         report: ${{ steps.source.outputs.artifact-path }}/aggregate.json
         repository: ${{ github.repository }}
         pr-number: ${{ steps.source.outputs.pr-number }}
-        sha: ${{ steps.source.outputs.tested-sha }}
+        sha: ${{ steps.tested-verified.outputs.tested-sha || steps.source.outputs.tested-sha }}
         profile: ${{ env.ABICHECK_PROFILE }}
         # Order the sticky comment by the PRODUCER's run, not this
         # publisher's.  Left unset these default to the publisher's own run
@@ -138,7 +194,7 @@ jobs:
         set -eu
         echo "posted=${{ steps.publish.outputs.posted }}"
         echo "skipped-reason=${{ steps.publish.outputs.skipped-reason }}"
-        echo "pr=${{ steps.source.outputs.pr-number }} tested-sha=${{ steps.source.outputs.tested-sha }} pr-head=${{ steps.source.outputs.pr-head-sha }} from-fork=${{ steps.source.outputs.from-fork }}"
+        echo "pr=${{ steps.source.outputs.pr-number }} tested-sha=${{ steps.tested-verified.outputs.tested-sha || steps.source.outputs.tested-sha }} run-head=${{ steps.source.outputs.tested-sha }} pr-head=${{ steps.source.outputs.pr-head-sha }} from-fork=${{ steps.source.outputs.from-fork }}"
         if [ "${{ steps.publish.outcome }}" != "success" ]; then
           echo "::error::the ABI/API report could not be published (the analysis result itself is unaffected)"
           exit 1

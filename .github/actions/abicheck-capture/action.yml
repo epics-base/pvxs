@@ -77,6 +77,7 @@ runs:
       env:
         TOP: ${{ inputs.top || github.workspace }}
         SPEC_IN: ${{ inputs.component-spec }}
+        CFG_IN: ${{ inputs.build-config }}
         WORKSPACE: ${{ github.workspace }}
         SPEC_OUT: ${{ runner.temp }}/abicheck-components.resolved.json
       run: |
@@ -95,6 +96,20 @@ runs:
           echo "::error::component declaration $spec_in does not exist"
           exit 64
         }
+
+        # Same reasoning for the extraction config.  It resolved correctly
+        # only by accident: a `uses:` step runs with cwd = workspace, so a
+        # relative path happened to land in the trusted checkout.  Make the
+        # trusted origin explicit rather than depending on the runner's cwd.
+        case "$CFG_IN" in
+          "")  cfg_in= ;;
+          /*)  cfg_in=$CFG_IN ;;
+          *)   cfg_in=$WORKSPACE/$CFG_IN ;;
+        esac
+        if [ -n "$cfg_in" ] && [ ! -f "$cfg_in" ]; then
+          echo "::error::extraction config $cfg_in does not exist"
+          exit 64
+        fi
 
         cd "$TOP"
 
@@ -121,22 +136,65 @@ runs:
             ;;
         esac
 
-        # Render the two build-system values into the declaration.  Exactly
-        # these two placeholders are substituted -- not envsubst, which is
-        # not guaranteed on every runner image and would also expand any
-        # other '$' the declaration might legitimately contain.
-        sed -e "s|\${EPICS_BASE}|$EPICS_BASE|g" \
-            -e "s|\${EPICS_HOST_ARCH}|$EPICS_HOST_ARCH|g" \
-            "$spec_in" > "$SPEC_OUT"
-        if grep -q '\${' "$SPEC_OUT"; then
-          echo "::error::unsubstituted placeholder left in $SPEC_OUT"
-          grep -n '\${' "$SPEC_OUT" >&2
-          exit 64
-        fi
+        # Bind the two build-system values into the declaration.
+        #
+        # This is a JSON document, so the binding is done by a JSON reader
+        # and writer.  Textual substitution is not JSON escaping: measured
+        # against the real declaration, `sed` mangles a value containing
+        # `&` (which means "the whole match" in a replacement), emits
+        # invalid JSON for one containing `"`, drops a backslash, and fails
+        # outright on one containing the `|` delimiter.  EPICS_BASE is a
+        # path from configure/RELEASE.local, so it is not ours to constrain.
+        #
+        # Exactly two names are bound and any other ${...} is refused, so
+        # this stays a two-variable binding rather than growing into a
+        # local templating language.
+        SPEC_IN_ABS=$spec_in EPICS_BASE=$EPICS_BASE \
+        EPICS_HOST_ARCH=$EPICS_HOST_ARCH SPEC_OUT=$SPEC_OUT \
+        python3 - <<'PY'
+        import json, os, re, sys
+
+        bind = {
+            "EPICS_BASE": os.environ["EPICS_BASE"],
+            "EPICS_HOST_ARCH": os.environ["EPICS_HOST_ARCH"],
+        }
+        placeholder = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}")
+
+        def sub(text):
+            def one(m):
+                name = m.group(1)
+                if name not in bind:
+                    sys.exit(
+                        "::error::%s is not a value this capture binds; "
+                        "known: %s" % (name, ", ".join(sorted(bind)))
+                    )
+                return bind[name]
+            return placeholder.sub(one, text)
+
+        def walk(node):
+            if isinstance(node, str):
+                return sub(node)
+            if isinstance(node, list):
+                return [walk(v) for v in node]
+            if isinstance(node, dict):
+                return {walk(k): walk(v) for k, v in node.items()}
+            return node
+
+        with open(os.environ["SPEC_IN_ABS"]) as f:
+            try:
+                spec = json.load(f)
+            except json.JSONDecodeError as exc:
+                sys.exit("::error::%s is not valid JSON: %s"
+                         % (os.environ["SPEC_IN_ABS"], exc))
+
+        with open(os.environ["SPEC_OUT"], "w") as f:
+            json.dump(walk(spec), f, indent=2, sort_keys=True)
+        PY
 
         echo "epics-base=$EPICS_BASE" >> "$GITHUB_OUTPUT"
         echo "host-arch=$EPICS_HOST_ARCH" >> "$GITHUB_OUTPUT"
         echo "spec=$SPEC_OUT" >> "$GITHUB_OUTPUT"
+        echo "build-config=$cfg_in" >> "$GITHUB_OUTPUT"
         echo "resolved component declaration:"
         cat "$SPEC_OUT"
 
@@ -150,7 +208,7 @@ runs:
         project-ref: ${{ inputs.project-ref }}
         profile: ${{ inputs.profile }}
         depth: headers
-        build-config: ${{ inputs.build-config }}
+        build-config: ${{ steps.epics.outputs.build-config }}
         baseline-generation: ${{ inputs.baseline-generation }}
         generator-action-ref: ${{ inputs.abicheck-ref }}
         # A libpvxs snapshot is ~124 MB of JSON at this depth (measured).

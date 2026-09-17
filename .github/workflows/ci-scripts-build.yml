@@ -602,6 +602,81 @@ jobs:
              "analyzed=${{ steps.aggregate.outputs.analyzed }}/${{ steps.aggregate.outputs.expected }}"
         echo "channels: ${{ steps.aggregate.outputs.channels }}"
 
+    # The headline, above the rendered body, so the distinction between
+    # "compared, and compatible" and "compared nothing" survives a glance at
+    # a green advisory job.
+    #
+    # Every value here is a canonical output of actions/aggregate -- status,
+    # coverage, analyzed/expected and the per-channel roll-up.  Nothing is
+    # re-derived from report files and no reason string is parsed: the
+    # reasons stay where the aggregate document and the renderer put them.
+    - name: State plainly whether a comparison happened
+      if: ${{ always() && steps.aggregate.outcome == 'success' }}
+      env:
+        STATUS: ${{ steps.aggregate.outputs.status }}
+        COVERAGE: ${{ steps.aggregate.outputs.coverage }}
+        ANALYZED: ${{ steps.aggregate.outputs.analyzed }}
+        EXPECTED: ${{ steps.aggregate.outputs.expected }}
+        CHANNELS: ${{ steps.aggregate.outputs.channels }}
+      run: |
+        set -eu
+        {
+          if [ "$ANALYZED" -eq 0 ]; then
+            echo "## ABI/API comparison not performed: $ANALYZED/$EXPECTED checks completed."
+            echo
+            echo "Baselines unavailable; no compatibility verdict was produced."
+          elif [ "$ANALYZED" -lt "$EXPECTED" ]; then
+            echo "## ABI/API comparison incomplete: $ANALYZED/$EXPECTED checks completed."
+            echo
+            echo "Some baselines were unavailable; the verdict below covers only the checks that ran."
+          else
+            echo "## ABI/API comparison completed: $ANALYZED/$EXPECTED checks."
+          fi
+          echo
+          echo "\`status=$STATUS\` \`coverage=$COVERAGE\` \`channels=$CHANNELS\`"
+          echo
+        } >> "$GITHUB_STEP_SUMMARY"
+
+    # The same renderer the trusted publisher uses, in `dry-run` mode: it
+    # contacts no API, needs no token and posts nothing, so it stays inside
+    # this job's `contents: read`.  It renders the aggregate that was
+    # already written -- it does not extract, compare, or re-derive a
+    # verdict.
+    #
+    # This exists so the difference between "compared, and compatible" and
+    # "compared nothing at all" is visible on the run itself, not only to
+    # whoever opens aggregate.json.  A green advisory job whose summary is
+    # silent is how an empty aggregate gets mistaken for a clean result.
+    - name: Render the result into the job summary
+      if: ${{ always() && steps.aggregate.outcome == 'success' }}
+      uses: abicheck/abicheck/actions/report@80cf72abb5856eb623a6056fb35d06a66ad26774
+      with:
+        report: ${{ env.REPORT_DIR }}/aggregate.json
+        repository: ${{ github.repository }}
+        sha: ${{ github.sha }}
+        profile: ${{ env.ABICHECK_PROFILE }}
+        detail: standard
+        dry-run: 'true'
+        job-summary: 'true'
+
+    # Provenance for the trusted publisher, written into the REPORTS
+    # artifact -- the one the publisher actually downloads.  It used to be
+    # written into the candidate artifact, which the publisher never fetches,
+    # so it could not have been used even in principle.
+    #
+    # `github.sha` here is the commit this analysis really ran against: on a
+    # pull_request run that is the ephemeral merge commit, which is also
+    # what the capture recorded as its project-ref.  It is a CLAIM until the
+    # publisher verifies it -- verify-source-run checks it is the PR head or
+    # a merge of it, and refuses otherwise.  Nothing downstream trusts this
+    # file; it only lets the publisher ask the API the right question.
+    - name: Record the analysed commit for the publisher
+      if: ${{ always() }}
+      run: |
+        set -eu
+        mkdir -p "$REPORT_DIR"
+        printf '%s\n' "$GITHUB_SHA" > "$REPORT_DIR/tested-sha.txt"
+
     - name: Upload ABI reports
       if: ${{ always() }}
       uses: actions/upload-artifact@v7
