@@ -152,7 +152,7 @@ int main(int argc, char *argv[])
                     opts.server = true;
                     break;
                 case 'B':
-                    bindaddrs.emplace_back(optarg, 5076);
+                    bindaddrs.emplace_back(optarg, nullptr, 5076);
                     break;
                 case 'P':
                     opts.pvnames.insert(optarg);

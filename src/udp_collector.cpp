@@ -406,9 +406,10 @@ void UDPCollector::process_one(const uint8_t *buf, size_t nrx, origin_t origin,
                              origDest.tostring().c_str());
         }
 
-        // so far, only "tcp" transport has ever been seen.
+        // so far, only "tcp" and "tls" transport has ever been seen.
         // however, we will pass through others which might appear
         otherproto.clear();
+        protoTCP = protoTLS = false;
         Size nproto{0};
         from_wire(M, nproto);
         for(size_t i=0; i<nproto.size && M.good(); i++) {
@@ -416,6 +417,8 @@ void UDPCollector::process_one(const uint8_t *buf, size_t nrx, origin_t origin,
             from_wire(M, prot);
             if(prot=="tcp") {
                 protoTCP = true;
+            } else if(prot=="tls") {
+                protoTLS = true;
             } else if(!prot.empty()) {
                 otherproto.push_back(prot);
             }
