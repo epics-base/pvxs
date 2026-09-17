@@ -135,6 +135,31 @@ to name the exact commit that was built.
 A missing, expired, wrong-profile or incompatible baseline produces an
 explicit unavailable/incomplete outcome. It never produces a clean result.
 
+### What the baseline publisher refuses
+
+`.github/actions/abicheck-publish-baseline` validates a set before any of
+it is staged or uploaded. It checks the manifest's `profile`, that both
+components are present, and that the manifest's `project_ref` is the commit
+the requested tag actually names — resolving `refs/tags/<name>` explicitly
+rather than through the commits endpoint (which would resolve a branch of
+the same name) and peeling an annotated tag rather than accepting the tag
+object's own sha.
+
+The revision check exists because nothing downstream repeats it. The
+accepted-main comparisons pass `expected-project-ref` to `check-target`,
+since a pull request knows exactly which commit its baseline must describe.
+The release-contract comparisons cannot, because the release is chosen at
+consumption time — so they deliberately pass no expected ref. The publisher
+is therefore the only point where a set claiming the wrong revision can be
+caught, on either publishing path.
+
+That matters most for the bootstrap below, which runs a historical
+revision's own build system in the shared workspace before the runner loads
+the capture action. Splitting the jobs put the write token out of that
+code's reach; it did not make the artifact it produces trustworthy. The
+claim is verified where both paths converge rather than trusted from the
+producer.
+
 ### Bootstrapping a historical release
 
 A release that predates this integration has no capture, and re-dispatching

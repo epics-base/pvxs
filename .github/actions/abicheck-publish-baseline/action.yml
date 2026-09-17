@@ -1,7 +1,8 @@
 name: 'PVXS ABI baseline publication'
 description: >-
   Package a baseline-set and attach it to a release, after checking that
-  the set really describes the profile it is being published as.
+  the set really describes the revision and the profile it is being
+  published as.
 
   Shared by abicheck-baseline.yml's automatic and bootstrap paths so the
   eligibility rules exist once.
@@ -54,6 +55,53 @@ runs:
           echo "::error::baseline-set covers '$libs', expected both libpvxs and libpvxsIoc"
           exit 1
         fi
+
+    # Nothing downstream re-checks this.  The accepted-main comparisons
+    # pass `expected-project-ref` to check-target, because a pull request
+    # knows exactly which commit its baseline must describe.  The
+    # release-contract comparisons cannot: the release is selected at
+    # consumption time, so they deliberately pass no expected ref.  That
+    # makes this the only point at which a set claiming the wrong revision
+    # can be caught, for either publishing path.
+    #
+    # It matters most on the bootstrap path.  That job builds a historical
+    # revision by running ITS code (cue.py, its submodules, its makefiles)
+    # in the shared workspace, before the runner loads the capture action
+    # from this checkout -- so that code can influence what is captured and
+    # what the manifest records.  Splitting the jobs took the write token
+    # out of its reach; it did not make the artifact trustworthy.  Verify
+    # the claim here, where both paths converge, rather than trusting the
+    # producer.
+    - name: Check the set describes the revision it is published as
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+        BASELINE_PATH: ${{ inputs.baseline-path }}
+        TAG: ${{ inputs.tag }}
+      run: |
+        set -euo pipefail
+        manifest="$BASELINE_PATH/manifest.json"
+        actual=$(jq -r '.project_ref // empty' "$manifest")
+        [ -n "$actual" ] || {
+          echo "::error::baseline-set records no project_ref; refusing to publish it as $TAG"
+          exit 1
+        }
+
+        # Resolve refs/tags/<name> explicitly rather than via the commits
+        # endpoint, which would happily resolve a branch of the same name,
+        # and peel an annotated tag instead of treating the tag object's
+        # own sha as the commit.
+        ref=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$TAG")
+        want=$(jq -r '.object.sha' <<<"$ref")
+        if [ "$(jq -r '.object.type' <<<"$ref")" = "tag" ]; then
+          want=$(gh api "repos/$GITHUB_REPOSITORY/git/tags/$want" --jq '.object.sha')
+        fi
+
+        if [ "$actual" != "$want" ]; then
+          echo "::error::baseline-set describes $actual but $TAG is $want; refusing to publish it"
+          exit 1
+        fi
+        echo "baseline-set describes $actual, which is what $TAG names"
 
     - name: Package the baseline-set
       id: stage
