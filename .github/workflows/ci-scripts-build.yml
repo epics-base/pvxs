@@ -325,13 +325,16 @@ jobs:
         name: abicheck-candidate-${{ env.ABICHECK_PROFILE }}
         path: ${{ env.CANDIDATE_DIR }}
 
-    # Both channel directories always exist, so a staging failure reaches
-    # resolve-baseline as its own `not_found` outcome on a declared check
-    # rather than as a skipped step that would vanish from the expected set.
-    - name: Prepare the baseline channel directories
-      run: mkdir -p "$BASELINE_MAIN_DIR" "$BASELINE_RELEASE_DIR"
-
     # ── Baseline staging ─────────────────────────────────────────────
+    # Neither channel directory is pre-created.  resolve-baseline treats a
+    # baseline-path that does not exist as `not_found` -- the bootstrap case
+    # these checks opt into with baseline-required: false -- but a directory
+    # that exists WITHOUT a manifest.json as `ambiguous`, a hard failure,
+    # because that is what a partial cache restore or a stripped artifact
+    # looks like.  So `mkdir -p` here would turn every unpublished baseline
+    # into a corrupt-evidence error.  The download commands create their own
+    # directories.
+    #
     # Two distinct questions, two distinct channels, never merged:
     #   accepted-main    what did THIS pull request introduce?
     #   release-contract what changed since the selected supported release?
