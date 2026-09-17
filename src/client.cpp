@@ -1360,6 +1360,9 @@ void ContextImpl::onNSCheck()
             continue;
 
         if(ns.hostname.empty()) {
+            // drop old conn first so its dtor's connByAddr.erase(peerAddr) runs
+            // before build() inserts the fresh entry (same addr -> would erase it)
+            ns.conn.reset();
             ns.conn = Connection::build(shared_from_this(), ns.addr);
             ns.conn->nameserver = true;
             log_debug_printf(io, "Reconnecting nameserver %s\n", ns.conn->peerName.c_str());
@@ -1378,6 +1381,7 @@ void ContextImpl::onNSCheck()
                     resolved.tostring().c_str());
                 ns.addr = resolved;
             }
+            ns.conn.reset();
             ns.conn = Connection::build(shared_from_this(), ns.addr);
             ns.conn->nameserver = true;
             log_debug_printf(io, "Reconnecting nameserver %s (%s)\n",
@@ -1438,8 +1442,9 @@ void ContextImpl::onDNSRecheck()
                 resolved.tostring().c_str());
             ns.addr = resolved;
 
-            if(ns.conn)
-                ns.conn->cleanup();
+            // drop old conn first so its dtor's connByAddr.erase(peerAddr) runs
+            // before build() inserts the fresh entry
+            ns.conn.reset();
             ns.conn = Connection::build(shared_from_this(), ns.addr);
             ns.conn->nameserver = true;
             log_debug_printf(io, "Reconnecting nameserver %s after DNS change\n",
