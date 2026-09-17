@@ -8,16 +8,18 @@ Release Notes
 
 - `Value` field traverse syntax change.
   When starting from a Union, a leading "->" to be omitted.
-  "->booleanValue" may be replaced with "booleanValue".
+  ``"->booleanValue"`` may be replaced with ``"booleanValue"``.
 - Fix build with RTEMS 6.3 (Sang Woo Kim)
 - client: Correct regression in 1.5.2 leading to omission of client credentials (Sang Woo Kim).
+- client: Fix slow resource leak through ``chanByCID`` (Claudio Bisegni)
 - server: With a `server::ChannelControl`.  Setting an ``onClose()`` function alone is no longer
   enough for a channel to be considered "claimed".  It is necessary to set some GET/RPC/MONITOR/...
   handler.
+- ioc: serve ``display.precision`` for boRecord.HIGH and mbbxDirect (Sang Woo Kim)
+- ioc: publish ``$PVAS_SERVER_PORT`` and ``$PVXS_SERVER_PORT`` with the IOC singleton server's TCP port.
 - tools: The CLI tools are now built only with epics-base >= 3.15 .
 - tools: pvxput now understand JSON syntax.
 - tools: CLI tool argument parsing now requires that option flags appear before positional arguments.
-- ioc: serve ``display.precision`` for boRecord.HIGH and mbbxDirect (Sang Woo Kim)
 
 1.5.2 (Jun 2026)
 ----------------
