@@ -378,6 +378,49 @@ install tree has been refreshed. The git source was never affected. This is
 the concrete reason capture must be pinned to the build that produced it
 rather than to whatever happens to be lying in an install directory.
 
+## Blocking upstream defect: `actions/report` cannot be loaded
+
+`abicheck/abicheck/actions/report` fails GitHub Actions **template
+validation** at the pinned revision, so any job referencing it dies in
+`Set up job` before a single step runs:
+
+```
+abicheck/abicheck/<sha>/actions/report/action.yml (Line: 119, Col: 18):
+Unrecognized named-value: 'github'. Located at position 1 within
+expression: github.event.workflow_run.id
+```
+
+The cause is prose, not logic. Two input **descriptions** quote
+`${{ github.event.workflow_run.id }}` and
+`${{ github.event.workflow_run.run_attempt }}` as usage examples
+(`action.yml:122` and `:133`). Actions evaluates `${{ }}` inside input
+descriptions, and the `github` context does not exist in action metadata.
+`${{ }}` is legal in `inputs.*.default` and `outputs.*.value` — and
+`actions/check-target` uses `default: ${{ github.repository }}` perfectly
+happily — but not in a description.
+
+It is unconditional: no caller, no set of inputs and no trigger avoids it,
+because validation happens when the file is parsed. `actions/report` is the
+only abicheck Action with an expression in a description, and **no abicheck
+workflow references `actions/report`**, which is why it has no in-repo
+consumer to have caught it.
+
+What it costs here, stated plainly:
+
+| Path | Effect |
+|---|---|
+| Bounded rendering in the read-only analysis job | removed — the job could not start. The canonical headline above still reports the outcome from `actions/aggregate`'s own outputs. |
+| `abicheck-report.yml`, the trusted publisher | **cannot work as pinned.** Its `actions/report` step would fail the same way. The publisher has never run — it is `workflow_run`-only and not yet on a default branch — so this was never observed. |
+
+So the publication path is blocked on upstream twice over: it needs a
+default-branch deployment *and* it needs this defect fixed. Neither is
+worked around here; deleting two expression markers from someone else's
+documentation is upstream's call, and vendoring a patched copy of a
+published Action is exactly the local reimplementation this integration
+exists to remove.
+
+Reported upstream with the reproduction above.
+
 ## Dependency status
 
 Every abicheck Action is pinned to one merged, immutable revision:

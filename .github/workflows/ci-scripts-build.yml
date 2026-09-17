@@ -637,27 +637,30 @@ jobs:
           echo
         } >> "$GITHUB_STEP_SUMMARY"
 
-    # The same renderer the trusted publisher uses, in `dry-run` mode: it
-    # contacts no API, needs no token and posts nothing, so it stays inside
-    # this job's `contents: read`.  It renders the aggregate that was
-    # already written -- it does not extract, compare, or re-derive a
-    # verdict.
+    # A bounded rendering of the aggregate belongs here, and upstream's
+    # actions/report `dry-run: true` is exactly that -- no API, no token,
+    # nothing posted.  It cannot be used at this pin: the action fails
+    # TEMPLATE VALIDATION and the job dies in "Set up job", before any step
+    # runs:
     #
-    # This exists so the difference between "compared, and compatible" and
-    # "compared nothing at all" is visible on the run itself, not only to
-    # whoever opens aggregate.json.  A green advisory job whose summary is
-    # silent is how an empty aggregate gets mistaken for a clean result.
-    - name: Render the result into the job summary
-      if: ${{ always() && steps.aggregate.outcome == 'success' }}
-      uses: abicheck/abicheck/actions/report@80cf72abb5856eb623a6056fb35d06a66ad26774
-      with:
-        report: ${{ env.REPORT_DIR }}/aggregate.json
-        repository: ${{ github.repository }}
-        sha: ${{ github.sha }}
-        profile: ${{ env.ABICHECK_PROFILE }}
-        detail: standard
-        dry-run: 'true'
-        job-summary: 'true'
+    #   abicheck/abicheck/<sha>/actions/report/action.yml (Line: 119,
+    #   Col: 18): Unrecognized named-value: 'github'. Located at position 1
+    #   within expression: github.event.workflow_run.id
+    #
+    # The cause is prose, not logic.  Two input DESCRIPTIONS quote
+    # `${{ github.event.workflow_run.id }}` and
+    # `${{ github.event.workflow_run.run_attempt }}` as usage examples
+    # (action.yml:122 and :133).  Actions evaluates expressions inside input
+    # descriptions, and the `github` context does not exist in action
+    # metadata -- so the file cannot be loaded from any workflow, whatever
+    # inputs a caller passes.  Passing the inputs explicitly does not help;
+    # validation happens when the file is parsed.
+    #
+    # It is unconditional and it is upstream's to fix: reported with this
+    # reproduction.  It also means `abicheck-report.yml` cannot work as
+    # pinned either -- see documentation/abicheck.md.  Nothing is
+    # reimplemented here to route around it; the headline above already
+    # states the outcome from the aggregate's own outputs.
 
     # Provenance for the trusted publisher, written into the REPORTS
     # artifact -- the one the publisher actually downloads.  It used to be
