@@ -69,7 +69,7 @@ void ConnBase::connect(ev_owned_ptr<bufferevent> &&bev)
 
 #if LIBEVENT_VERSION_NUMBER >= 0x02010000
     // allow attempt to write as much as is available
-    (void)bufferevent_set_max_single_write(bev.get(), EV_SSIZE_MAX);
+    (void)bufferevent_set_max_single_write(bev.get(), EV_SIZE_MAX);
 #endif
 
     state = isClient ? Connecting : Connected;
