@@ -68,7 +68,7 @@ constexpr timeval beaconCleanInterval{180, 0};
 // special interval to attempt to reconnect to disconnected name servers
 constexpr timeval tcpNSCheckInterval{10, 0};
 
-constexpr timeval dnsRecheckInterval{30, 0};
+constexpr timeval dnsRecheckInterval{10, 0};
 
 // searchSequenceID in CMD_SEARCH is redundant.
 // So we use a static value and instead rely on IDs for individual PVs
@@ -1356,37 +1356,18 @@ void ContextImpl::tickBeaconCleanS(evutil_socket_t fd, short evt, void *raw)
 void ContextImpl::onNSCheck()
 {
     for(auto& ns : nameServers) {
+        if(!ns.hostname.empty())
+            continue; // hostname entries owned by onDNSRecheck
+
         if(ns.conn && ns.conn->state != ConnBase::Disconnected)
             continue;
 
-        if(ns.hostname.empty()) {
-            // drop old conn first so its dtor's connByAddr.erase(peerAddr) runs
-            // before build() inserts the fresh entry (same addr -> would erase it)
-            ns.conn.reset();
-            ns.conn = Connection::build(shared_from_this(), ns.addr);
-            ns.conn->nameserver = true;
-            log_debug_printf(io, "Reconnecting nameserver %s\n", ns.conn->peerName.c_str());
-        } else {
-            SockAddr resolved;
-            try {
-                resolved.setAddress(ns.hostname.c_str(), ns.addr.port());
-            } catch(std::exception& e) {
-                log_warn_printf(io, "DNS resolution failed for nameserver '%s': %s\n",
-                    ns.hostname.c_str(), e.what());
-                continue;
-            }
-            if(resolved != ns.addr) {
-                log_info_printf(io, "Nameserver %s re-resolved: %s -> %s\n",
-                    ns.hostname.c_str(), ns.addr.tostring().c_str(),
-                    resolved.tostring().c_str());
-                ns.addr = resolved;
-            }
-            ns.conn.reset();
-            ns.conn = Connection::build(shared_from_this(), ns.addr);
-            ns.conn->nameserver = true;
-            log_debug_printf(io, "Reconnecting nameserver %s (%s)\n",
-                ns.conn->peerName.c_str(), ns.hostname.c_str());
-        }
+        // drop old conn first so its dtor's connByAddr.erase(peerAddr) runs
+        // before build() inserts the fresh entry (same addr -> would erase it)
+        ns.conn.reset();
+        ns.conn = Connection::build(shared_from_this(), ns.addr);
+        ns.conn->nameserver = true;
+        log_debug_printf(io, "Reconnecting nameserver %s\n", ns.conn->peerName.c_str());
     }
 }
 
@@ -1436,19 +1417,25 @@ void ContextImpl::onDNSRecheck()
             continue;
         }
 
-        if(resolved != ns.addr) {
+        bool ipChanged = (resolved != ns.addr);
+        bool connDown = (!ns.conn || ns.conn->state == ConnBase::Disconnected);
+
+        if(ipChanged) {
             log_info_printf(io, "Nameserver %s re-resolved: %s -> %s\n",
                 ns.hostname.c_str(), ns.addr.tostring().c_str(),
                 resolved.tostring().c_str());
             ns.addr = resolved;
+        }
 
+        if(ipChanged || connDown) {
             // drop old conn first so its dtor's connByAddr.erase(peerAddr) runs
             // before build() inserts the fresh entry
             ns.conn.reset();
             ns.conn = Connection::build(shared_from_this(), ns.addr);
             ns.conn->nameserver = true;
-            log_debug_printf(io, "Reconnecting nameserver %s after DNS change\n",
-                ns.conn->peerName.c_str());
+            log_debug_printf(io, "Reconnecting nameserver %s (%s)%s\n",
+                ns.conn->peerName.c_str(), ns.hostname.c_str(),
+                ipChanged ? " after DNS change" : "");
         }
     }
 }
