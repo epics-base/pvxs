@@ -578,18 +578,19 @@ void _fromDefs(Config& self, const std::map<std::string, std::string>& defs, boo
             log_warn_printf(clientsetup, "%s invalid integer : %s", pickone.name.c_str(), e.what());
         }
     }
-    if(self.tcp_port==0u && !self.nameServers.empty()) {
-        log_warn_printf(clientsetup, "ignoring EPICS_PVA_SERVER_PORT=%d\n", 0);
-        self.tcp_port = 5075;
-    }
-
     if(pickone({"EPICS_PVA_ADDR_LIST"})) {
         split_addr_into(pickone.name.c_str(), self.addressList, pickone.val, self.udp_port,
                         false, &self.addressHostnames);
     }
 
     if(pickone({"EPICS_PVA_NAME_SERVERS"})) {
-        split_addr_into(pickone.name.c_str(), self.nameServers, pickone.val, self.tcp_port,
+        auto nameServersName(pickone.name);
+        auto nameServersVal(pickone.val);
+        if(self.tcp_port==0u) {
+            log_warn_printf(clientsetup, "ignoring EPICS_PVA_SERVER_PORT=%d\n", 0);
+            self.tcp_port = 5075;
+        }
+        split_addr_into(nameServersName.c_str(), self.nameServers, nameServersVal, self.tcp_port,
                         false, &self.nameServerHostnames);
     }
 

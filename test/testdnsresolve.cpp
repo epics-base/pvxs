@@ -57,6 +57,33 @@ void test_config_hostname_preservation()
     }
 }
 
+void test_config_hostname_no_port_defaults_tcp_port()
+{
+    testDiag("%s", __func__);
+
+    client::Config conf;
+    conf.udp_port = 5076;
+    conf.tcp_port = 0;
+
+    epicsEnvUnset("EPICS_PVA_SERVER_PORT");
+    epicsEnvSet("EPICS_PVA_NAME_SERVERS", "localhost");
+    epicsEnvSet("EPICS_PVA_ADDR_LIST", "");
+    epicsEnvSet("EPICS_PVA_AUTO_ADDR_LIST", "NO");
+
+    conf.applyEnv();
+
+    testOk(conf.tcp_port == 5075, "tcp_port defaulted to 5075 (got %u)", conf.tcp_port);
+
+    testOk(conf.nameServers.size() == 1, "nameServers has one entry");
+    if(!conf.nameServers.empty()) {
+        auto& ep = conf.nameServers[0];
+        testOk(ep.find(":0") == std::string::npos,
+               "resolved nameserver endpoint doesn't carry port 0 ('%s')", ep.c_str());
+    } else {
+        testSkip(1, "no nameServers entries");
+    }
+}
+
 void test_config_ip_no_hostname()
 {
     testDiag("%s", __func__);
@@ -77,10 +104,11 @@ void test_config_ip_no_hostname()
 MAIN(testdnsresolve)
 {
     SockAttach attach;
-    testPlan(11);
+    testPlan(14);
     testSetup();
     test_isHostname();
     test_config_hostname_preservation();
+    test_config_hostname_no_port_defaults_tcp_port();
     test_config_ip_no_hostname();
     cleanup_for_valgrind();
     return testDone();
