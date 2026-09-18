@@ -709,7 +709,7 @@ void ContextImpl::startNS()
         for(auto& ns : nameServers) {
             ns.conn = Connection::build(shared_from_this(), ns.addr);
             ns.conn->nameserver = true;
-            log_info_printf(io, "Connecting to nameserver %s%s%s\n", ns.conn->peerName.c_str(),
+            log_debug_printf(io, "Connecting to nameserver %s%s%s\n", ns.conn->peerName.c_str(),
                             (ns.hostname.empty()?"":" hostname="), ns.hostname.c_str());
         }
 
@@ -1368,7 +1368,7 @@ void ContextImpl::onNSCheck()
         ns.conn.reset();
         ns.conn = Connection::build(shared_from_this(), ns.addr);
         ns.conn->nameserver = true;
-        log_info_printf(io, "Reconnecting nameserver %s\n", ns.conn->peerName.c_str());
+        log_debug_printf(io, "Reconnecting nameserver %s\n", ns.conn->peerName.c_str());
     }
 }
 
@@ -1434,7 +1434,7 @@ void ContextImpl::onDNSRecheck()
             ns.conn.reset();
             ns.conn = Connection::build(shared_from_this(), ns.addr);
             ns.conn->nameserver = true;
-            log_info_printf(io, "Reconnecting nameserver %s (%s)%s\n",
+            log_debug_printf(io, "Reconnecting nameserver %s (%s)%s\n",
                 ns.conn->peerName.c_str(), ns.hostname.c_str(),
                 ipChanged ? " after DNS change" : "");
         }
