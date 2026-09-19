@@ -651,6 +651,9 @@ ContextImpl::ContextImpl(const Config& conf, const evbase& tcp_loop)
         if(hit != effective.nameServerHostnames.end())
             nsHostname = hit->second;
 
+        log_warn_printf(io, "TRACE nameServers loop: addr='%s' hostnameMapSize=%zu found=%d nsHostname='%s'\n",
+                        addr.c_str(), effective.nameServerHostnames.size(), (int)(hit != effective.nameServerHostnames.end()), nsHostname.c_str());
+
         log_info_printf(io, "Searching to TCP %s%s\n", saddr.tostring().c_str(),
                         (nsHostname.empty()?"":(std::string(" hostname=")+nsHostname).c_str()));
         nameServers.push_back({saddr, nullptr, std::move(nsHostname)});

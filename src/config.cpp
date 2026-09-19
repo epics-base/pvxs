@@ -170,8 +170,12 @@ void split_addr_into(const char* name, std::vector<std::string>& out, const std:
                 auto resolved = (SB()<<ep).str();
                 out.push_back(resolved);
 
+                log_warn_printf(config, "TRACE split_addr_into: token='%s' resolved='%s' isHostname=%d hostnameMap=%p\n",
+                                temp.c_str(), resolved.c_str(), (int)isHostname(temp), (void*)hostnameMap);
                 if(hostnameMap && isHostname(temp)) {
                     (*hostnameMap)[resolved] = temp;
+                    log_warn_printf(config, "TRACE hostnameMap[%s] = %s (size now %zu)\n",
+                                    resolved.c_str(), temp.c_str(), hostnameMap->size());
                 }
 
             } catch(std::exception& e){
