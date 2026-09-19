@@ -464,14 +464,14 @@ void SockAddr::setAddress(const char *name, unsigned short defport)
         throw std::runtime_error(SB()<<"IPv6 with mismatched brackets \""<<escape(name)<<"\"");
     }
 
-    char scratch[INET6_ADDRSTRLEN+1];
+    std::string scratch;
     const char *addr, *port;
     SockAddr temp;
     void *sockaddr;
 
     if(!firstc && !openb) {
         // no brackets or port.
-        // plain ipv4
+        // plain ipv4 or bare host name
         addr = name;
         port = nullptr;
         temp->sa.sa_family = AF_INET;
@@ -479,14 +479,9 @@ void SockAddr::setAddress(const char *name, unsigned short defport)
 
     } else if(firstc && firstc==lastc && !openb) {
         // no bracket and only one ':'
-        // ipv4 w/ port
-        size_t addrlen = firstc-name;
-        if(addrlen >= sizeof(scratch))
-            throw std::runtime_error(SB()<<"IPv4 address too long \""<<escape(name)<<"\"");
-
-        memcpy(scratch, name, addrlen);
-        scratch[addrlen] = '\0';
-        addr = scratch;
+        // ipv4 or host name w/ port
+        scratch.assign(name, firstc-name);
+        addr = scratch.c_str();
         port = lastc+1;
         temp->sa.sa_family = AF_INET;
         sockaddr = (void*)&temp->in.sin_addr.s_addr;
@@ -502,13 +497,8 @@ void SockAddr::setAddress(const char *name, unsigned short defport)
     } else if(openb) {
         // brackets
         // ipv6, maybe with port
-        size_t addrlen = closeb-openb-1u;
-        if(addrlen >= sizeof(scratch))
-            throw std::runtime_error(SB()<<"IPv6 address too long \""<<escape(name)<<"\"");
-
-        memcpy(scratch, openb+1, addrlen);
-        scratch[addrlen] = '\0';
-        addr = scratch;
+        scratch.assign(openb+1, closeb-openb-1u);
+        addr = scratch.c_str();
         if(lastc > closeb)
             port = lastc+1;
         else
