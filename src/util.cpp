@@ -452,6 +452,14 @@ void SockAddr::setAddress(const char *name, unsigned short defport)
      * [ipv6]
      * ipv4:port
      * ipv4
+     * hostname:port
+     * hostname
+     *
+     * "addr" below is first tried as a literal IP (old behavior, no DNS
+     * involved).  Only when that parse fails is it treated as a hostname
+     * and resolved via DNS (see evutil_inet_pton()/GetAddrInfo fallback
+     * below) -- so any of the ipv4/ipv6 forms above may have its address
+     * portion replaced with a hostname.
      */
     // TODO: could optimize to find all of these with a single loop
     const char *firstc = strchr(name, ':'),
