@@ -16,23 +16,29 @@ Configuration
 The recommended starting point is creating new context configured from ``$EPICS_PVA_*`` :ref:`environ`.
 Use `pvxs::client::Context::fromEnv`.
 
-EPICS_PVA_ADDR_LIST
+.. envvar:: EPICS_PVA_ADDR_LIST
+
     A space separated list of destination addresses to which UDP search messages will be sent.
     May contain unicast, multicast, and/or broadcast addresses.
 
-EPICS_PVA_AUTO_ADDR_LIST
-    If "YES" then all local broadcast addresses will be implicitly appended to $EPICS_PVA_ADDR_LIST.
+.. envvar:: EPICS_PVA_AUTO_ADDR_LIST
+
+    If "YES" then all local broadcast addresses will be implicitly appended to :envvar:`EPICS_PVA_ADDR_LIST`.
     "YES" if unset.
 
-EPICS_PVA_NAME_SERVERS
+.. envvar:: EPICS_PVA_NAME_SERVERS
+
     A list of the addresses of listening TCP sockets to which search messages will be sent.
 
-EPICS_PVA_BROADCAST_PORT
+.. envvar:: EPICS_PVA_BROADCAST_PORT
+
     Default UDP port to which UDP searches will be sent.  5076 if unset.
 
-EPICS_PVA_CONN_TMO
+.. envvar:: EPICS_PVA_CONN_TMO
+
     Inactivity timeout for TCP connections.  For compatibility with pvAccessCPP
     a multiplier of 4/3 is applied.  So a value of 30 results in a 40 second timeout.
+    This is an expert configuration, which will not normally be changed by end users.
     Prior to 0.2.0 this variable was ignored.
 
 .. versionadded:: 0.3.0
