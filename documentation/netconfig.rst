@@ -20,33 +20,33 @@ A Client will look at only ``$EPICS_PVA_*``.
 A server will prefer ``$EPICS_PVAS_*`` if set,
 or fallback to use the associated ``$EPICS_PVA_*`` if set.
 
-+----------------------------------+--------+--------+
-|             Variable             | Client | Server |
-+==================================+========+========+
-|       EPICS_PVA_ADDR_LIST        |   x    |   x    |
-+----------------------------------+--------+--------+
-|   EPICS_PVAS_BEACON_ADDR_LIST    |        |   x    |
-+----------------------------------+--------+--------+
-|     EPICS_PVA_AUTO_ADDR_LIST     |   x    |   x    |
-+----------------------------------+--------+--------+
-| EPICS_PVAS_AUTO_BEACON_ADDR_LIST |        |   x    |
-+----------------------------------+--------+--------+
-|    EPICS_PVAS_INTF_ADDR_LIST     |        |   x    |
-+----------------------------------+--------+--------+
-|      EPICS_PVA_SERVER_PORT       |   x    |   x    |
-+----------------------------------+--------+--------+
-|      EPICS_PVAS_SERVER_PORT      |        |   x    |
-+----------------------------------+--------+--------+
-|     EPICS_PVA_BROADCAST_PORT     |   x    |   x    |
-+----------------------------------+--------+--------+
-|    EPICS_PVAS_BROADCAST_PORT     |        |   x    |
-+----------------------------------+--------+--------+
-|   EPICS_PVAS_IGNORE_ADDR_LIST    |        |   x    |
-+----------------------------------+--------+--------+
-|        EPICS_PVA_CONN_TMO        |   x    |   x    |
-+----------------------------------+--------+--------+
-|      EPICS_PVA_NAME_SERVERS      |   x    |        |
-+----------------------------------+--------+--------+
++--------------------------------------------+--------+--------+
+|                  Variable                  | Client | Server |
++============================================+========+========+
+|       :envvar:`EPICS_PVA_ADDR_LIST`        |   x    |   x    |
++--------------------------------------------+--------+--------+
+|   :envvar:`EPICS_PVAS_BEACON_ADDR_LIST`    |        |   x    |
++--------------------------------------------+--------+--------+
+|     :envvar:`EPICS_PVA_AUTO_ADDR_LIST`     |   x    |   x    |
++--------------------------------------------+--------+--------+
+| :envvar:`EPICS_PVAS_AUTO_BEACON_ADDR_LIST` |        |   x    |
++--------------------------------------------+--------+--------+
+|    :envvar:`EPICS_PVAS_INTF_ADDR_LIST`     |        |   x    |
++--------------------------------------------+--------+--------+
+|      :envvar:`EPICS_PVA_SERVER_PORT`       |   x    |   x    |
++--------------------------------------------+--------+--------+
+|      :envvar:`EPICS_PVAS_SERVER_PORT`      |        |   x    |
++--------------------------------------------+--------+--------+
+|     :envvar:`EPICS_PVA_BROADCAST_PORT`     |   x    |   x    |
++--------------------------------------------+--------+--------+
+|    :envvar:`EPICS_PVAS_BROADCAST_PORT`     |        |   x    |
++--------------------------------------------+--------+--------+
+|   :envvar:`EPICS_PVAS_IGNORE_ADDR_LIST`    |        |   x    |
++--------------------------------------------+--------+--------+
+|        :envvar:`EPICS_PVA_CONN_TMO`        |   x    |   x    |
++--------------------------------------------+--------+--------+
+|      :envvar:`EPICS_PVA_NAME_SERVERS`      |   x    |        |
++--------------------------------------------+--------+--------+
 
 
 .. _addrspec:
@@ -96,14 +96,14 @@ Once this is known, a TCP connection is open to that server, and the operation(s
 The PVA Name resolution process is similar to Channel Access protocol.
 
 When a name needs to be resolved, a PVA client will begin sending UDP search messages to any addresses
-listed in ``$EPICS_PVA_ADDR_LIST`` and also via TCP to any servers listed in ``$EPICS_PVA_NAME_SERVERS``
+listed in :envvar:`EPICS_PVA_ADDR_LIST` and also via TCP to any servers listed in :envvar:`EPICS_PVA_NAME_SERVERS`
 which can be reached.
 
-UDP searches are by default sent to port **5076**, subject to ``$EPICS_PVA_BROADCAST_PORT`` and
-port numbers explicitly given in ``$EPICS_PVA_ADDR_LIST``.
+UDP searches are by default sent to port **5076**, subject to :envvar:`EPICS_PVA_BROADCAST_PORT` and
+port numbers explicitly given in :envvar:`EPICS_PVA_ADDR_LIST`.
 
-The addresses in ``$EPICS_PVA_ADDR_LIST`` may include IPv4/6 unicast, multicast, and/or broadcast addresses.
-By default (cf. ``$EPICS_PVA_AUTO_ADDR_LIST``) the address list is automatically populated
+The addresses in :envvar:`EPICS_PVA_ADDR_LIST` may include IPv4/6 unicast, multicast, and/or broadcast addresses.
+By default (cf. :envvar:`EPICS_PVA_AUTO_ADDR_LIST`) the address list is automatically populated
 with the IPv4 broadcast addresses of all local network interfaces.
 
 Searches will be repeated periodically in perpetuity until a positive response is received,
@@ -114,4 +114,4 @@ the time between searches will initially be short, then gradually increase
 as time passes without a positive response.
 
 Server beacon destinations are by default configured using the client configuration.
-This may be overridden with ``$EPICS_PVAS_BEACON_ADDR_LIST`` and ``$EPICS_PVAS_AUTO_BEACON_ADDR_LIST``.
+This may be overridden with :envvar:`EPICS_PVAS_BEACON_ADDR_LIST` and :envvar:`EPICS_PVAS_AUTO_BEACON_ADDR_LIST`.
