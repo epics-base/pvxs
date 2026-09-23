@@ -567,7 +567,8 @@ bool putGroupField(const Value& value,
     }
     if (changing || field.info.type==MappingInfo::Proc) {
         // Do processing if required
-        IOCSource::doPostProcessing(field.value, forceProcessing);
+        IOCSource::doPostProcessing(field.value,
+                                    field.info.type==MappingInfo::Proc ? TriState::True : forceProcessing);
         return true;
     }
     return false;

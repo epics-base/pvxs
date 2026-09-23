@@ -120,11 +120,15 @@ void testTable()
               "value.A double[] = {0}[]\n"
               "value.B double[] = {0}[]\n");
 
+    testdbGetFieldEqual("tbl:Save", DBR_LONG, 0);
+
     testDiag("Update tbl:Tbl");
     shared_array<const double> colA({1.0, 2.0, 3.0});
     shared_array<const double> colB({4.0, 5.0, 6.0});
     testTimeSec++;
     ctxt.put("tbl:Tbl").set("value.A", colA).set("value.B", colB).exec()->wait(5.0);
+
+    testdbGetFieldEqual("tbl:Save", DBR_LONG, 1);
 
     val = sub.waitForUpdate();
     checkUTAG(val, 0);
@@ -789,7 +793,7 @@ void testDbLoadGroup()
 
 MAIN(testqgroup)
 {
-    testPlan(46);
+    testPlan(48);
     testSetup();
     {
         generalTimeRegisterCurrentProvider("test", 1, &testTimeCurrent);
