@@ -452,6 +452,14 @@ void SockAddr::setAddress(const char *name, unsigned short defport)
      * [ipv6]
      * ipv4:port
      * ipv4
+     * hostname:port
+     * hostname
+     *
+     * "addr" below is first tried as a literal IP (old behavior, no DNS
+     * involved).  Only when that parse fails is it treated as a hostname
+     * and resolved via DNS (see evutil_inet_pton()/GetAddrInfo fallback
+     * below) -- so any of the ipv4/ipv6 forms above may have its address
+     * portion replaced with a hostname.
      */
     // TODO: could optimize to find all of these with a single loop
     const char *firstc = strchr(name, ':'),
@@ -464,14 +472,14 @@ void SockAddr::setAddress(const char *name, unsigned short defport)
         throw std::runtime_error(SB()<<"IPv6 with mismatched brackets \""<<escape(name)<<"\"");
     }
 
-    char scratch[INET6_ADDRSTRLEN+1];
+    std::string scratch;
     const char *addr, *port;
     SockAddr temp;
     void *sockaddr;
 
     if(!firstc && !openb) {
         // no brackets or port.
-        // plain ipv4
+        // plain ipv4 or bare host name
         addr = name;
         port = nullptr;
         temp->sa.sa_family = AF_INET;
@@ -479,14 +487,9 @@ void SockAddr::setAddress(const char *name, unsigned short defport)
 
     } else if(firstc && firstc==lastc && !openb) {
         // no bracket and only one ':'
-        // ipv4 w/ port
-        size_t addrlen = firstc-name;
-        if(addrlen >= sizeof(scratch))
-            throw std::runtime_error(SB()<<"IPv4 address too long \""<<escape(name)<<"\"");
-
-        memcpy(scratch, name, addrlen);
-        scratch[addrlen] = '\0';
-        addr = scratch;
+        // ipv4 or host name w/ port
+        scratch.assign(name, firstc-name);
+        addr = scratch.c_str();
         port = lastc+1;
         temp->sa.sa_family = AF_INET;
         sockaddr = (void*)&temp->in.sin_addr.s_addr;
@@ -502,13 +505,8 @@ void SockAddr::setAddress(const char *name, unsigned short defport)
     } else if(openb) {
         // brackets
         // ipv6, maybe with port
-        size_t addrlen = closeb-openb-1u;
-        if(addrlen >= sizeof(scratch))
-            throw std::runtime_error(SB()<<"IPv6 address too long \""<<escape(name)<<"\"");
-
-        memcpy(scratch, openb+1, addrlen);
-        scratch[addrlen] = '\0';
-        addr = scratch;
+        scratch.assign(openb+1, closeb-openb-1u);
+        addr = scratch.c_str();
         if(lastc > closeb)
             port = lastc+1;
         else
@@ -892,4 +890,36 @@ done:
     }
 }
 
-}}
+}
+
+bool isHostname(const std::string& s)
+{
+    // strip port suffix and brackets to test the host part only
+    std::string host(s);
+
+    if(!host.empty() && host.front() == '[') {
+        // bracketed IPv6: [::1]:port or [::1]
+        auto bracket = host.find(']');
+        if(bracket != std::string::npos)
+            host = host.substr(1, bracket - 1);
+    } else {
+        // for non-bracketed: only strip port if there's exactly one colon (host:port)
+        auto first_colon = host.find(':');
+        auto last_colon = host.rfind(':');
+        if(first_colon != std::string::npos && first_colon == last_colon)
+            host = host.substr(0, first_colon);
+    }
+
+    if(host.empty())
+        return false;
+
+    in_addr dummy4;
+    in6_addr dummy6;
+    if(evutil_inet_pton(AF_INET, host.c_str(), &dummy4) == 1)
+        return false;
+    if(evutil_inet_pton(AF_INET6, host.c_str(), &dummy6) == 1)
+        return false;
+    return true;
+}
+
+}

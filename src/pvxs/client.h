@@ -1026,6 +1026,16 @@ struct PVXS_API Config {
     //! @since 0.2.0
     std::vector<std::string> nameServers;
 
+    //! Maps resolved IP string -> original hostname for entries in addressList.
+    //! Populated automatically when addressList entries are hostnames.
+    //! @since NEXT
+    std::map<std::string, std::string> addressHostnames;
+
+    //! Maps resolved IP string -> original hostname for entries in nameServers.
+    //! Populated automatically when nameServers entries are hostnames.
+    //! @since NEXT
+    std::map<std::string, std::string> nameServerHostnames;
+
     //! UDP port to bind.  Default is 5076.  May be zero, cf. Server::config() to find allocated port.
     unsigned short udp_port = 5076;
     //! Default TCP port for name servers

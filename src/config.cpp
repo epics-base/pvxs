@@ -149,7 +149,8 @@ namespace {
 constexpr double tmoScale = 4.0/3.0; // 40 second idle timeout / 30 configured
 
 void split_addr_into(const char* name, std::vector<std::string>& out, const std::string& inp,
-                     uint16_t defaultPort, bool required=false)
+                     uint16_t defaultPort, bool required=false,
+                     std::map<std::string, std::string>* hostnameMap=nullptr)
 {
     size_t pos=0u;
 
@@ -166,7 +167,16 @@ void split_addr_into(const char* name, std::vector<std::string>& out, const std:
                 SockEndpoint ep(temp);
                 if(ep.addr.port()==0)
                     ep.addr.setPort(defaultPort);
-                out.push_back(SB()<<ep);
+                auto resolved = (SB()<<ep).str();
+                out.push_back(resolved);
+
+                log_warn_printf(config, "TRACE split_addr_into: token='%s' resolved='%s' isHostname=%d hostnameMap=%p\n",
+                                temp.c_str(), resolved.c_str(), (int)isHostname(temp), (void*)hostnameMap);
+                if(hostnameMap && isHostname(temp)) {
+                    (*hostnameMap)[resolved] = temp;
+                    log_warn_printf(config, "TRACE hostnameMap[%s] = %s (size now %zu)\n",
+                                    resolved.c_str(), temp.c_str(), hostnameMap->size());
+                }
 
             } catch(std::exception& e){
                 if(required)
@@ -572,17 +582,20 @@ void _fromDefs(Config& self, const std::map<std::string, std::string>& defs, boo
             log_warn_printf(clientsetup, "%s invalid integer : %s", pickone.name.c_str(), e.what());
         }
     }
-    if(self.tcp_port==0u && !self.nameServers.empty()) {
-        log_warn_printf(clientsetup, "ignoring EPICS_PVA_SERVER_PORT=%d\n", 0);
-        self.tcp_port = 5075;
-    }
-
     if(pickone({"EPICS_PVA_ADDR_LIST"})) {
-        split_addr_into(pickone.name.c_str(), self.addressList, pickone.val, self.udp_port);
+        split_addr_into(pickone.name.c_str(), self.addressList, pickone.val, self.udp_port,
+                        false, &self.addressHostnames);
     }
 
     if(pickone({"EPICS_PVA_NAME_SERVERS"})) {
-        split_addr_into(pickone.name.c_str(), self.nameServers, pickone.val, self.tcp_port);
+        auto nameServersName(pickone.name);
+        auto nameServersVal(pickone.val);
+        if(self.tcp_port==0u) {
+            log_warn_printf(clientsetup, "ignoring EPICS_PVA_SERVER_PORT=%d\n", 0);
+            self.tcp_port = 5075;
+        }
+        split_addr_into(nameServersName.c_str(), self.nameServers, nameServersVal, self.tcp_port,
+                        false, &self.nameServerHostnames);
     }
 
     if(pickone({"EPICS_PVA_AUTO_ADDR_LIST"})) {

@@ -198,6 +198,7 @@ struct Channel {
 
     // channel created with .server() to bypass normal search process
     SockAddr forcedServer;
+    std::string forcedServerHostname;
 
     // when state==Searching, number of repetitions
     size_t nSearch = 0u;
@@ -275,10 +276,12 @@ struct ContextImpl : public std::enable_shared_from_this<ContextImpl>
 
     // search destination address and whether to set the unicast flag
     struct SearchDest {
-        const SockEndpoint dest;
+        SockEndpoint dest;
         const bool isucast;
         bool lastSuccess = true;
-        SearchDest(SockEndpoint dest, bool isu) :dest(dest), isucast(isu) {}
+        std::string hostname;
+        SearchDest(SockEndpoint dest, bool isu, std::string hostname = {})
+            :dest(dest), isucast(isu), hostname(std::move(hostname)) {}
     };
 
     std::vector<SearchDest> searchDest;
@@ -299,7 +302,12 @@ struct ContextImpl : public std::enable_shared_from_this<ContextImpl>
 
     std::map<SockAddr, std::weak_ptr<Connection>> connByAddr;
 
-    std::vector<std::pair<SockAddr, std::shared_ptr<Connection>>> nameServers;
+    struct NameServerEntry {
+        SockAddr addr;
+        std::shared_ptr<Connection> conn;
+        std::string hostname;
+    };
+    std::vector<NameServerEntry> nameServers;
 
     evbase tcp_loop;
     const evevent searchRx4, searchRx6;
@@ -315,6 +323,7 @@ struct ContextImpl : public std::enable_shared_from_this<ContextImpl>
     const evevent beaconCleaner;
     const evevent cacheCleaner;
     const evevent nsChecker;
+    const evevent dnsRecheckTimer;
 
     INST_COUNTER(ClientContextImpl);
 
@@ -345,6 +354,8 @@ struct ContextImpl : public std::enable_shared_from_this<ContextImpl>
     static void cacheCleanS(evutil_socket_t fd, short evt, void *raw);
     void onNSCheck();
     static void onNSCheckS(evutil_socket_t fd, short evt, void *raw);
+    void onDNSRecheck();
+    static void onDNSRecheckS(evutil_socket_t fd, short evt, void *raw);
 };
 
 struct Context::Pvt {
