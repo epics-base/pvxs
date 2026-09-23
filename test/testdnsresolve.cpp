@@ -4,6 +4,8 @@
  * in file LICENSE that is included with this distribution.
  */
 
+#include <cstdlib>
+
 #include <testMain.h>
 #include <epicsUnitTest.h>
 #include <envDefs.h>
@@ -17,6 +19,16 @@
 using namespace pvxs;
 
 namespace {
+
+// epicsEnvUnset() is not available on older EPICS base (e.g. 3.14)
+void unsetEnv(const char *name)
+{
+#ifdef _WIN32
+    _putenv((std::string(name)+"=").c_str());
+#else
+    unsetenv(name);
+#endif
+}
 
 void test_isHostname()
 {
@@ -65,7 +77,7 @@ void test_config_hostname_no_port_defaults_tcp_port()
     conf.udp_port = 5076;
     conf.tcp_port = 0;
 
-    epicsEnvUnset("EPICS_PVA_SERVER_PORT");
+    unsetEnv("EPICS_PVA_SERVER_PORT");
     epicsEnvSet("EPICS_PVA_NAME_SERVERS", "localhost");
     epicsEnvSet("EPICS_PVA_ADDR_LIST", "");
     epicsEnvSet("EPICS_PVA_AUTO_ADDR_LIST", "NO");
