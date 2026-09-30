@@ -59,7 +59,7 @@ void testParse()
     }
 
     if(testEq(conf.addressList.size(), 2u)) {
-        testEq(conf.addressList[0], "1.2.3.4:1234");
+        testEq(conf.addressList[0], "1.2.3.4");
         testEq(conf.addressList[1], "5.6.7.8:9876");
     }
 
@@ -100,7 +100,7 @@ void testDefs()
         conf.applyDefs(defs);
         testEq(conf.udp_port, 1234);
         testFalse(conf.autoAddrList);
-        testEq(conf.addressList, std::vector<std::string>({"1.2.1.2:1234", "4.3.2.1:1234"}));
+        testEq(conf.addressList, std::vector<std::string>({"1.2.1.2", "4.3.2.1:1234"}));
         testEq(conf.interfaces, std::vector<std::string>({"1.1.1.1", "1.2.3.4"}));
     }
 
@@ -140,8 +140,8 @@ void testDefs()
         testEq(conf.udp_port, 1234);
         testEq(conf.tcp_port, 5678);
         testFalse(conf.auto_beacon);
-        testEq(conf.beaconDestinations, std::vector<std::string>({"1.2.1.2:1234", "4.3.2.1:1234"}));
-        testEq(conf.interfaces, std::vector<std::string>({"1.1.1.1:5678", "1.2.3.4:5678"}));
+        testEq(conf.beaconDestinations, std::vector<std::string>({"1.2.1.2", "4.3.2.1:1234"}));
+        testEq(conf.interfaces, std::vector<std::string>({"1.1.1.1", "1.2.3.4"}));
     }
 }
 

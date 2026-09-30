@@ -148,38 +148,56 @@ namespace {
  */
 constexpr double tmoScale = 4.0/3.0; // 40 second idle timeout / 30 configured
 
-void split_addr_into(const char* name, std::vector<std::string>& out, const std::string& inp,
-                     uint16_t defaultPort, bool required=false)
+// remove duplicates while preserving order of first appearance
+template<typename A>
+void removeDups(std::vector<A>& addrs)
+{
+    std::sort(addrs.begin(), addrs.end());
+    addrs.erase(std::unique(addrs.begin(), addrs.end()),
+                addrs.end());
+}
+
+// special handling for SockEndpoint where duplication is based on
+// address,interface.  Duplicates are combined with the longest TTL.
+template<>
+void removeDups(std::vector<SockEndpoint>& addrs)
+{
+    std::map<std::pair<SockAddr, std::string>, size_t> seen;
+    for(size_t i=0; i<addrs.size(); ) {
+        auto& ep = addrs[i];
+        auto key = std::make_pair(ep.addr, ep.iface);
+        auto it = seen.find(key);
+        if(it==seen.end()) { // first sighting
+            seen[key] = i++;
+
+        } else { // duplicate
+            auto& orig = addrs[it->second];
+
+            if(ep.ttl > orig.ttl) { // w/ longer TTL
+                orig.ttl = ep.ttl;
+            }
+
+            addrs.erase(addrs.begin()+i);
+            // 'ep' and 'orig' are invalidated
+        }
+    }
+}
+
+void split_into(std::vector<std::string>& out, const std::string& inp)
 {
     size_t pos=0u;
 
-    // parse, resolve host names, then re-print.
-    // Catch syntax errors early, and normalize prior to removing duplicates
     while(pos<inp.size()) {
         auto start = inp.find_first_not_of(" \t\r\n", pos);
         auto end = inp.find_first_of(" \t\r\n", start);
         pos = end;
 
         if(start<end) {
-            auto temp(inp.substr(start, end==std::string::npos ? end : end-start));
-            try {
-                SockEndpoint ep(temp);
-                if(ep.addr.port()==0)
-                    ep.addr.setPort(defaultPort);
-                out.push_back(SB()<<ep);
-
-            } catch(std::exception& e){
-                if(required)
-                    throw std::runtime_error(SB()<<"invalid endpoint \""<<temp<<"\" "<<e.what());
-                log_err_printf(config, "%s ignoring invalid '%s' : %s\n", name, temp.c_str(), e.what());
-            }
+            out.push_back(inp.substr(start, end==std::string::npos ? end : end-start));
         }
     }
 
-    // remove any duplicates
-    std::sort(out.begin(), out.end());
-    out.erase(std::unique(out.begin(), out.end()),
-              out.end());
+    removeDups(out);
 }
 
 std::string join_addr(const std::vector<std::string>& in)
@@ -254,12 +272,12 @@ struct PickOne {
     }
 };
 
-std::vector<SockEndpoint> parseAddresses(const std::vector<std::string>& addrs, uint16_t defport=0)
+std::vector<SockEndpoint> parseAddresses(const std::vector<std::string>& addrs)
 {
     std::vector<SockEndpoint> ret;
     for(const auto& addr : addrs) {
         try {
-            ret.emplace_back(addr, defport);
+            ret.emplace_back(addr);
         }catch(std::runtime_error& e){
             log_warn_printf(config, "Ignoring %s : %s\n", addr.c_str(), e.what());
             continue;
@@ -335,41 +353,6 @@ void addGroups(std::vector<SockEndpoint>& ifaces,
     }
 }
 
-// remove duplicates while preserving order of first appearance
-template<typename A>
-void removeDups(std::vector<A>& addrs)
-{
-    std::sort(addrs.begin(), addrs.end());
-    addrs.erase(std::unique(addrs.begin(), addrs.end()),
-                addrs.end());
-}
-
-// special handling for SockEndpoint where duplication is based on
-// address,interface.  Duplicates are combined with the longest TTL.
-template<>
-void removeDups(std::vector<SockEndpoint>& addrs)
-{
-    std::map<std::pair<SockAddr, std::string>, size_t> seen;
-    for(size_t i=0; i<addrs.size(); ) {
-        auto& ep = addrs[i];
-        auto key = std::make_pair(ep.addr, ep.iface);
-        auto it = seen.find(key);
-        if(it==seen.end()) { // first sighting
-            seen[key] = i++;
-
-        } else { // duplicate
-            auto& orig = addrs[it->second];
-
-            if(ep.ttl > orig.ttl) { // w/ longer TTL
-                orig.ttl = ep.ttl;
-            }
-
-            addrs.erase(addrs.begin()+i);
-            // 'ep' and 'orig' are invalidated
-        }
-    }
-}
-
 void enforceTimeout(double& tmo)
 {
     /* Inactivity timeouts with PVA have a long (and growing) history.
@@ -416,15 +399,15 @@ void _fromDefs(Config& self, const std::map<std::string, std::string>& defs, boo
     }
 
     if(pickone({"EPICS_PVAS_INTF_ADDR_LIST"})) {
-        split_addr_into(pickone.name.c_str(), self.interfaces, pickone.val, self.tcp_port, true);
+        split_into(self.interfaces, pickone.val);
     }
 
     if(pickone({"EPICS_PVAS_IGNORE_ADDR_LIST"})) {
-        split_addr_into(pickone.name.c_str(), self.ignoreAddrs, pickone.val, 0, true);
+        split_into(self.ignoreAddrs, pickone.val);
     }
 
     if(pickone({"EPICS_PVAS_BEACON_ADDR_LIST", "EPICS_PVA_ADDR_LIST"})) {
-        split_addr_into(pickone.name.c_str(), self.beaconDestinations, pickone.val, self.udp_port);
+        split_into(self.beaconDestinations, pickone.val);
     }
 
     if(pickone({"EPICS_PVAS_AUTO_BEACON_ADDR_LIST", "EPICS_PVA_AUTO_ADDR_LIST"})) {
@@ -578,11 +561,11 @@ void _fromDefs(Config& self, const std::map<std::string, std::string>& defs, boo
     }
 
     if(pickone({"EPICS_PVA_ADDR_LIST"})) {
-        split_addr_into(pickone.name.c_str(), self.addressList, pickone.val, self.udp_port);
+        split_into(self.addressList, pickone.val);
     }
 
     if(pickone({"EPICS_PVA_NAME_SERVERS"})) {
-        split_addr_into(pickone.name.c_str(), self.nameServers, pickone.val, self.tcp_port);
+        split_into(self.nameServers, pickone.val);
     }
 
     if(pickone({"EPICS_PVA_AUTO_ADDR_LIST"})) {
@@ -590,7 +573,7 @@ void _fromDefs(Config& self, const std::map<std::string, std::string>& defs, boo
     }
 
     if(pickone({"EPICS_PVA_INTF_ADDR_LIST"})) {
-        split_addr_into(pickone.name.c_str(), self.interfaces, pickone.val, 0);
+        split_into(self.interfaces, pickone.val);
     }
 
     if(pickone({"EPICS_PVA_CONN_TMO"})) {
