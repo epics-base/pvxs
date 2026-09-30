@@ -196,12 +196,22 @@ void testDNS()
         testArrEq(conf.addressList, expect)<<" localhost";
     }
     {
-        std::vector<std::string> expect;
+        std::vector<std::string> expect({"1.1.1.1"});
         client::Config conf;
+        conf.addressList.push_back("1.1.1.1");
         conf.addressList.push_back("16name.invalid"); // expect failure unless host resolver is hijacking
         conf.autoAddrList = false;
         conf.expand();
         testArrEq(conf.addressList, expect)<<" invalid hostname";
+    }
+    {
+        std::vector<std::string> expect;
+        client::Config conf;
+        conf.addressList.push_back("16name.invalid"); // expect failure unless host resolver is hijacking
+        conf.autoAddrList = false;
+        testThrowsMatch<std::runtime_error>(".*resolving.*16name\\.invalid.*", [&] {
+            conf.expand();
+        });
     }
 }
 
@@ -209,7 +219,7 @@ void testDNS()
 
 MAIN(testconfig)
 {
-    testPlan(34);
+    testPlan(35);
     testSetup();
     testDefs();
     logger_config_env();

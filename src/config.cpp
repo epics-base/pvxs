@@ -275,13 +275,19 @@ struct PickOne {
 std::vector<SockEndpoint> parseAddresses(const std::vector<std::string>& addrs)
 {
     std::vector<SockEndpoint> ret;
+    std::exception_ptr firsterr;
     for(const auto& addr : addrs) {
         try {
             ret.emplace_back(addr);
         }catch(std::runtime_error& e){
             log_warn_printf(config, "Ignoring %s : %s\n", addr.c_str(), e.what());
+            if(!firsterr)
+                firsterr = std::current_exception();
             continue;
         }
+    }
+    if(!addrs.empty() && ret.empty() && firsterr) {
+        std::rethrow_exception(firsterr);
     }
     return ret;
 }
