@@ -1,0 +1,25 @@
+# Extraction context for the advisory abicheck shadow check.
+#
+# This describes how the PUBLIC HEADERS are parsed.  It does not change how
+# PVXS itself is built: the libraries analysed are exactly the ones
+# `cue.py build` produced, with PVXS's normal flags.
+compile:
+  options:
+    # CURRENT LIMITATION.  PVXS's supported consumer language mode is C++11,
+    # but abicheck's extraction pipeline cannot parse these headers against
+    # libstdc++ 13 in C++11 or C++14 (each fails, for a different reason, on
+    # the toolchain CI selects).  C++17 extraction is therefore a disclosed
+    # deviation from the consumer language mode -- it is NOT validation of
+    # C++11 consumer behaviour -- and it is applied identically to both
+    # components and to both sides of every comparison.  Remove it once the
+    # pipeline parses the headers in C++11.  Measurements and the upstream
+    # issue are linked from the pull request.
+    - -std=c++17
+    # Deliberately NOT set: PVXS_API_BUILDING (a library-build-only macro)
+    # and PVXS_ENABLE_EXPERT_API (an opt-in expert surface).  The headers are
+    # parsed the way an ordinary consumer sees them.
+assurance:
+  # A comparison that could not complete is reported as incomplete, never as
+  # a clean result.  The shadow gate stays advisory; this controls what the
+  # analysis may claim, not whether CI goes red.
+  require_complete: true
