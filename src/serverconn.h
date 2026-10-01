@@ -231,7 +231,8 @@ struct Server::Pvt
 
     std::weak_ptr<Server::Pvt> internal_self;
 
-    // "const" after ctor
+    const Config original;
+    std::shared_ptr<IfaceMap::Changer> ifChanged;
     Config effective;
 
     epicsEvent done;
