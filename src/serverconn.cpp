@@ -428,7 +428,12 @@ ServIface::ServIface(const SockAddr &addr, server::Server::Pvt *server, bool fal
 #  define LEV_OPT_DISABLED 0
 #endif
 
+#if defined(__rtems__) || defined(vxWorks)
+            // lower limit on RTOS, typically with lower resources
             const int backlog = 4;
+#else
+            const int backlog = 32;
+#endif
             auto list(evconnlistener_new(server->acceptor_loop.base, onConnS, this, LEV_OPT_DISABLED|LEV_OPT_CLOSE_ON_EXEC, backlog, sock.sock));
             if(!list) {
                 int err = evutil_socket_geterror(sock);
