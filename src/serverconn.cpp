@@ -428,7 +428,7 @@ ServIface::ServIface(const SockAddr &addr, server::Server::Pvt *server, bool fal
 #  define LEV_OPT_DISABLED 0
 #endif
 
-            const int backlog = 4;
+            const int backlog = SOMAXCONN;
             auto list(evconnlistener_new(server->acceptor_loop.base, onConnS, this, LEV_OPT_DISABLED|LEV_OPT_CLOSE_ON_EXEC, backlog, sock.sock));
             if(!list) {
                 int err = evutil_socket_geterror(sock);
