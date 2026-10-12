@@ -641,6 +641,38 @@ void testPutProc()
     testdbGetFieldEqual("test:counter", DBF_LONG, 1);
 }
 
+void testPutUnmarked()
+{
+    testDiag("%s", __func__);
+    TestClient ctxt;
+
+    testdbGetFieldEqual("test:unmarked", DBF_LONG, 33);
+    testdbGetFieldEqual("test:unmarked:count", DBF_LONG, 0);
+
+    ctxt.put("test:unmarked")
+        .record("process", true)
+        .exec()->wait(5.0);
+    testdbGetFieldEqual("test:unmarked", DBF_LONG, 33);
+    testdbGetFieldEqual("test:unmarked:count", DBF_LONG, 1);
+
+#if EPICS_VERSION_INT >= VERSION_INT(3, 16, 0, 1)
+    ctxt.put("test:unmarked")
+        .record("process", true)
+        .record("block", true)
+        .exec()->wait(5.0);
+
+    testdbGetFieldEqual("test:unmarked", DBF_LONG, 33);
+#  if EPICS_VERSION_INT >= VERSION_INT(7, 0, 11, 0)
+    testdbGetFieldEqual("test:unmarked:count", DBF_LONG, 2);
+#  else
+    // https://github.com/epics-base/epics-base/issues/987
+    testdbGetFieldEqual("test:unmarked:count", DBF_LONG, 1);
+#  endif
+#else
+    testSkip(2, "dbNotify testing broken on 3.15"); // see below
+#endif
+}
+
 void testPutLog()
 {
     testDiag("%s", __func__);
@@ -1080,7 +1112,7 @@ void testiocsh(TestClient& ctxt)
 
 MAIN(testqsingle)
 {
-    testPlan(118);
+    testPlan(124);
     testSetup();
     pvxs::logger_config_env();
     generalTimeRegisterCurrentProvider("test", 1, &testTimeCurrent);
@@ -1117,6 +1149,7 @@ MAIN(testqsingle)
         testPut();
         testGetPut64();
         testPutProc();
+        testPutUnmarked();
         testPutLog();
         {
             TestClient mctxt;
