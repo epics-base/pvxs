@@ -55,6 +55,9 @@ record(calcout, "test:slowmo") {
     field(ODLY, "1")
     field(CALC, "VAL+1")
 }
+record(longout, "test:unmarked") {
+    field(VAL, "33")
+}
 record(longout, "test:ro") {
     field(ASG, "RO")
 }

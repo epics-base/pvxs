@@ -586,6 +586,8 @@ void IOCSource::put(dbChannel* pDbChannel, const Value& node, const MappingInfo 
         break;
     case MappingInfo::Scalar:
         value = node["value"];
+        if(!value.isMarked(true, true))
+            return; // client sent no value, don't write the type default
         if(value.type()==TypeCode::Struct)
             value = value["index"]; // NTEnum
         break;

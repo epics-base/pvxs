@@ -641,6 +641,27 @@ void testPutProc()
     testdbGetFieldEqual("test:counter", DBF_LONG, 1);
 }
 
+void testPutUnmarked()
+{
+    testDiag("%s", __func__);
+    TestClient ctxt;
+
+    testdbGetFieldEqual("test:unmarked", DBF_LONG, 33);
+
+    // only meta-data marked.  VAL must not be overwritten with the unmarked value's default
+    ctxt.put("test:unmarked").set("display.units", "mm").exec()->wait(5.0);
+    testdbGetFieldEqual("test:unmarked", DBF_LONG, 33);
+
+#if EPICS_VERSION_INT >= VERSION_INT(3, 16, 0, 1)
+    // nothing marked, blocking.  A processRequest with nothing to put.
+    // epics-base before epics-base/epics-base#988 completes it without processing.
+    ctxt.put("test:unmarked").pvRequest("record[block=true,process=true]").exec()->wait(5.0);
+    testdbGetFieldEqual("test:unmarked", DBF_LONG, 33);
+#else
+    testSkip(1, "dbNotify testing broken on 3.15");
+#endif
+}
+
 void testPutLog()
 {
     testDiag("%s", __func__);
@@ -1080,7 +1101,7 @@ void testiocsh(TestClient& ctxt)
 
 MAIN(testqsingle)
 {
-    testPlan(118);
+    testPlan(121);
     testSetup();
     pvxs::logger_config_env();
     generalTimeRegisterCurrentProvider("test", 1, &testTimeCurrent);
@@ -1117,6 +1138,7 @@ MAIN(testqsingle)
         testPut();
         testGetPut64();
         testPutProc();
+        testPutUnmarked();
         testPutLog();
         {
             TestClient mctxt;
