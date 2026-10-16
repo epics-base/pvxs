@@ -263,6 +263,7 @@ jobs:
         # this is the merge commit, NOT the PR head.
         project-ref: ${{ github.sha }}
         profile: ${{ env.ABICHECK_PROFILE }}
+        baseline-generation: '2'
         abicheck-ref: ${{ env.ABICHECK_REF }}
 
     - name: Upload ABI snapshots
@@ -414,7 +415,7 @@ jobs:
         bundle-members: '["libpvxs", "libpvxsIoc"]'
         profile: ${{ env.ABICHECK_PROFILE }}
         expected-project-ref: ${{ github.sha }}
-        expected-baseline-generation: '1'
+        expected-baseline-generation: '2'
 
     - name: 'libpvxs vs accepted-main'
       id: main-core
@@ -427,7 +428,7 @@ jobs:
         baseline-path: ${{ env.BASELINE_MAIN_DIR }}
         baseline-required: 'false'
         expected-project-ref: ${{ github.event.pull_request.base.sha }}
-        expected-baseline-generation: '1'
+        expected-baseline-generation: '2'
         requested-depth: headers
         gate-mode: advisory
         new-library: ${{ fromJSON(steps.snapshots.outputs.snapshot-paths).libpvxs }}
@@ -445,7 +446,7 @@ jobs:
         baseline-path: ${{ env.BASELINE_MAIN_DIR }}
         baseline-required: 'false'
         expected-project-ref: ${{ github.event.pull_request.base.sha }}
-        expected-baseline-generation: '1'
+        expected-baseline-generation: '2'
         requested-depth: headers
         gate-mode: advisory
         new-library: ${{ fromJSON(steps.snapshots.outputs.snapshot-paths).libpvxsIoc }}
@@ -462,7 +463,7 @@ jobs:
         baseline-channel: release-contract
         baseline-path: ${{ env.BASELINE_RELEASE_DIR }}/abicheck-baseline-${{ env.ABICHECK_PROFILE }}.tar.zst
         baseline-required: 'false'
-        expected-baseline-generation: '1'
+        expected-baseline-generation: '2'
         requested-depth: headers
         gate-mode: advisory
         explicit-id: release
@@ -479,7 +480,7 @@ jobs:
         baseline-channel: release-contract
         baseline-path: ${{ env.BASELINE_RELEASE_DIR }}/abicheck-baseline-${{ env.ABICHECK_PROFILE }}.tar.zst
         baseline-required: 'false'
-        expected-baseline-generation: '1'
+        expected-baseline-generation: '2'
         requested-depth: headers
         gate-mode: advisory
         explicit-id: release

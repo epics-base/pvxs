@@ -31,6 +31,10 @@ release once those four ship in one.
 Base include roots are *parser context* for both — an include root never
 widens what a component is held responsible for.
 
+Extraction defines `PVXS_ENABLE_EXPERT_API`, so the scan covers the opt-in
+Expert API as well as the ordinary consumer API. It deliberately does not
+define `PVXS_API_BUILDING`, which is private to the library build.
+
 Two assertions in the declaration are deliberate, because a glob alone would
 lose them and a pattern matching nothing is a hard error upstream:
 
@@ -44,6 +48,8 @@ One profile is analysed —
 `linux-x86_64-gcc-default-base7.0-bundled-libevent`: native Linux x86_64,
 GCC, shared (default) configuration, EPICS Base 7.0, PVXS's bundled libevent.
 That name is the compatibility key; snapshots and baselines must share it.
+Generation `2` additionally identifies the Expert-API extraction surface;
+generation-`1` snapshots must not be compared with it.
 
 ## Build reuse
 

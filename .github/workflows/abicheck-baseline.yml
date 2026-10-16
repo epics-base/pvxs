@@ -104,7 +104,7 @@ jobs:
       # set's own project_ref to equal that commit -- never the other way
       # round, and never a tag-valued rewrite of a SHA-valued manifest.
       expected-project-ref: commit
-      baseline-generation: '1'
+      baseline-generation: '2'
       asset-name-template: 'abicheck-baseline-{profile}.tar.zst'
 
   # ── Bootstrap: build a historical release once, here ───────────────────
@@ -164,6 +164,7 @@ jobs:
         output-dir: ${{ runner.temp }}/baseline-set
         project-ref: ${{ steps.tag.outputs.commit-sha }}
         profile: ${{ env.ABICHECK_PROFILE }}
+        baseline-generation: '2'
         abicheck-ref: ${{ env.ABICHECK_REF }}
 
     # An artifact, not a path: the set has to cross a real job boundary, and
@@ -192,5 +193,5 @@ jobs:
       baseline-set-artifact-prefix: abicheck-bootstrap-
       release-tag: ${{ inputs.tag }}
       expected-project-ref: commit
-      baseline-generation: '1'
+      baseline-generation: '2'
       asset-name-template: 'abicheck-baseline-{profile}.tar.zst'
