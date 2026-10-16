@@ -5,7 +5,6 @@ Version numbers are encoded as: MAJOR.MINOR.MAINT
 """
 import re
 from collections import namedtuple
-from pkg_resources import get_distribution, parse_version
 
 __all__ = (
     'version',
@@ -13,7 +12,16 @@ __all__ = (
     'abi_requires',
 )
 
-version = get_distribution('pvxslibs').version # as a string
+def version():
+    try:
+        from importlib.metadata import version # >= py 3.8
+    except ImportError: # removed from setuptools v82
+        from pkg_resources import get_distribution
+        return get_distribution('pvxslibs').version
+    else:
+        return version('pvxslibs')
+
+version = version() # as a string
 
 version_info  = re.match(r'([\d]+)\.([\d]+)\.([\d]+)([ab]\d+)?', version).groups()
 

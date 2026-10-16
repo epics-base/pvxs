@@ -59,7 +59,7 @@ void linkGlobal_t::alloc()
     if (inUnitTest()) {
         linkGlobal->provider_remote = ioc::server().clientConfig().build();
     } else {
-        linkGlobal->provider_remote = client::Config().build();
+        linkGlobal->provider_remote = client::Config::from_env().build();
     }
 }
 
@@ -104,7 +104,7 @@ std::shared_ptr<pvaLinkChannel> testGetPVALink(struct link *plink)
 {
     DBLocker lock(plink->precord);
 
-    if(plink->type!=JSON_LINK || !plink->value.json.jlink || plink->value.json.jlink->pif!=&lsetPVA) {
+    if(plink->type!=JSON_LINK || !plink->value.json.jlink || plink->value.json.jlink->pif!=&lsetPVX) {
         testAbort("Not a PVA link");
     }
     pvaLink *pval = static_cast<pvaLink*>(plink->value.json.jlink);
@@ -175,14 +175,14 @@ QSrvWaitForLinkUpdate::~QSrvWaitForLinkUpdate()
             ok = lchan->update_evt.wait(5.0);
         }
         if(!ok)
-            testAbort("%s(\"%s\") timeout at %u", __func__, plink->precord->name, seq);
+            testAbort("%s(\"%s\") timeout at %u", __func__, plink->precord->name, lchan->update_seq);
         errlogFlush();
-        testDiag("%s(\"%s\") wake at %u", __func__, plink->precord->name, seq);
+        testDiag("%s(\"%s\") wake at %u", __func__, plink->precord->name, lchan->update_seq);
     }
 }
 
 extern "C"
-void dbpvar(const char *precordname, int level)
+void dbpvxr(const char *precordname, int level)
 {
     try {
         if(!linkGlobal) {
@@ -320,15 +320,15 @@ const iocshVarDef pvaLinkNWorkersDef[] = {
     {
         "pvaLinkNWorkers",
         iocshArgInt,
-        &pvaLinkNWorkers
+        &pvxLinkNWorkers
     },
     {0, iocshArgInt, 0}
 };
 
 void pvalink_enable()
 {
-    IOCShCommand<const char*, int>("dbpvar", "dbpvar", "record name", "level")
-            .implementation<&dbpvar>();
+    IOCShCommand<const char*, int>("dbpvar", "record name", "level")
+            .implementation<&dbpvxr>();
     iocshRegisterVariable(pvaLinkNWorkersDef);
 
 }

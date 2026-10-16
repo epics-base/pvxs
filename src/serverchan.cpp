@@ -54,9 +54,16 @@ void ServerChan::cleanup()
         }
     }
 
-    auto fn(std::move(onClose));
-    if(fn)
-        fn("");
+    decltype(onClose) fn;
+    fn.swap(onClose);
+    if(fn) {
+        try {
+            fn("");
+        }catch(std::exception& e){
+            log_err_printf(connsetup, "Channel \"%s\" onClose() error: %s\n",
+                           name.c_str(), e.what());
+        }
+    }
 }
 
 ServerChannelControl::ServerChannelControl(const std::shared_ptr<ServerConn> &conn, const std::shared_ptr<ServerChan>& channel)
@@ -303,7 +310,7 @@ void ServerConn::handle_CREATE_CHANNEL()
                     if(chan->state!=ServerChan::Creating) {
                         msg = "rejected";
 
-                    } else if(chan->onOp || chan->onRPC || chan->onSubscribe || chan->onClose) {
+                    } else if(chan->onOp || chan->onRPC || chan->onSubscribe) {
                         msg = "accepted";
                         claimed = true;
 
@@ -319,7 +326,7 @@ void ServerConn::handle_CREATE_CHANNEL()
                     if(msg)
                         break;
                 }catch(std::exception& e){
-                    log_exc_printf(serversearch, "Client %s Unhandled error in onCreate %s,%d %s : %s\n", peerName.c_str(),
+                    log_err_printf(serversearch, "Client %s in onCreate %s,%d %s : %s\n", peerName.c_str(),
                                pair.first.second.c_str(), pair.first.first,
                                typeid(&e).name(), e.what());
                 }
@@ -333,12 +340,12 @@ void ServerConn::handle_CREATE_CHANNEL()
                 sts.code = Status::Fatal;
                 sts.msg = "Refused to create Channel";
                 sts.trace = "pvx:serv:refusechan:";
-                chan->state = ServerChan::Destroy;
+                chan->cleanup();
 
                 sid = -1;
             }
 
-            // ServerChannelControl destroyed it not saved by claiming Source
+            // ServerChannelControl destroyed if not saved by claiming Source
         }
 
 
@@ -391,6 +398,8 @@ void ServerConn::handle_DESTROY_CHANNEL()
         log_debug_printf(connsetup, "Client %s provides incorrect CID with DestroyChan sid=%d cid=%d!=%d '%s'\n", peerName.c_str(),
                    unsigned(sid), unsigned(chan->cid), unsigned(cid), chan->name.c_str());
     }
+
+    chanBySID.erase(it);
 
     chan->cleanup();
 

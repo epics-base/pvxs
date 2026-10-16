@@ -25,6 +25,7 @@ namespace client {
 
 struct Channel;
 struct ContextImpl;
+struct Discovery;
 
 struct ResultWaiter {
     epicsMutex lock;
@@ -44,14 +45,17 @@ struct ResultWaiter {
 struct OperationBase : public Operation
 {
     const evbase loop;
+    const std::string channelName;
     // remaining members only accessibly from loop worker
     std::shared_ptr<Channel> chan;
     uint32_t ioid = 0;
     Value result;
     bool done = false;
+    // state of handoff from user thread to worker
+    bool onWorker = false;
     std::shared_ptr<ResultWaiter> waiter;
 
-    OperationBase(operation_t op, const evbase& loop);
+    OperationBase(operation_t op, const evbase& loop, const std::string& name);
     virtual ~OperationBase();
 
     virtual void createOp() =0;
@@ -68,6 +72,7 @@ struct RequestFL {
     std::vector<Value> unused;
 
     explicit RequestFL(size_t limit) :limit(limit) {}
+    ~RequestFL();
 };
 
 struct RequestInfo {
@@ -86,6 +91,7 @@ struct Connection final : public ConnBase, public std::enable_shared_from_this<C
 
     // While HoldOff, the time until re-connection
     // While Connected, periodic Echo
+    // After early connect() failure, deferred notification
     const evevent echoTimer;
 
     bool ready = false;
@@ -223,30 +229,9 @@ struct Channel {
                                    const std::string& server);
 };
 
-struct Discovery final : public OperationBase
-{
-    const std::shared_ptr<ContextImpl> context;
-    std::function<void(const Discovered &)> notify;
-    bool running = false;
-
-    Discovery(const std::shared_ptr<ContextImpl>& context);
-    ~Discovery();
-
-    virtual bool cancel() override final;
-private:
-    bool _cancel(bool implicit);
-
-    // unused for this special case
-    virtual void _reExecGet(std::function<void (Result &&)> &&resultcb) override final;
-    virtual void _reExecPut(const Value &arg, std::function<void (Result &&)> &&resultcb) override final;
-    virtual void createOp() override final;
-    virtual void disconnected(const std::shared_ptr<OperationBase> &self) override final;
-};
-
 struct ContextImpl : public std::enable_shared_from_this<ContextImpl>
 {
     SockAttach attach;
-    IfaceMap& ifmap;
 
     enum state_t {
         Init,
@@ -280,6 +265,7 @@ struct ContextImpl : public std::enable_shared_from_this<ContextImpl>
     struct BeaconInfo {
         SockAddr sender;
         ServerGUID guid{};
+        uint16_t beaconChange = 0;
         uint8_t peerVersion{};
         epicsTimeStamp time{};
     };
@@ -288,7 +274,14 @@ struct ContextImpl : public std::enable_shared_from_this<ContextImpl>
     std::vector<uint8_t> searchMsg;
 
     // search destination address and whether to set the unicast flag
-    std::vector<std::pair<SockEndpoint, bool>> searchDest;
+    struct SearchDest {
+        const SockEndpoint dest;
+        const bool isucast;
+        bool lastSuccess = true;
+        SearchDest(SockEndpoint dest, bool isu) :dest(dest), isucast(isu) {}
+    };
+
+    std::vector<SearchDest> searchDest;
 
     size_t currentBucket = 0u;
     // Channels where we have yet to send out an initial search request

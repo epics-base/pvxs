@@ -1,6 +1,6 @@
 {
     "$schema": "http://json-schema.org/draft-07/schema#",
-    "$id": "https://mdavidsaver.github.io/pvxs/qsrv2-schema-0.json",
+    "$id": "https://epics-base.github.io/pvxs/qsrv2-schema-0.json",
     "title": "QSRV2 group schema",
     "type": "object",
     "additionalProperties": {

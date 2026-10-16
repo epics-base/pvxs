@@ -8,7 +8,7 @@
 
 #include "pvxs/version.h"
 
-#if !defined(GCC_VERSION) || GCC_VERSION>VERSION_INT(4,9,0,0)
+#if !defined(__rtems__) && ( !defined(GCC_VERSION) || GCC_VERSION>VERSION_INT(4,9,0,0) )
 #  include <regex>
 
 #else

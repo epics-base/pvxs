@@ -128,6 +128,39 @@ struct BasicTest {
         testOk1(!done->wait(1.1));
     }
 
+    void cancelDuringEvent()
+    {
+        testShow()<<__func__;
+
+        mbox.open(initial);
+        serv.start();
+
+        // A heap-allocated captured value the callback reads AFTER cancelling.
+        // If the functor (and this capture) were freed by the in-call cancel,
+        // touching `canary` would be a use-after-free (caught under ASan).
+        auto canary(std::make_shared<std::string>("alive"));
+        auto fired(std::make_shared<epicsEvent>());
+        auto ok(std::make_shared<std::atomic<bool>>(false));
+
+        std::shared_ptr<client::Subscription> self;
+        self = cli.monitor("mailbox")
+                   .maskConnected(true)
+                   .maskDisconnected(true)
+                   .event([canary, fired, ok](client::Subscription& s) {
+                       // Re-entrant cancel on this same loop: move-destroys `event`.
+                       s.cancel();
+                       // Touch the capture after the cancel; must still be valid.
+                       ok->store(*canary == "alive");
+                       fired->signal();
+                   })
+                   .exec();
+
+        post(1);
+
+        testOk1(fired->wait(5.0));
+        testOk1(ok->load());
+    }
+
     void badRequest()
     {
         testShow()<<__func__;
@@ -154,6 +187,24 @@ struct BasicTest {
         testThrows<client::RemoteError>([this, &sub]() {
             testShow()<<pop(sub, evt);
         });
+    }
+
+    void testNoMark()
+    {
+        initial.unmark();
+        mbox.open(initial);
+        serv.start();
+        subscribe("mailbox");
+
+        testThrows<client::Connected>([this](){
+            pop(sub, evt);
+        });
+
+        if(auto val = pop(sub, evt)) {
+            testEq(val["value"].as<int32_t>(), 0);
+        } else {
+            testFail("Missing initial data update");
+        }
     }
 };
 
@@ -363,14 +414,16 @@ struct TestReconn : public BasicTest
 
 MAIN(testmon)
 {
-    testPlan(41);
+    testPlan(45);
     testSetup();
     try{
         logger_config_env();
         BasicTest().orphan();
         BasicTest().cancel();
         BasicTest().asyncCancel();
+        BasicTest().cancelDuringEvent();
         BasicTest().badRequest();
+        BasicTest().testNoMark();
         TestLifeCycle().testBasic(true);
         TestLifeCycle().testBasic(false);
         TestLifeCycle().testSecond();

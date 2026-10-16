@@ -53,6 +53,12 @@ void testNTNDArray()
     auto top = nt::NTNDArray{}.create();
 
     testTrue(top.idStartsWith("epics:nt/NTNDArray:"))<<"\n"<<top;
+
+    top["value->floatValue"] = shared_array<const float>({0.1, 0.2, 0.3, 0.4, 0.5});
+    testEq(top["value"].type(), TypeCode::Union);
+    top = top["value"].lookup("->");
+    testEq(top.type(), TypeCode::Float32A);
+
 }
 
 void testNTURI()
@@ -88,19 +94,27 @@ void testNTTable()
 
     auto top = nt::NTTable{}
             .add_column(TypeCode::Int32, "A", "Col A")
+            .add_column(TypeCode::String, "C", "Col C")
             .add_column(TypeCode::String, "B", "Col B")
             .create();
 
-    shared_array<const std::string> labels({"Col A", "Col B"});
+    shared_array<const std::string> labels({"Col A", "Col C", "Col B"});
     testArrEq(top["labels"].as<shared_array<const std::string>>(), labels);
     testTrue(top["value.A"].type()==TypeCode::Int32A);
     testTrue(top["value.B"].type()==TypeCode::StringA);
+
+    std::vector<std::string> names;
+    for(auto fld : top["value"].ichildren()) {
+        names.push_back(top.nameOf(fld));
+    }
+    shared_array<const std::string> expect({"value.A", "value.C", "value.B"});
+    testArrEq(shared_array<const std::string>(names.begin(), names.end()), expect);
 }
 
 } // namespace
 
 MAIN(testnt) {
-    testPlan(21);
+    testPlan(24);
     testNTScalar();
     testNTNDArray();
     testNTURI();

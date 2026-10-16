@@ -88,8 +88,9 @@ struct ServerGPR final : public ServerOp
 
                 if(state==Executing)
                     state = Idle;
+
                 else // Creating
-                    state = Dead;
+                    cleanup();
 
             } else if(state==Creating) {
                 // connect()
@@ -108,7 +109,11 @@ struct ServerGPR final : public ServerOp
                     if(value)
                         to_wire_full(R, value);
                 }
-                state = lastRequest ? Dead : Idle;
+                if(lastRequest) {
+                    cleanup();
+                } else {
+                    state = Idle;
+                }
 
             } else {
                 assert(false);
@@ -117,10 +122,6 @@ struct ServerGPR final : public ServerOp
         }
 
         ch->statTx += conn->enqueueTxBody(cmd);
-
-        if(state == ServerOp::Dead) {
-            cleanup();
-        }
     }
 
     void cleanup() override final
@@ -180,28 +181,48 @@ struct ServerGPRConnect : public server::ConnectOp
 
     virtual void connect(const Value& prototype) override final
     {
+        if(!prototype && _op!=RPC)
+            throw std::invalid_argument("Must provide prototype");
+
+        if(didConnect)
+            throw std::logic_error("Operation already connected (has a type)");
+
         auto serv = server.lock();
         if(!serv)
             return;
-        serv->acceptor_loop.call([this, &prototype](){
+
+        auto op(this->op);
+        auto pvR(_pvRequest);
+        serv->acceptor_loop.dispatch([prototype, op, pvR](){
             if(auto oper = op.lock()) {
-                if(oper->state!=ServerOp::Creating)
+                auto chan(oper->chan.lock());
+                if(!chan)
+                    return;
+                auto conn(chan->conn.lock());
+                if(oper->state!=ServerOp::Creating || !conn)
                     return;
 
-                if(!prototype && oper->cmd!=CMD_RPC)
-                    throw std::invalid_argument("Must provide prototype");
-
-                if(oper->type)
-                    throw std::logic_error("Operation already connected (has a type)");
+                if(oper->type) {
+                    // condition should be detected prior to dispatch, paranoia double-check here
+                    log_err_printf(connsetup, "connect() from %s for %s: Operation already connected (has a type)",
+                                   conn->peerName.c_str(), chan->name.c_str());
+                    return;
+                }
 
                 if(prototype) {
                     oper->type = Value::Helper::type(prototype);
-                    oper->pvMask = request2mask(oper->type.get(), _pvRequest);
+                    try {
+                        oper->pvMask = request2mask(oper->type.get(), pvR);
+                    } catch(std::exception& e) { // eg. bad pvRequest mask
+                        oper->doReply(Value(), e.what());
+                        return;
+                    }
                 }
 
                 oper->doReply(Value(), std::string());
             }
         });
+        didConnect = true;
     }
     virtual void error(const std::string& msg) override final
     {
@@ -245,13 +266,21 @@ struct ServerGPRConnect : public server::ConnectOp
         if(!serv)
             return;
         serv->acceptor_loop.call([this, &fn](){
-            if(auto oper = op.lock())
-                oper->onClose = std::move(fn);
+            if(auto oper = op.lock()) {
+                if(oper->state != ServerOp::Dead)
+                    oper->onClose = std::move(fn);
+            }
         });
+    }
+
+    virtual void logRemote(Level lvl, const std::string& msg) override final
+    {
+        doLogRemote(this, lvl, msg);
     }
 
     const std::weak_ptr<server::Server::Pvt> server;
     const std::weak_ptr<ServerGPR> op;
+    bool didConnect = false;
 
     INST_COUNTER(ServerGPRConnect);
 };
@@ -322,6 +351,11 @@ struct ServerGPRExec : public server::ExecOp
             throw std::logic_error("Can't start timer on deal server");
 
         return Timer::Pvt::buildOneShot(delay, serv->acceptor_loop.internal(), std::move(fn));
+    }
+
+    virtual void logRemote(Level lvl, const std::string& msg) override final
+    {
+        doLogRemote(this, lvl, msg);
     }
 
     const std::weak_ptr<server::Server::Pvt> server;

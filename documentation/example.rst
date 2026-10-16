@@ -2,9 +2,9 @@ Examples
 ========
 
 Example are built, but not installed.
-They can be found under example/O.\*
+They can be found under ``example/O.*``
 
-Latest versions https://github.com/mdavidsaver/pvxs/blob/master/example/
+Latest versions https://github.com/epics-base/pvxs/blob/master/example/
 
 Shortest Client Get
 -------------------
@@ -33,3 +33,10 @@ Mailbox Server
 .. literalinclude:: ../example/mailbox.cpp
     :language: c++
     :name: mailbox.cpp
+
+Counter Server
+--------------
+
+.. literalinclude:: ../example/ticker.cpp
+    :language: c++
+    :name: ticker.cpp

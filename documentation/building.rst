@@ -5,7 +5,7 @@ Building from Source
 
 Begin be fetching all needed source. ::
 
-    git clone --recursive https://github.com/mdavidsaver/pvxs.git
+    git clone --recursive https://github.com/epics-base/pvxs.git
     git clone --branch 7.0 https://github.com/epics-base/epics-base.git
 
 Prepare the PVXS source tree with the location of epics-base: ::
@@ -31,6 +31,11 @@ On RHEL6 and earlier. ::
 On Debian/Ubuntu. ::
 
     apt-get install libevent-dev
+
+On macOS / Homebrew. ::
+
+    brew install libevent
+    export LIBEVENT=$(brew --prefix)
 
 To build from source (Requires `CMake <https://cmake.org/>`_): ::
 
@@ -98,4 +103,4 @@ Add the pvxs library as a dependency to your executable or library. eg. ::
 libevent will be automatically added for linking.
 
 For those interested, this is accomplished with the logic found in
-"cfg/CONFIG_PVXS_MODULE".
+``$(INSTALL_LOCATION)/cfg/CONFIG_PVXS_MODULE``.

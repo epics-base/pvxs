@@ -84,6 +84,9 @@ ServerConn::ServerConn(ServIface* iface, evutil_socket_t sock, struct sockaddr *
     timeval tmo(totv(iface->server->effective.tcpTimeout));
     bufferevent_set_timeouts(bev.get(), &tmo, &tmo);
 
+    // set threshold to begin clearing backlog
+    bufferevent_setwatermark(this->bev.get(), EV_WRITE, tcp_tx_limit, 0);
+
     auto tx = bufferevent_get_output(bev.get());
 
     std::vector<uint8_t> buf(128);
@@ -138,6 +141,23 @@ const std::shared_ptr<ServerChan>& ServerConn::lookupSID(uint32_t sid)
         //throw std::runtime_error(SB()<<"Client "<<peerName<<" non-existent SID "<<sid);
     }
     return it->second;
+}
+
+void ServerConn::logRemote(uint32_t ioid, Level lvl, const std::string& msg)
+{
+    // TODO: respect TX throttle
+    if(!connection())
+        return;
+    {
+        (void)evbuffer_drain(txBody.get(), evbuffer_get_length(txBody.get()));
+
+        EvOutBuf R(sendBE, txBody.get());
+        to_wire(R, ioid);
+        to_wire(R, level2mtype(lvl));
+        to_wire(R, msg);
+    }
+
+    enqueueTxBody(CMD_MESSAGE);
 }
 
 void ServerConn::handle_ECHO()
@@ -265,8 +285,14 @@ void ServerConn::handle_CANCEL_REQUEST()
     if(op->state==ServerOp::Executing) {
         op->state = ServerOp::Idle;
 
-        if(op->onCancel)
-            op->onCancel();
+        if(op->onCancel) {
+            try {
+                op->onCancel();
+            }catch(std::exception& e){
+                log_err_printf(connsetup, "IOID %u to \"%s\" remote onCancel() error: %s\n",
+                               unsigned(ioid), chan->name.c_str(), e.what());
+            }
+        }
 
     } else {
         // an allowed race
@@ -361,23 +387,6 @@ void ServerConn::cleanup()
     }
 }
 
-void ServerConn::bevRead()
-{
-    ConnBase::bevRead();
-
-    if(bev) {
-        auto tx = bufferevent_get_output(bev.get());
-
-        if(evbuffer_get_length(tx)>=tcp_tx_limit) {
-            // write buffer "full".  stop reading until it drains
-            // TODO configure
-            (void)bufferevent_disable(bev.get(), EV_READ);
-            bufferevent_setwatermark(bev.get(), EV_WRITE, tcp_tx_limit/2, 0);
-            log_debug_printf(connio, "%s suspend READ\n", peerName.c_str());
-        }
-    }
-}
-
 void ServerConn::bevWrite()
 {
     log_debug_printf(connio, "%s process backlog\n", peerName.c_str());
@@ -391,13 +400,6 @@ void ServerConn::bevWrite()
 
         fn();
     }
-
-    // TODO configure
-    if(evbuffer_get_length(tx)<tcp_tx_limit) {
-        (void)bufferevent_enable(bev.get(), EV_READ);
-        bufferevent_setwatermark(bev.get(), EV_WRITE, 0, 0);
-        log_debug_printf(connio, "%s resume READ\n", peerName.c_str());
-    }
 }
 
 
@@ -408,18 +410,40 @@ ServIface::ServIface(const SockAddr &addr, server::Server::Pvt *server, bool fal
     server->acceptor_loop.assertInLoop();
     auto orig_port = bind_addr.port();
 
-    sock = evsocket(bind_addr.family(), SOCK_STREAM, 0);
-
-    if(evutil_make_listen_socket_reuseable(sock.sock))
-        log_warn_printf(connsetup, "Unable to make socket reusable%s", "\n");
-
     // try to bind to requested port, then fallback to a random port
     while(true) {
+
+        sock = evsocket(bind_addr.family(), SOCK_STREAM, 0);
+
+        if(evutil_make_listen_socket_reuseable(sock.sock))
+            log_warn_printf(connsetup, "Unable to make socket reusable%s", "\n");
+
         try {
             sock.bind(bind_addr);
+            // semantics of SO_REUSEADDR on *nix allow multiple bind() to success.
+            // however, only one listen() will succeed
+
+            // added in libevent 2.1.1
+#ifndef LEV_OPT_DISABLED
+#  define LEV_OPT_DISABLED 0
+#endif
+
+            const int backlog = 4;
+            auto list(evconnlistener_new(server->acceptor_loop.base, onConnS, this, LEV_OPT_DISABLED|LEV_OPT_CLOSE_ON_EXEC, backlog, sock.sock));
+            if(!list) {
+                int err = evutil_socket_geterror(sock);
+                throw std::system_error(err, std::system_category());
+            }
+            listener = evlisten(__FILE__, __LINE__, list);
+
+            if(LEV_OPT_DISABLED==0)
+                evconnlistener_disable(listener.get());
+
         } catch(std::system_error& e) {
-            if(fallback && e.code().value()==SOCK_EADDRINUSE) {
-                log_debug_printf(connsetup, "Address %s in use\n", bind_addr.tostring().c_str());
+            if(fallback && (e.code().value()==SOCK_EADDRINUSE || e.code().value()==SOCK_EACCES)) {
+                log_debug_printf(connsetup, "Address %s in use or not permitted: %s\n",
+                                 bind_addr.tostring().c_str(),
+                                 e.what());
                 bind_addr.setPort(0);
                 fallback = false;
                 continue;
@@ -438,18 +462,6 @@ ServIface::ServIface(const SockAddr &addr, server::Server::Pvt *server, bool fal
     if(orig_port && bind_addr.port() != orig_port) {
         log_warn_printf(connsetup, "Server unable to bind port %u, falling back to %s\n", orig_port, name.c_str());
     }
-
-    // added in libevent 2.1.1
-#ifndef LEV_OPT_DISABLED
-#  define LEV_OPT_DISABLED 0
-#endif
-
-    const int backlog = 4;
-    listener = evlisten(__FILE__, __LINE__,
-                        evconnlistener_new(server->acceptor_loop.base, onConnS, this, LEV_OPT_DISABLED|LEV_OPT_CLOSE_ON_EXEC, backlog, sock.sock));
-
-    if(!LEV_OPT_DISABLED)
-        evconnlistener_disable(listener.get());
 }
 
 void ServIface::onConnS(struct evconnlistener *listener, evutil_socket_t sock, struct sockaddr *peer, int socklen, void *raw)
@@ -483,15 +495,24 @@ void ServerOp::cleanup()
     if(state==ServerOp::Dead)
         return;
 
-    if(state==ServerOp::Executing && onCancel) {
-        auto fn(std::move(onCancel));
-        fn();
+    if(onCancel) {
+        decltype(onCancel) fn;
+        fn.swap(onCancel);
+        if(state==ServerOp::Executing) {
+            try {
+                fn();
+            }catch(std::exception& e){
+                auto ch(chan.lock());
+                log_err_printf(connsetup, "IOID %u to \"%s\" cleanup onCancel() error: %s\n",
+                               unsigned(ioid), ch ? ch->name.c_str() : "<defunct>", e.what());
+            }
+        }
     }
 
     state = ServerOp::Dead;
 
-    onCancel = nullptr;
-    auto closer(std::move(onClose));
+    decltype(onClose) closer;
+    closer.swap(onClose);
     bool notify = closer.operator bool();
 
     if(auto ch = chan.lock()) {
@@ -509,8 +530,15 @@ void ServerOp::cleanup()
         }
     }
 
-    if(notify)
-        closer("");
+    if(notify) {
+        // no loop to dispatch to, so this one is not caught by evhelper
+        try {
+            closer("");
+        }catch(std::exception& e){
+            log_err_printf(connsetup, "IOID %u onClose() error: %s\n",
+                           unsigned(ioid), e.what());
+        }
+    }
 }
 
 }} // namespace pvxs::impl

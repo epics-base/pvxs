@@ -16,6 +16,9 @@
 #include <memory>
 #include <stdexcept>
 
+#include <stdlib.h>
+
+#include <envDefs.h>
 #include <epicsExport.h>
 #include <epicsExit.h>
 #include <epicsString.h>
@@ -93,6 +96,14 @@ void initialisePvxsServer() {
     Guard G(pvxServer->lock);
     if(!pvxServer->srv) {
         pvxServer->srv = Server(conf);
+
+        std::ostringstream strm;
+        std::string portstr(SB()<<pvxServer->srv.config().tcp_port);
+        // publish our effective TCP port number
+        epicsEnvSet("PVXS_SERVER_PORT", portstr.c_str());
+        // publish with the same name used by pvAccessCPP,
+        // which may later overwrite if it is also loaded.
+        epicsEnvSet("PVAS_SERVER_PORT", portstr.c_str());
     }
 }
 
@@ -165,9 +176,17 @@ void testCleanupPrepare()
     resetGroups();
 }
 
-////////////////////////////////////
-// Two ioc shell commands for pvxs
-////////////////////////////////////
+static
+void pvxs_log_config(const char *str)
+{
+    logger_config_str(str);
+}
+
+static
+void pvxs_log_reset()
+{
+    logger_level_clear();
+}
 
 /**
  * Show the PVXS server report.
@@ -456,6 +475,12 @@ void pvxsBaseRegistrar() noexcept {
 
         bool enableQ = enable2();
 
+        IOCShCommand<const char*>("pvxs_log_config", "KEY=VAL,KEY=VAL,...",
+                                  "Append logger configuration.  eg. pvxs_log_config \"pvxs.*=DEBUG\"")
+                .implementation<&pvxs_log_config>();
+        IOCShCommand<>("pvxs_log_clear",
+                       "Reset logger configuration to defaults")
+                .implementation<&pvxs_log_reset>();
         IOCShCommand<int>("pvxsr", "[show_detailed_information?]", "PVXS Server Report.  "
                                                                    "Shows information about server config (level==0)\n"
                                                                    "or about connected clients (level>0).\n")

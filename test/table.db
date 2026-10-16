@@ -35,7 +35,8 @@ record(aao, "$(N)B") {
     field(TPRO, "1")
 }
 
-record(longout, "$(N)Save") {
+record(calc, "$(N)Save") {
+    field(CALC, "VAL+1")
     field(MDEL, "-1") # ensure we always trigger group monitor
     field(TPRO, "1")
     info(Q:group, {

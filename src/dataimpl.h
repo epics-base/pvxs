@@ -47,6 +47,7 @@ struct Value::Helper {
  * copy   marked from delta -> cache
  * copy unmarked from cache -> delta
  */
+PVXS_API
 void cache_sync(Value& cache, Value& delta);
 
 namespace impl {
@@ -178,7 +179,7 @@ void from_wire_type(Buffer& buf, TypeStore& ctxt, Value& val);
 
 //! deserialize full Value
 PVXS_API
-void from_wire_full(Buffer& buf, TypeStore& ctxt, Value& val);
+void from_wire_full(Buffer& buf, TypeStore& ctxt, Value& val, unsigned depth=0);
 
 //! deserialize BitMask and partial Value
 PVXS_API

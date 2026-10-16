@@ -8,13 +8,15 @@
  */
 
 #include <string>
-#include <sstream>
 
 #include <epicsThread.h>
 #include <cantProceed.h>
 
 #include "group.h"
 #include "utilpvt.h"
+
+// define printf macro after __attribute__ in event2.h
+#include <epicsStdio.h>
 
 namespace pvxs {
 namespace ioc {

@@ -44,7 +44,7 @@ void testSetup();
 PVXS_API
 void cleanup_for_valgrind();
 
-/** A single test case (or diagnostic line).
+/** A single test case and context messages.
  *
  * Acts as an output string to accumulate test comment.
  * Multi-line output results in one test line, and subsequent diagnostic lines.
@@ -243,14 +243,14 @@ testCase testThrows(FN fn)
 /** Assert that an exception is throw with a certain message.
  *
  * @tparam Exception The exception type which should be thrown
- * @param expr A regular expression
+ * @param expr A regular expression which the exception message must match
  * @param fn A callable
  *
  * @returns A testCase which passes if an Exception instance was caught
  *          and std::exception::what() matched the provided regular expression.
  *
  * @code
- * testThrowsMatch<std::runtime_error>("happened", []() {
+ * testThrowsMatch<std::runtime_error>(".*happened", []() {
  *      testShow()<<"Now you see me";
  *      throw std::runtime_error("I happened");
  *      testShow()<<"Now you don't";
@@ -276,47 +276,77 @@ testCase testThrowsMatch(const std::string& expr, FN fn)
 
 } // namespace pvxs
 
-//! Macro which assert that an expression evaluate to 'true'.
-//! Evaluates to a pvxs::testCase
+/** Macro which assert that an expression evaluate to 'true'.
+ *
+ * Evaluates to a pvxs::testCase, which may be used to add notes.
+ *
+ * @code
+ * testTrue(1+1==2)<<" Yes, really!";
+ * @endcode
+ */
 #define testTrue(EXPR) ::pvxs::testCase(EXPR)<<(" " #EXPR)
 
-//! Macro which assert that an expression evaluate to 'true'.
-//! Evaluates to a pvxs::testCase
+//! Macro which assert that an expression evaluate to 'false'.
+//! Equivalent to @code testTrue(!(EXPR)); @endcode
 #define testFalse(EXPR) ::pvxs::testCase(!(EXPR))<<(" !" #EXPR)
 
-//! Macro which asserts equality between LHS and RHS.
-//! Evaluates to a pvxs::testCase
-//! Roughly equivalent to @code testOk((LHS)==(RHS), "..."); @endcode
+/** Macro which asserts equality between LHS and RHS.
+ *
+ * Evaluates to a pvxs::testCase, which may be used to add notes.
+ * Also, both left and right hand side values will be printed.
+ *
+ * @code
+ * testEq(1+1, 2)<<" Yes, really!";
+ * @endcode
+ */
 #define testEq(LHS, RHS) ::pvxs::detail::testEq(#LHS, LHS, #RHS, RHS)
 
 //! Macro which asserts in-equality between LHS and RHS.
-//! Evaluates to a pvxs::testCase
-//! Roughly equivalent to @code testOk((LHS)!=(RHS), "..."); @endcode
+//! Inverse of testEq()
 #define testNotEq(LHS, RHS) ::pvxs::detail::testNotEq(#LHS, LHS, #RHS, RHS)
 
-//! Macro which asserts equality between LHS and RHS.
-//! Evaluates to a pvxs::testCase
-//! Functionally equivalent to testEq() with two std::string instances.
-//! Prints diff-like output which is friendlier to multi-line strings.
+/** Macro which asserts equality between LHS and RHS.
+ *
+ * Evaluates to a pvxs::testCase, which may be used to add notes.
+ * Functionally equivalent to testEq() with two std::string instances.
+ * Prints diff-like output which is friendlier for multi-line strings.
+ */
 #define testStrEq(LHS, RHS) ::pvxs::detail::_testStrTest(1, #LHS, ::pvxs::detail::asStr(LHS), #RHS, ::pvxs::detail::asStr(RHS))
 
 //! Macro which asserts inequality between LHS and RHS.
-//! Evaluates to a pvxs::testCase
-//! Functionally equivalent to testNotEq() with two std::string instances.
-//! Prints diff-like output which is friendlier to multi-line strings.
+//! Inverse of testStrEq()
 //! @since 0.2.0
 #define testStrNotEq(LHS, RHS) ::pvxs::detail::_testStrTest(0, #LHS, ::pvxs::detail::asStr(LHS), #RHS, ::pvxs::detail::asStr(RHS))
 
-//! Macro which asserts that STR matches the regular expression EXPR
-//! Evaluates to a pvxs::testCase
-//! @since 0.2.1 Expression syntax is POSIX extended.
-//! @since 0.1.1
+/** Macro which asserts that STR matches completely the regular expression EXPR
+ *
+ * Evaluates to a pvxs::testCase, which may be used to add notes.
+ *
+ * @param EXPR regex string
+ * @param STR Input to be matched
+ *
+ * @code
+ * testStrMatch("h.*world", "hello world");  // ok
+ * testStrMatch("h.*world", "hello world!"); // not ok
+ * @endcode
+ *
+ * @since 0.2.1 Expression syntax is POSIX extended.
+ * @since 0.1.1 Added
+ */
 #define testStrMatch(EXPR, STR) ::pvxs::detail::_testStrMatch(#EXPR, EXPR, #STR, STR)
 
-//! Macro which asserts equality between LHS and RHS.
-//! Evaluates to a pvxs::testCase
-//! Functionally equivalent to testEq() for objects with .size() and operator[].
-//! Prints element by element differences
+/** Macro which asserts equality between LHS and RHS.
+ *
+ * Evaluates to a pvxs::testCase, which may be used to add notes.
+ * Functionally equivalent to testEq() for objects with .size() and operator[].
+ * Prints element by element differences
+ *
+ * @code
+ * std::vector<uint32_t> left({...});
+ * pvxs::shared_array<const uint32_t> right(...);
+ * testArrEq(left, right)<<" context";
+ * @endcode
+ */
 #define testArrEq(LHS, RHS) ::pvxs::detail::testArrEq(#LHS, LHS, #RHS, RHS)
 
 //! Macro which prints diagnostic (non-test) lines.

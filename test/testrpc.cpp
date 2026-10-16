@@ -94,6 +94,8 @@ struct Tester {
 
     void echo()
     {
+        testShow()<<__func__;
+
         mbox.open(initial);
         serv.start();
 
@@ -110,6 +112,8 @@ struct Tester {
 
     void lazy()
     {
+        testShow()<<__func__;
+
         // mbox not open
         serv.start();
 
@@ -148,6 +152,8 @@ struct Tester {
 
     void null()
     {
+        testShow()<<__func__;
+
         mbox.open(initial);
         serv.start();
 
@@ -160,6 +166,8 @@ struct Tester {
 
     void timeout()
     {
+        testShow()<<__func__;
+
         // server not started
 
         auto arg = initial.cloneEmpty();
@@ -170,6 +178,8 @@ struct Tester {
 
     void cancel()
     {
+        testShow()<<__func__;
+
         mbox.open(initial);
         serv.start();
         wait = true;
@@ -192,6 +202,8 @@ struct Tester {
 
     void error()
     {
+        testShow()<<__func__;
+
         mbox.open(initial);
         serv.start();
         fail=true;
@@ -211,6 +223,8 @@ struct Tester {
 
     void builder()
     {
+        testShow()<<__func__;
+
         mbox.open(initial);
         serv.start();
 

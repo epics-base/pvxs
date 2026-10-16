@@ -24,6 +24,8 @@
 namespace {
 using namespace pvxs;
 
+DEFINE_LOGGER(_log, "pvxs.testput");
+
 struct TesterBase {
     Value initial;
     server::SharedPV mbox;
@@ -87,8 +89,12 @@ struct Tester : public TesterBase
             testSkip(2, "timeout");
         }
 
+        auto before(cli.report());
         op.reset();
-        cli.cacheClear();
+        cli.cacheClear("", client::Context::Disconnect);
+        auto after(cli.report());
+        testEq(before.connections.size(), 1u);
+        testEq(after.connections.size(), 0u);
     }
 
     void loopback(bool get)
@@ -175,6 +181,7 @@ struct Tester : public TesterBase
 
         cli.hurryUp();
 
+        // expect timeout without completion
         testOk1(!done.wait(2.1));
     }
 
@@ -357,6 +364,18 @@ void testRO()
 
 struct ErrorSource : public server::Source
 {
+    const enum phase_t {
+        OnCreate,
+        OnPut,
+    } phase;
+
+    const Value proto;
+
+    explicit ErrorSource(phase_t phas)
+        :phase(phas)
+        ,proto(nt::NTScalar{}.create())
+    {}
+
     virtual void onSearch(Search &op) override final
     {
         for(auto& name : op) {
@@ -367,19 +386,28 @@ struct ErrorSource : public server::Source
     {
         auto chan = std::move(op);
 
-        chan->onOp([](std::unique_ptr<server::ConnectOp>&& op) {
-            op->error("haha");
+        chan->onOp([this](std::unique_ptr<server::ConnectOp>&& op) {
+            if(phase==OnCreate) {
+                log_info_printf(_log, "HAHA%s", "\n");
+                op->error("haha");
+                return;
+            }
+            op->onPut([](std::unique_ptr<server::ExecOp>&& pop, Value&&) {
+                log_info_printf(_log, "Nope!%s", "\n");
+                pop->error("Nope!");
+            });
+            op->connect(proto);
         });
     }
 };
 
-void testError()
+void testError(ErrorSource::phase_t phase)
 {
-    testShow()<<__func__;
+    testShow()<<__func__<<"("<<phase<<")";
 
     auto serv = server::Config::isolated()
             .build()
-            .addSource("err", std::make_shared<ErrorSource>())
+            .addSource("err", std::make_shared<ErrorSource>(phase))
             .start();
 
     auto cli = serv.clientConfig().build();
@@ -387,8 +415,10 @@ void testError()
     client::Result actual;
     epicsEvent done;
 
-    auto op = cli.get("mailbox")
+    auto op = cli.put("mailbox")
+            .set("value", 42)
             .result([&actual, &done](client::Result&& result) {
+                log_debug_printf(_log, "orig result%s", "\n");
                 actual = std::move(result);
                 done.signal();
             })
@@ -397,21 +427,146 @@ void testError()
     cli.hurryUp();
 
     if(testOk1(done.wait(5.0))) {
-        testThrows<client::RemoteError>([&actual]() {
+        try {
             auto val = actual();
-            testShow()<<"unexpected result\n"<<val;
-        });
-
+            testTrue(false)<<"unexpected result\n"<<val;
+        }catch(client::RemoteError& e){
+            testStrMatch(phase ? "Nope!" : "haha", e.what());
+        }
     } else {
         testSkip(1, "timeout");
     }
+}
+
+void testErrorManual(ErrorSource::phase_t phase)
+{
+    testShow()<<__func__<<"("<<phase<<")";
+
+    auto serv = server::Config::isolated()
+            .build()
+            .addSource("err", std::make_shared<ErrorSource>(phase))
+            .start();
+
+    auto cli = serv.clientConfig().build();
+
+    client::Result actual;
+    epicsEvent init, done;
+    Value prototype;
+
+    auto op = cli.put("mailbox")
+            .autoExec(false)
+            .onInit([&init, &prototype](const Value& proto) {
+                log_debug_printf(_log, "onInit%s", "\n");
+                prototype = proto.cloneEmpty();
+                init.signal();
+            })
+            .result([&actual, &done](client::Result&& result) {
+                testFalse(actual)<<" No prior result";
+                actual = std::move(result);
+                done.signal();
+            })
+            .exec();
+
+    cli.hurryUp();
+
+    if(phase==ErrorSource::OnCreate) {
+        testSkip(1, "Expect error prior to onInit");
+
+    } else if(testOk1(init.wait(5.0))) {
+        log_debug_printf(_log, "reExecGet%s", "\n");
+        prototype["value"] = 43;
+        op->reExecPut(prototype,
+                      [&actual, &done](client::Result&& result) {
+            log_debug_printf(_log, "repeat result%s", "\n");
+            actual = std::move(result);
+            done.signal();
+        });
+    }
+
+    if(testOk1(done.wait(5.0))) {
+        try {
+            auto val = actual();
+            testTrue(false)<<"unexpected result\n"<<val;
+        }catch(client::RemoteError& e){
+            testStrMatch(phase ? "Nope!" : "haha", e.what());
+        }
+    } else {
+        testSkip(1, "timeout");
+    }
+}
+
+struct CancelSource : public server::Source {
+    const Value proto;
+    std::atomic<bool> cancelled{false};
+
+    explicit CancelSource()
+        :proto(nt::NTScalar{}.create())
+    {}
+
+    virtual void onSearch(Search &op) override final
+    {
+        for(auto& name : op) {
+            name.claim();
+        }
+    }
+    virtual void onCreate(std::unique_ptr<server::ChannelControl> &&op) override final
+    {
+        auto chan = std::move(op);
+
+        chan->onOp([this](std::unique_ptr<server::ConnectOp>&& op) {
+            op->onPut([this](std::unique_ptr<server::ExecOp>&& pop, Value&&) {
+                auto eop(std::move(pop));
+                eop->onCancel([this](){
+                    cancelled = true;
+                });
+                // never complete
+            });
+            op->connect(proto);
+        });
+    }
+};
+
+void testCancel()
+{
+    testShow()<<__func__;
+
+    auto source(std::make_shared<CancelSource>());
+    auto serv = server::Config::isolated()
+                    .build()
+                    .addSource("cancel", source)
+                    .start();
+
+    auto cli = serv.clientConfig().build();
+
+    epicsEvent built, done;
+
+    auto op =cli.put("arbitrary")
+        .fetchPresent(false) // GET no implemented
+        .build([&](Value&& proto) -> Value {
+            testDiag("built");
+            built.signal();
+            return proto.cloneEmpty();
+        })
+        .result([&](client::Result&& r) {
+            testDiag("result");
+            done.signal();
+        })
+        .exec();
+
+    testTrue(built.wait(5.0));
+
+    testDiag("Cancelling");
+    op->cancel();
+
+    testTrue(!done.wait(5.0));
+    testTrue(source->cancelled);
 }
 
 } // namespace
 
 MAIN(testput)
 {
-    testPlan(40);
+    testPlan(58);
     testSetup();
     logger_config_env();
     Tester().loopback(false);
@@ -423,7 +578,11 @@ MAIN(testput)
     Tester().manualExec();
     TestPutBuilder().testSet();
     testRO();
-    testError();
+    testError(ErrorSource::OnCreate);
+    testError(ErrorSource::OnPut);
+    testErrorManual(ErrorSource::OnCreate);
+    testErrorManual(ErrorSource::OnPut);
+    testCancel();
     cleanup_for_valgrind();
     return testDone();
 }

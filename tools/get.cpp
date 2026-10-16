@@ -25,7 +25,7 @@ namespace {
 
 void usage(const char* argv0)
 {
-    std::cerr<<"Usage: "<<argv0<<" <opts> [pvname ...]\n"
+    std::cerr<<"Usage: "<<argv0<<" [opts] [pvname ...]\n"
                "\n"
                "  -h        Show this message.\n"
                "  -V        Print version and exit.\n"
@@ -94,15 +94,15 @@ int main(int argc, char *argv[])
             }
         }
 
+        std::atomic<int> remaining{argc-optind};
+        epicsEvent done;
+
         auto ctxt(client::Context::fromEnv());
 
         if(verbose)
-            std::cout<<"Effective config\n"<<ctxt.config();
+            std::cerr<<"Effective config\n"<<ctxt.config();
 
         std::list<std::shared_ptr<client::Operation>> ops;
-
-        std::atomic<int> remaining{argc-optind};
-        epicsEvent done;
 
         for(auto n : range(optind, argc)) {
 
@@ -115,6 +115,7 @@ int main(int argc, char *argv[])
                                          .format()
                                          .format(format)
                                          .arrayLimit(arrLimit);
+                              std::cout.flush();
 
                               if(remaining.fetch_sub(1)==1)
                                   done.signal();
@@ -145,7 +146,7 @@ int main(int argc, char *argv[])
             return 2;
         }
     }catch(std::exception& e){
-        std::cerr<<"Error: "<<e.what()<<"\n";
+        std::cerr<<ERL_ERROR ": "<<e.what()<<"\n";
         return 1;
     }
 }

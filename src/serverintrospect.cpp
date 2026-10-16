@@ -58,7 +58,7 @@ struct ServerIntrospect final : public ServerOp
 };
 DEFINE_INST_COUNTER(ServerIntrospect);
 
-struct ServerIntrospectControl : public server::ConnectOp
+struct ServerIntrospectControl final : public server::ConnectOp
 {
     ServerIntrospectControl(ServerConn *conn, ServerChan *chan,
                             const std::weak_ptr<server::Server::Pvt>& server,
@@ -73,26 +73,27 @@ struct ServerIntrospectControl : public server::ConnectOp
 
     virtual void connect(const Value& prototype) override final
     {
-        auto desc = Value::Helper::desc(prototype);
-        if(!desc)
+        if(!prototype)
             throw std::logic_error("Can't reply to GET_FIELD with Null prototype");
         Status sts{Status::Ok};
-        doReply(desc, sts);
+        doReply(prototype, sts);
     }
 
     virtual void error(const std::string &msg) override final
     {
         Status sts{Status::Error, msg};
-        doReply(nullptr, sts);
+        doReply(Value(), sts);
     }
 
-    void doReply(const FieldDesc* type, const Status& sts)
+    void doReply(const Value& prototype, const Status& sts)
     {
         auto serv = server.lock();
         if(!serv)
             return; // soft fail if already completed, canceled, disconnected, ....
 
-        serv->acceptor_loop.call([this, type, &sts](){
+        auto op(this->op);
+        serv->acceptor_loop.dispatch([op, prototype, sts](){
+            auto type = Value::Helper::desc(prototype);
             if(auto oper = op.lock())
                 oper->doReply(type, sts);
         });
@@ -104,14 +105,33 @@ struct ServerIntrospectControl : public server::ConnectOp
         if(!serv)
             return;
         serv->acceptor_loop.call([this, &fn](){
-            if(auto oper = op.lock())
-                oper->onClose = std::move(fn);
+            if(auto oper = op.lock()) {
+                if(oper->state != ServerOp::Dead)
+                    oper->onClose = std::move(fn);
+            }
         });
     }
 
     // we'll never use these, so no reason to store
     virtual void onGet(std::function<void(std::unique_ptr<server::ExecOp>&& fn)>&& fn) override final {}
     virtual void onPut(std::function<void(std::unique_ptr<server::ExecOp>&& fn, Value&&)>&& fn) override final {}
+
+    virtual void logRemote(Level lvl, const std::string& msg) override final
+    {
+        auto serv = server.lock();
+        if(!serv)
+            return;
+        std::string m(msg); // copy for bind
+        serv->acceptor_loop.dispatch([this, lvl, m](){
+            if(auto oper = op.lock()) {
+                if(auto chan = oper->chan.lock()) {
+                    if(auto conn = chan->conn.lock()) {
+                        conn->logRemote(oper->ioid, lvl, m);
+                    }
+                }
+            }
+        });
+    }
 
     const std::weak_ptr<server::Server::Pvt> server;
     const std::weak_ptr<ServerIntrospect> op;

@@ -24,13 +24,13 @@ namespace ioc {
  */
 
 Credentials::Credentials(const server::ClientCredentials& clientCredentials) {
-    // Extract host name part (or whole thing if no colon present)
-    auto pos = clientCredentials.peer.find_first_of(':');
-    host = clientCredentials.peer.substr(0, pos);
+    SockAddr addr(clientCredentials.peer);
+    addr.setPort(0);
+    host = std::string(SB()<<addr.map6to4());
 
     // "ca" style credentials
     if (clientCredentials.method == "ca") {
-        pos = clientCredentials.account.find_last_of('/');
+        auto pos = clientCredentials.account.find_last_of('/');
         if (pos == std::string::npos) {
             cred.emplace_back(clientCredentials.account);
         } else {

@@ -12,6 +12,7 @@
 #include <dbDefs.h>
 #include <epicsThread.h>
 #include <epicsGuard.h>
+#include <osiProcess.h>
 
 #include <pvxs/log.h>
 #include <clientimpl.h>
@@ -101,7 +102,7 @@ Interrupted::Interrupted()
 Interrupted::~Interrupted() {}
 
 Timeout::Timeout()
-    :std::runtime_error ("Interrupted")
+    :std::runtime_error ("Timeout")
 {}
 Timeout::~Timeout() {}
 
@@ -310,16 +311,17 @@ void ResultWaiter::complete(Result&& result, bool interrupt)
     notify.signal();
 }
 
-OperationBase::OperationBase(operation_t op, const evbase& loop)
+OperationBase::OperationBase(operation_t op, const evbase& loop, const std::string &name)
     :Operation(op)
     ,loop(loop)
+    ,channelName(name)
 {}
 
 OperationBase::~OperationBase() {}
 
 const std::string& OperationBase::name()
 {
-    return chan->name;
+    return channelName;
 }
 
 Value OperationBase::wait(double timeout)
@@ -509,15 +511,36 @@ Value buildCAMethod()
 {
     using namespace pvxs::members;
 
-    return TypeDef(TypeCode::Struct, {
-                       String("user"),
-                       String("host"),
-                   }).create();
+    auto cred(TypeDef(TypeCode::Struct, {
+                                            String("user"),
+                                            String("host"),
+                                        }).create());
+
+    std::vector<char> buffer(256u);
+
+    if(osiGetUserName(&buffer[0], buffer.size()) == osiGetUserNameSuccess) {
+        buffer[buffer.size()-1] = '\0';
+        cred["user"] = buffer.data();
+    } else {
+        cred["user"] = "nobody";
+    }
+
+    if (gethostname(&buffer[0], buffer.size()) == 0) {
+        buffer[buffer.size()-1] = '\0';
+        cred["host"] = buffer.data();
+    } else {
+        cred["host"] = "invalidhost.";
+    }
+
+    log_info_printf(setup, "Will 'ca' auth as %s@%s\n",
+                    cred["user"].as<std::string>().c_str(),
+                    cred["host"].as<std::string>().c_str());
+
+    return cred;
 }
 
 ContextImpl::ContextImpl(const Config& conf, const evbase& tcp_loop)
-    :ifmap(IfaceMap::instance())
-    ,effective([conf]() -> Config{
+    :effective([conf]() -> Config{
         Config eff(conf);
         eff.expand();
         return eff;
@@ -606,6 +629,9 @@ ContextImpl::ContextImpl(const Config& conf, const evbase& tcp_loop)
         log_info_printf(io, "Searching to TCP %s\n", saddr.tostring().c_str());
         nameServers.emplace_back(saddr, nullptr);
     }
+
+    if(searchDest.empty() && nameServers.empty())
+        log_err_printf(setup, "Client context created with no search destinations.  Nothing much will happen now%s", "\n");
 
     const auto cb([this](const UDPManager::Beacon& msg) {
         onBeacon(msg);
@@ -778,12 +804,16 @@ void ContextImpl::onBeacon(const UDPManager::Beacon& msg)
 
     auto& cur(it->second);
 
-    if(action==Update && (cur.guid!=msg.guid || cur.peerVersion!=msg.peerVersion)) {
+    if(action==Update && (
+            cur.guid!=msg.guid ||
+            cur.peerVersion!=msg.peerVersion ||
+            cur.beaconChange!=msg.beaconChange
+    )) {
         action = Change;
         log_debug_printf(beacon, "Update server %s\n",
                          std::string(SB()<<msg.src<<" : "<<msg.server<<'/'<<msg.proto
-                                     <<" "<<cur.guid<<'/'<<(unsigned)cur.peerVersion
-                                     <<" -> "<<msg.guid<<'/'<<(unsigned)msg.peerVersion).c_str());
+                                     <<" "<<cur.guid<<'/'<<(unsigned)cur.peerVersion<<'@'<<cur.beaconChange
+                                     <<" -> "<<msg.guid<<'/'<<(unsigned)msg.peerVersion<<'@'<<msg.beaconChange).c_str());
 
         serverEvent(Discovered{Discovered::Timeout,
                                cur.peerVersion,
@@ -797,8 +827,9 @@ void ContextImpl::onBeacon(const UDPManager::Beacon& msg)
 
     cur.guid = msg.guid;
     cur.peerVersion = msg.peerVersion;
+    cur.beaconChange = msg.beaconChange;
     cur.time = now;
-    // don't trigger if sender changes as server (mis)configuration
+    // don't trigger if sender changes as server configuration
     // could see beacons reach us from multiple interfaces.
     cur.sender = msg.src;
 
@@ -806,7 +837,7 @@ void ContextImpl::onBeacon(const UDPManager::Beacon& msg)
         if(action==New)
             log_debug_printf(beacon, "New server %s\n",
                              std::string(SB()<<msg.src<<" : "<<msg.server<<'/'<<msg.proto
-                                         <<" "<<cur.guid<<'/'<<(unsigned)cur.peerVersion).c_str());
+                             <<" "<<cur.guid<<'/'<<(unsigned)cur.peerVersion<<'@'<<cur.beaconChange).c_str());
 
         serverEvent(Discovered{Discovered::Online,
                                msg.peerVersion,
@@ -904,6 +935,7 @@ void procSearchReply(ContextImpl& self, const SockAddr& src, uint8_t peerVersion
             chan->conn = Connection::build(self.shared_from_this(), serv);
 
             chan->conn->pending[chan->cid] = chan;
+            chan->nSearch = 0u;
             chan->state = Channel::Connecting;
 
             chan->conn->createChannels();
@@ -936,8 +968,8 @@ bool ContextImpl::onSearch(evutil_socket_t fd)
         if(err==SOCK_EWOULDBLOCK || err==EAGAIN || err==SOCK_EINTR) {
             // nothing to do here
         } else {
-            log_warn_printf(io, "UDP search RX Error on : %s\n",
-                       evutil_socket_error_to_string(err));
+            log_warn_printf(io, "UDP search RX Error (%d) : %s\n",
+                       err, evutil_socket_error_to_string(err));
         }
         return false; // wait for more I/O
 
@@ -1022,14 +1054,17 @@ void ContextImpl::tickSearch(SearchKind kind, bool poked)
     if(kind == SearchKind::check)
         currentBucket = (currentBucket+1u)%searchBuckets.size();
 
-    log_debug_printf(io, "Search tick %zu\n", idx);
-
     decltype (searchBuckets)::value_type bucket;
     if (kind == SearchKind::initial) {
         initialSearchBucket.swap(bucket);
     } else if(kind == SearchKind::check) {
         searchBuckets[idx].swap(bucket);
     }
+
+    log_debug_printf(io, "%s tick %zu for %zu\n",
+                     kind == SearchKind::discover ? "Discover" : "Search",
+                     idx,
+                     bucket.size());
 
     while(!bucket.empty() || kind == SearchKind::discover) {
         // when 'discover' we only loop once
@@ -1145,37 +1180,42 @@ void ContextImpl::tickSearch(SearchKind kind, bool poked)
             to_wire(H, Header{CMD_SEARCH, 0, uint32_t(consumed-8u)});
         }
         for(auto& pair : searchDest) {
-            auto& dest = pair.first.addr.family()==AF_INET ? searchTx4 : searchTx6;
+            auto& dest = pair.dest.addr.family()==AF_INET ? searchTx4 : searchTx6;
 
-            if(pair.second) {
+            if(pair.isucast) {
                 *pflags |= pva_search_flags::Unicast;
 
             } else {
                 *pflags &= ~pva_search_flags::Unicast;
 
-                dest.mcast_prep_sendto(pair.first);
+                dest.mcast_prep_sendto(pair.dest);
             }
 
             int ntx = sendto(dest.sock, (char*)searchMsg.data(), consumed, 0,
-                             &pair.first.addr->sa, pair.first.addr.size());
+                             &pair.dest.addr->sa, pair.dest.addr.size());
 
             if(ntx<0) {
                 int err = evutil_socket_geterror(dest.sock);
                 auto lvl = Level::Warn;
-                if(err==EINTR || err==EPERM)
+                if(err==EINTR || err==EPERM || !pair.lastSuccess)
                     lvl = Level::Debug;
                 log_printf(io, lvl, "Search tx %s error (%d) %s\n",
-                           pair.first.addr.tostring().c_str(), err, evutil_socket_error_to_string(err));
+                           pair.dest.addr.tostring().c_str(), err, evutil_socket_error_to_string(err));
+                pair.lastSuccess = false;
 
             } else if(unsigned(ntx)<consumed) {
-                log_warn_printf(io, "Search truncated %u < %u",
+                log_warn_printf(io, "Search tx truncated %u < %u",
                            unsigned(ntx), unsigned(consumed));
 
             } else {
-                log_hex_printf(io, Level::Debug, (char*)searchMsg.data(), consumed,
-                               "Search to %s %s\n",
-                               std::string(SB()<<pair.first).c_str(),
-                               pair.second ? "ucast" : "bcast");
+                auto lvl = Level::Info;
+                if(pair.lastSuccess)
+                    lvl = Level::Debug;
+                log_hex_printf(io, lvl, (char*)searchMsg.data(), consumed,
+                               "Search tx %s %s\n",
+                               std::string(SB()<<pair.dest).c_str(),
+                               pair.isucast ? "ucast" : "bcast");
+                pair.lastSuccess = true;
             }
         }
         *pflags |= 0x80; // TCP search is always "unicast"
@@ -1313,10 +1353,9 @@ void ContextImpl::cacheClean(const std::string& name, Context::cacheAction actio
             continue;
 
         else if(action!=Context::Clean || cur->second.use_count()<=1) {
-            cur->second->garbage = true;
 
             if(action==Context::Clean && !cur->second->garbage) {
-                // mark for next sweep
+                cur->second->garbage = true;
                 log_debug_printf(setup, "Chan GC mark '%s':'%s'\n",
                                  cur->first.first.c_str(), cur->first.second.c_str());
 
@@ -1328,12 +1367,19 @@ void ContextImpl::cacheClean(const std::string& name, Context::cacheAction actio
 
                 // explicitly break ref. loop of channel cache
                 chanByName.erase(cur);
+                if(chanByCID.erase(trash->cid)!=1)
+                    log_crit_printf(io, "Inconsistent chanByName vs. chanByCID for %s\n", trash->name.c_str());
 
                 if(action==Context::Disconnect) {
                     trash->disconnect(trash);
                 }
             }
         }
+    }
+
+    if(chanByName.size() != chanByCID.size()) {
+        log_crit_printf(io, "Inconsistent sizes chanByName %zu vs. chanByCID %zu",
+                        chanByName.size(), chanByCID.size());
     }
 }
 

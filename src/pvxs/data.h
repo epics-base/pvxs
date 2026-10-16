@@ -192,7 +192,7 @@ struct TypeCode {
     //! the actual type code.  eg. for switch()
     code_t code;
 
-    bool valid() const;
+    PVXS_API bool valid() const;
 
     Kind    kind() const  { return Kind(code&0xe0); }
     //! size()==1<<order()
@@ -710,26 +710,20 @@ public:
 
     /** Attempt to access a descendant field.
      *
-     * Argument may be:
-     * * name of a child field.  eg. "value"
-     * * name of a descendant field.  eg "alarm.severity"
-     * * element of an array of structures.  eg "dimension[0]"
-     * * name of a union field.  eg. "->booleanValue"
+     * See [Field Lookup](value.html#field-lookup).
      *
-     * These may be composed.  eg.
-     *
-     * * "dimension[0]size"
-     * * "value->booleanValue"
-     *
-     * @returns A valid() Value if the descendant field exists, otherwise an invalid Value.
+     * @returns A valid() Value if the descendant field exists,
+     *          otherwise an invalid Value.
      */
     Value operator[](const std::string& name);
     const Value operator[](const std::string& name) const;
 
     /** Attempt to access a descendant field, or throw exception.
      *
-     * Acts like operator[] on success, but throws a (hopefully descriptive)
+     * Acts like operator[] on success, but throws an
      * exception instead of returning an invalid Value.
+     *
+     * See [Field Lookup](value.html#field-lookup).
      *
      * @throws LookupError If the lookup can not be satisfied
      * @throws NoField If this Value is empty
@@ -739,7 +733,7 @@ public:
     const Value lookup(const std::string& name) const;
 
     //! Number of child fields.
-    //! only Struct, StructA, Union, UnionA return non-zero
+    //! Only Struct, StructA, Union, UnionA return non-zero
     //! \since 1.1.3 correctly return non-zero for StructA and UnionA
     size_t nmembers() const;
 

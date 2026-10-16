@@ -7,12 +7,12 @@ Details
 Reporting a Bug
 ===============
 
-Before reporting a bug, please check to see if this issue has already been `reported <https://github.com/mdavidsaver/pvxs/issues>`_.
+Before reporting a bug, please check to see if this issue has already been `reported <https://github.com/epics-base/pvxs/issues>`_.
 
 When composing a new report, please run the included automatic tests "make runtests" and mention the results.
 It is enough to mention "All tests successful." if this is so.  (see `runtests`)
 
-`Bug reports <https://github.com/mdavidsaver/pvxs/issues>`_ should always include:
+`Bug reports <https://github.com/epics-base/pvxs/issues>`_ should always include:
 
 * EPICS Base version or VCS commit
 * PVXS module version or VCS commit
@@ -35,6 +35,42 @@ Additional information which may be relevant:
 
 If the module has built successfully, then running ``pvxinfo -D`` will
 report much of this information.
+
+Stack Trace with GDB
+--------------------
+
+When troubleshooting a crash or hung process, one important piece of information is a stack trace.
+On a Linux host, this is commonly acquired with `GDB <https://www.sourceware.org/gdb/>`_.
+Three scenarios are common:
+
+Running the process in GDB.  eg. ::
+
+    $ gdb --args ./bin/linux-x86_64/myioc st.cmd
+
+Alternately, if a crash has produced a core dump file. ::
+
+    $ gdb ./bin/linux-x86_64/myioc core
+
+Or to attach to a running process. ::
+
+    $ pgrep -l myioc
+    12345
+    $ gdb -p 12345
+
+All three scenarios should leave you at the GDB shell. ::
+
+    (gdb)
+
+One useful sequence of commands to run at the GDB shell is: ::
+
+    (gdb) set pagination 0
+    (gdb) thread apply all backtrace
+
+In fact this can be combined with one of the three preceding incantations by
+prepending the following arguments: ::
+
+    $ gdb --nx --nw --batch -ex "set pagination 0" \
+      -ex 'thread apply all bt' ...
 
 Packet Capture
 --------------
@@ -127,7 +163,7 @@ Elements of the Expert API may be "promoted" to regular/full API status if warra
 Contributing
 ============
 
-The recommended path for including changes is through `Pull Request <https://github.com/mdavidsaver/pvxs/pulls>`_.
+The recommended path for including changes is through `Pull Request <https://github.com/epics-base/pvxs/pulls>`_.
 
 When changing c++ code please do:
 
@@ -151,7 +187,7 @@ When committing changes please do:
 Contributors
 ------------
 
-Who did the [work](https://github.com/mdavidsaver/pvxs/graphs/contributors) to make PVXS what it is.
+Who did the `work <https://github.com/epics-base/pvxs/graphs/contributors>`_ to make PVXS what it is.
 
 .. comment: git log --format=format:%aN|sort -u|while read aa; do echo "* $aa"; done
 
@@ -170,12 +206,12 @@ Who did the [work](https://github.com/mdavidsaver/pvxs/graphs/contributors) to m
 
 Those who supported this work.
 
-* [ALS-U](https://als.lbl.gov/als-u/overview/) project at [Berkeley Lab](https://www.lbl.gov/)
-* [Diamond Light Source](https://www.diamond.ac.uk/)
-* [European Spallation Source](https://europeanspallationsource.se/)
-* [Fermilab](https://fnal.gov/)
-* [SLAC National Accelerator Laboratory](https://www6.slac.stanford.edu/)
-* [SNS](https://neutrons.ornl.gov/sns) at [Oak Ridge National Lab](https://www.ornl.gov/)
+* `ALS-U <https://als.lbl.gov/als-u/overview/>`_ project at `Berkeley Lab <https://www.lbl.gov/>`_
+* `Diamond Light Source <https://www.diamond.ac.uk/>`_
+* `European Spallation Source <https://europeanspallationsource.se/>`_
+* `Fermilab <https://fnal.gov/>`_
+* `SLAC National Accelerator Laboratory <https://www6.slac.stanford.edu/>`_
+* `SNS <https://neutrons.ornl.gov/sns>`_ at `Oak Ridge National Lab <https://www.ornl.gov/>`_
 
 Implementation Notes
 ====================

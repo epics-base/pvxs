@@ -33,8 +33,7 @@ void GroupProcessorContext::assign(const Value& value) {
             groupPvConfig.structureId = value.as<std::string>();
 
         } else {
-            groupConfigProcessor->groupProcessingWarnings += "Unknown group option ";
-            groupConfigProcessor->groupProcessingWarnings += field;
+            groupConfigProcessor->groupProcessingWarnings += SB()<<"Unknown group option: \""<<field<<"\"\n";
         }
         field.clear();
 
@@ -59,7 +58,7 @@ void GroupProcessorContext::assign(const Value& value) {
             } else if(tname == "const") {
                 type = MappingInfo::Const;
             } else {
-                groupConfigProcessor->groupProcessingWarnings += SB()<<"Unknown mapping +type:\""<<tname<<"\" ignored";
+                groupConfigProcessor->groupProcessingWarnings += SB()<<"Unknown mapping +type:\""<<tname<<"\" ignored\n";
             }
             groupField.info.type = type;
 
@@ -82,8 +81,7 @@ void GroupProcessorContext::assign(const Value& value) {
             groupField.info.cval = value;
 
         } else {
-            groupConfigProcessor->groupProcessingWarnings += "Unknown group field option ";
-            groupConfigProcessor->groupProcessingWarnings += field + ":" + key;
+            groupConfigProcessor->groupProcessingWarnings += SB()<<"Unknown group field option: \""<<field<<":"<<key<<"\"\n";
         }
         key.clear();
     }

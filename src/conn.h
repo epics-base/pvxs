@@ -61,7 +61,7 @@ public:
 
     bufferevent* connection() { return bev.get(); }
 
-    void connect(bufferevent* bev);
+    void connect(ev_owned_ptr<bufferevent>&& bev);
     void disconnect();
 
 protected:
@@ -91,7 +91,7 @@ protected:
     virtual std::shared_ptr<ConnBase> self_from_this() =0;
     virtual void cleanup() =0;
     virtual void bevEvent(short events);
-    virtual void bevRead();
+    void bevRead();
     virtual void bevWrite();
     static void bevEventS(struct bufferevent *bev, short events, void *ptr);
     static void bevReadS(struct bufferevent *bev, void *ptr);

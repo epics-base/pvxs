@@ -20,7 +20,7 @@ struct ServerConn;
 namespace server {
 
 //! Handle when an operation is being setup
-struct PVXS_API ConnectOp : public OpBase {
+struct PVXS_API ConnectOp : public OpBase, public RemoteLogger {
 protected:
     Value _pvRequest;
 public:
@@ -28,9 +28,10 @@ public:
 
     //! For GET_FIELD, GET, or PUT.  Inform peer of our data-type.
     //! @throws std::runtime_error if the client pvRequest() field mask does not select any fields of prototype.
+    //! @since 1.5.3 Does not synchronize with server worker thread
     virtual void connect(const Value& prototype) =0;
     //! Indicate that this operation can not be setup
-    //! @since 1.2.3 Does not block
+    //! @since 1.2.3 Does not synchronize with server worker thread
     virtual void error(const std::string& msg) =0;
 
     ConnectOp(const std::string& name,
@@ -42,10 +43,17 @@ public:
     virtual ~ConnectOp();
 
     //! Handler invoked when a peer executes a request for data on a GET o PUT
+    //! @note Synchronizes with server worker thread
+    //!       Functor executes on server worker
     virtual void onGet(std::function<void(std::unique_ptr<ExecOp>&&)>&& fn) =0;
     //! Handler invoked when a peer executes a send data on a PUT
+    //! @note Synchronizes with server worker thread
+    //!       Functor executes on server worker
     virtual void onPut(std::function<void(std::unique_ptr<ExecOp>&&, Value&&)>&& fn) =0;
-    //! Callback when the underlying channel closes
+    //! Callback when the operation ends.
+    //! By peer destruction of operation or channel.  Or by connection close/timeout.
+    //! @note Synchronizes with server worker thread
+    //!       Functor executes on server worker
     virtual void onClose(std::function<void(const std::string&)>&&) =0;
 };
 
@@ -72,7 +80,7 @@ struct MonitorStat {
 };
 
 //! Handle for active subscription
-struct PVXS_API MonitorControlOp : public OpBase {
+struct PVXS_API MonitorControlOp : public OpBase, public RemoteLogger {
     MonitorControlOp(const std::string& name,
            const std::shared_ptr<const ClientCredentials>& cred, op_t op)
         :OpBase(name, cred, op)
@@ -87,6 +95,7 @@ public:
     //! If nFree()<=0 the output queue will be over-filled with this element.
     //! Returns @code nFree()>0u @endcode
     //! @warning Caller must not modify the Value
+    //! @note Does not synchronize with server worker thread
     bool forcePost(const Value& val) {
         return doPost(val, false, true);
     }
@@ -95,6 +104,7 @@ public:
     //! If nFree()<=0 this element will be "squashed" to the last element in the queue
     //! Returns @code nFree()>0u @endcode
     //! @warning Caller must not modify the Value
+    //! @note Does not synchronize with server worker thread
     bool post(const Value& val) {
         return doPost(val, false, false);
     }
@@ -103,18 +113,21 @@ public:
     //! If nFree()<=0 return false and take no other action
     //! Returns @code nFree()>0u @endcode
     //! @warning Caller must not modify the Value
+    //! @note Does not synchronize with server worker thread
     bool tryPost(const Value& val) {
         return doPost(val, true, false);
     }
 
     //! Signal to subscriber that this subscription will not yield any further events.
     //! This is not an error.  Client should not retry.
+    //! @note Does not synchronize with server worker thread
     void finish() {
         doPost(Value(), false, true);
     }
 
     //! Poll information and statistics for this subscription.
     //! @since 1.1.0 Added 'reset' argument.
+    //! @note Does not synchronize with server worker thread
     virtual void stats(MonitorStat&, bool reset=false) const =0;
 
     /** Set flow control levels.
@@ -124,6 +137,8 @@ public:
      *
      *  onLowMark callback is not currently implemented and the 'low' level is not used.
      *  onHighMark callback will be invoked when a client ack. is received and the window size is above (>) 'high'.
+     *
+     *  @note Synchronizes with server worker thread
      */
     virtual void setWatermarks(size_t low, size_t high) =0;
 
@@ -134,7 +149,7 @@ public:
 };
 
 //! Handle for subscription which is being setup
-struct PVXS_API MonitorSetupOp : public OpBase {
+struct PVXS_API MonitorSetupOp : public OpBase, public RemoteLogger {
 protected:
     Value _pvRequest;
 public:
@@ -157,6 +172,7 @@ public:
     {}
     virtual ~MonitorSetupOp();
 
+    //! Set/replace functor provided through ConnectOp::onClose()
     virtual void onClose(std::function<void(const std::string&)>&&) =0;
 };
 
@@ -171,18 +187,28 @@ struct PVXS_API ChannelControl : public OpBase {
     virtual ~ChannelControl() =0;
 
     //! Invoked when a new GET or PUT Operation is requested through this Channel
+    //! @note Synchronizes with server worker thread
+    //!       Functor executes on server worker
     virtual void onOp(std::function<void(std::unique_ptr<ConnectOp>&&)>&& ) =0;
     //! Invoked when the peer executes an RPC
+    //! @note Synchronizes with server worker thread
+    //!       Functor executes on server worker
     virtual void onRPC(std::function<void(std::unique_ptr<ExecOp>&&, Value&&)>&& fn)=0;
     //! Invoked when the peer create a new subscription
+    //! @note Synchronizes with server worker thread
+    //!       Functor executes on server worker
     virtual void onSubscribe(std::function<void(std::unique_ptr<MonitorSetupOp>&&)>&&)=0;
 
     //! Callback when the channel closes (eg. peer disconnect)
+    //! @note Synchronizes with server worker thread
+    //!       Functor executes on server worker.
+    //! @note Not associated with any Operation.  Distinct from ConnectOp::onClose() .
     virtual void onClose(std::function<void(const std::string&)>&&) =0;
 
     //! Force disconnection
     //! If called from outside a handler method, blocks until in-progress Handler methods have returned.
     //! Reference to currently attached Handler is released.
+    //! @note Synchronizes with server worker thread
     virtual void close() =0;
 
     // TODO: signal Rights?
@@ -232,7 +258,7 @@ struct PVXS_API Source {
     private:
         typedef std::vector<Name> _names_t;
         _names_t _names;
-        char _src[24];
+        char _src[80]; // >= INET6_ADDRSTRLEN+1
         friend struct Server::Pvt;
         friend struct impl::ServerConn;
     public:
@@ -253,6 +279,8 @@ struct PVXS_API Source {
      * A Source may only Search::Name::claim() a Channel name if it is prepared to
      * immediately accept an onCreate() call for that Channel name.
      * In other situations it should wait for the client to retry.
+     *
+     * @note Executes on server worker thread
      */
     virtual void onSearch(Search& op) =0;
 
@@ -264,8 +292,11 @@ struct PVXS_API Source {
      *
      *  - Do nothing, allowing some other Source with higher/later order a chance to create.
      *  - Call ChannelControl::close() to explicitly reject the channel.
-     *  - std::move() the op and/or call ChannelControl::setHandler() to accept the new channel.
+     *  - std::move() the op and/or call ChannelControl::onOp(), ChannelControl::onSubscribe(),
+     *    and/or ChannelControl::onRPC() to accept the new channel.
      *  - std::move() the op and allow ChannelControl to be destroyed to implicitly reject the channel.
+     *
+     * @note Executes on server worker thread
      */
     virtual void onCreate(std::unique_ptr<ChannelControl>&& op) =0;
 
@@ -274,14 +305,24 @@ struct PVXS_API Source {
         //! The list
         std::shared_ptr<const std::set<std::string>> names;
         //! True if the list may change at some future time.
-        bool dynamic;
+        bool dynamic = false;
+        List() = default;
+        List(decltype(names)& names, bool dynamic=false)
+            :names(names), dynamic(dynamic)
+        {}
+        List(decltype(names)&& names, bool dynamic=false)
+            :names(std::move(names)), dynamic(dynamic)
+        {}
     };
 
     /** A Client is requesting a list of Channel names which we may claim.
+     *
+     * @note Executes on server worker thread
      */
     virtual List onList();
 
     //! Print status information.
+    //! Calls onList() are renders List.
     virtual void show(std::ostream& strm);
 };
 

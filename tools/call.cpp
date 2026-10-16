@@ -25,7 +25,7 @@ namespace {
 
 void usage(const char* argv0)
 {
-    std::cerr<<"Usage: "<<argv0<<" <opts> <pvname> <fld>=<value> ...\n"
+    std::cerr<<"Usage: "<<argv0<<" [opts] <pvname> <fld>=<value> ...\n"
                                  "\n"
                                  "  -h        Show this message.\n"
                                  "  -V        Print version and exit.\n"
@@ -86,14 +86,14 @@ int main(int argc, char *argv[])
             auto sep = fv.find_first_of('=');
 
             if(sep==std::string::npos) {
-                std::cerr<<"Error: expected <fld>=<value> not \""<<escape(fv)<<"\"\n";
+                std::cerr<<ERL_ERROR ": expected <fld>=<value> not \""<<escape(fv)<<"\"\n";
                 return 1;
             }
 
             auto key(fv.substr(0, sep));
 
             if(values.find(key)!=values.end()) {
-                std::cerr<<"Error: duplicate argument name "<<key<<"\n";
+                std::cerr<<ERL_ERROR ": duplicate argument name "<<key<<"\n";
                 return 1;
             }
 
@@ -117,13 +117,13 @@ int main(int argc, char *argv[])
             query[pair.first] = pair.second;
         }
 
+        epicsEvent done;
+        int ret=2;
+
         auto ctxt(client::Context::fromEnv());
 
         if(verbose)
-            std::cout<<"Effective config\n"<<ctxt.config();
-
-        epicsEvent done;
-        int ret=2;
+            std::cerr<<"Effective config\n"<<ctxt.config();
 
         auto op =ctxt.rpc(pvname, arg)
                      .result([&ret, &done](client::Result&& result) {
@@ -131,9 +131,10 @@ int main(int argc, char *argv[])
                 auto val = result();
                 if(val)
                     std::cout<<val;
+                std::cout.flush();
                 ret=0;
             }catch(std::exception& e){
-                std::cerr<<"Error "<<typeid(e).name()<<" : "<<e.what()<<"\n";
+                std::cerr<<ERL_ERROR " "<<typeid(e).name()<<" : "<<e.what()<<"\n";
                 ret=1;
             }
             done.signal();
@@ -154,7 +155,7 @@ int main(int argc, char *argv[])
             return ret;
         }
     }catch(std::exception& e){
-        std::cerr<<"Error: "<<e.what()<<"\n";
+        std::cerr<<ERL_ERROR ": "<<e.what()<<"\n";
         return 1;
     }
 }

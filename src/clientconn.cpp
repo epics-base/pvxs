@@ -4,8 +4,6 @@
  * in file LICENSE that is included with this distribution.
  */
 
-#include <osiProcess.h>
-
 #include <pvxs/log.h>
 #include "clientimpl.h"
 
@@ -13,7 +11,6 @@ namespace pvxs {
 namespace client {
 
 DEFINE_LOGGER(io, "pvxs.client.io");
-DEFINE_LOGGER(connsetup, "pvxs.tcp.setup");
 DEFINE_LOGGER(remote, "pvxs.remote.log");
 
 Connection::Connection(const std::shared_ptr<ContextImpl>& context,
@@ -62,25 +59,30 @@ void Connection::startConnecting()
 {
     assert(!this->bev);
 
-    auto bev(bufferevent_socket_new(context->tcp_loop.base, -1, BEV_OPT_CLOSE_ON_FREE|BEV_OPT_DEFER_CALLBACKS));
+    evsocket sock(peerAddr.family(), SOCK_STREAM, 0);
+    decltype(this->bev) bev(__FILE__, __LINE__,
+                bufferevent_socket_new(context->tcp_loop.base, sock.sock,
+                                       BEV_OPT_CLOSE_ON_FREE|BEV_OPT_DEFER_CALLBACKS));
 
-    bufferevent_setcb(bev, &bevReadS, nullptr, &bevEventS, this);
+    sock.release(); // hand-off ownership to bev
+
+    bufferevent_setcb(bev.get(), &bevReadS, nullptr, &bevEventS, this);
 
     timeval tmo(totv(context->effective.tcpTimeout));
-    bufferevent_set_timeouts(bev, &tmo, &tmo);
+    bufferevent_set_timeouts(bev.get(), &tmo, &tmo);
 
-    if(bufferevent_socket_connect(bev, const_cast<sockaddr*>(&peerAddr->sa), peerAddr.size()))
-        throw std::runtime_error("Unable to begin connecting");
-    {
-        auto fd(bufferevent_getfd(bev));
-        int opt = 1;
-        if(setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, (char*)&opt, sizeof(opt))<0) {
-            auto err(SOCKERRNO);
-            log_warn_printf(io, "Unable to TCP_NODELAY: %d on %d\n", err, fd);
-        }
+    if(bufferevent_socket_connect(bev.get(), const_cast<sockaddr*>(&peerAddr->sa), peerAddr.size())) {
+        // non-blocking connect() failed immediately.
+        // try to defer notification.
+        state = Disconnected;
+        constexpr timeval immediate{0, 0};
+        if(event_add(echoTimer.get(), &immediate))
+            throw std::runtime_error(SB()<<"Unable to begin connecting or schedule deferred notification "<<peerName);
+        log_warn_printf(io, "Unable to connect() to %s\n", peerName.c_str());
+        return;
     }
 
-    connect(bev);
+    connect(std::move(bev));
 
     log_debug_printf(io, "Connecting to %s, RX readahead %zu\n", peerName.c_str(), readahead);
 }
@@ -141,6 +143,16 @@ void Connection::bevEvent(short events)
 
     if(bev && (events&BEV_EVENT_CONNECTED)) {
         log_debug_printf(io, "Connected to %s\n", peerName.c_str());
+
+        {
+            // after async connect() to avoid winsock specific race.
+            auto fd(bufferevent_getfd(bev.get()));
+            int opt = 1;
+            if(setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, (char*)&opt, sizeof(opt))<0) {
+                auto err(SOCKERRNO);
+                log_warn_printf(io, "Unable to TCP_NODELAY: %d on %d\n", err, fd);
+            }
+        }
 
         if(bufferevent_enable(bev.get(), EV_READ|EV_WRITE))
             throw std::logic_error("Unable to enable BEV");
@@ -247,23 +259,7 @@ void Connection::handle_CONNECTION_VALIDATION()
 
     Value cred;
     if(selected=="ca") {
-        cred = context->caMethod.cloneEmpty();
-
-        std::vector<char> buffer(256u);
-
-        if(osiGetUserName(&buffer[0], buffer.size()) == osiGetUserNameSuccess) {
-            buffer[buffer.size()-1] = '\0';
-            cred["user"] = buffer.data();
-        } else {
-            cred["user"] = "nobody";
-        }
-
-        if (gethostname(&buffer[0], buffer.size()) == 0) {
-            buffer[buffer.size()-1] = '\0';
-            cred["host"] = buffer.data();
-        } else {
-            cred["host"] = "invalidhost.";
-        }
+        cred = context->caMethod.clone();
 
         log_info_printf(io, "Server %s 'ca' auth as %s@%s\n", peerName.c_str(),
                         cred["user"].as<std::string>().c_str(),
@@ -370,13 +366,31 @@ void Connection::handle_CREATE_CHANNEL()
     chan->statRx += rxlen;
 
     if(!sts.isSuccess()) {
-        // server refuses to create a channel, but presumably responded positively to search
+        if(chan->forcedServer.family()==AF_UNSPEC) {
+            // server refuses to create a channel, but presumably responded positively to search.
+            // try again
 
-        chan->state = Channel::Searching;
-        context->searchBuckets[context->currentBucket].push_back(chan);
+            log_warn_printf(io, "Server %s refuses channel to '%s' : %s\n", peerName.c_str(),
+                            chan->name.c_str(), sts.msg.c_str());
 
-        log_warn_printf(io, "Server %s refuses channel to '%s' : %s\n", peerName.c_str(),
-                        chan->name.c_str(), sts.msg.c_str());
+            // add to the far future bucket to slow down a re-try loop
+            auto laterBucket = context->currentBucket;
+            if(laterBucket)
+                laterBucket--;
+            else
+                laterBucket = context->searchBuckets.size()-1u;
+
+            chan->state = Channel::Searching;
+            context->searchBuckets[laterBucket].push_back(chan);
+
+        } else {
+            // server refused after we bypassed search, so can't use usual retry method.
+            // refuse to create a tight retry loop, and drop on the floor for now.
+            // retry on reconnect.
+            log_err_printf(io, "Server %s refuses direct channel to '%s' : %s\n", peerName.c_str(),
+                            chan->name.c_str(), sts.msg.c_str());
+            return;
+        }
 
     } else {
         chan->state = Channel::Active;
@@ -447,23 +461,18 @@ void Connection::handle_MESSAGE()
     if(!M.good())
         throw std::runtime_error(SB()<<M.file()<<':'<<M.line()<<" Decode error for Message");
 
-    auto it = opByIOID.find(ioid);
-    if(it==opByIOID.end()) {
-        log_debug_printf(connsetup, "Server %s Message on non-existent ioid\n", peerName.c_str());
-        return;
-    }
-    auto op = it->second.handle.lock();
+    auto lvl(mtype2level(mtype));
+    const char *chan = "<no channel>";
 
-    Level lvl;
-    switch(mtype) {
-    case 0:  lvl = Level::Info; break;
-    case 1:  lvl = Level::Warn; break;
-    case 2:  lvl = Level::Err; break;
-    default: lvl = Level::Crit; break;
+    auto it = opByIOID.find(ioid);
+    if(it!=opByIOID.end()) {
+        if(auto op = it->second.handle.lock()) {
+            chan = op->chan->name.c_str();
+        }
     }
 
     log_printf(remote, lvl, "%s : %s\n",
-               op && op->chan ? op->chan->name.c_str() : "<dead>", msg.c_str());
+               chan, msg.c_str());
 }
 
 void Connection::tickEcho()
@@ -475,6 +484,11 @@ void Connection::tickEcho()
             log_err_printf(io, "Server %s error Disabling echoTimer\n", peerName.c_str());
 
         startConnecting();
+
+    }else if(state==Disconnected) {
+        // deferred notification of early connect() failure.
+        // TODO: avoid a misleading "closed by peer" error
+        bevEvent(BEV_EVENT_EOF);
 
     } else {
         log_debug_printf(io, "Server %s ping\n", peerName.c_str());

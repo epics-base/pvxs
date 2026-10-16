@@ -39,6 +39,7 @@ bool testFwdVia(const server::Config& base, const SockAddr& ifaddr)
         if(ifaddr.family()!=AF_UNSPEC)
             sconf.interfaces.push_back(ifaddr.tostring());
         sconf.auto_beacon = false;
+        sconf.beaconDestinations.push_back(ifaddr.withPort(sconf.udp_port).tostring());
 
         srv1 = sconf.build();
 
@@ -101,11 +102,9 @@ void testFwdIface()
 
     std::vector<SockAddr> ifaddrs;
     {
-        auto& ifs(IfaceMap::instance());
+        auto ifs(IfaceMap::instance());
 
-        epicsGuard<epicsMutex> G(ifs.lock);
-
-        for(auto it : ifs.byIndex) {
+        for(auto it : ifs.current->byIndex) {
             auto& iface = it.second;
             if(iface.isLO)
                 continue;

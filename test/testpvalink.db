@@ -52,7 +52,12 @@ record(stringout, "src:str") {
 
 record(longout, "testToFromString:src") {
     field(VAL , "42")
-    field(OUT , {pva:"testToFromString:str1"})
+    field(OUT , {pva:{
+        "pv":"testToFromString:str1",
+        "proc":null,
+        "sevr":null,
+        "local":null,
+    }})
 }
 record(stringin, "testToFromString:str1") {
 }
@@ -127,7 +132,16 @@ record(ao, "meta:src") {
 }
 
 record(ai, "meta:inp") {
-    field(INP, {pva:{pv:"meta:src", sevr:"MS"}})
+    field(INP, {pva:{pv:"meta:src"}})
+}
+
+record(sub, "meta:src:ms") {
+    field(SNAM, "setAMSG")
+    field(TSE , "-2")
+}
+
+record(ai, "meta:inp:ms") {
+    field(INP, {pva:{pv:"meta:src:ms", sevr:"MS"}})
 }
 
 record(longout, "flnk:src") {
@@ -203,4 +217,15 @@ record(waveform, "sarr:inp") {
     field(INP , {pva:"sarr:src"})
     field(FTVL, "STRING")
     field(NELM, "16")
+}
+
+record(aai, "target:ntndarray_inp") {
+    field(INP,  {pva:{pv:"source:ntndarray", proc:"CP"}}) # created programatically with pvxs::server::SharedPV
+    field(NELM, "5")
+    field(FTVL, "FLOAT")
+}
+
+record(longin, "target:utag") {
+    field(INP, {pva:{pv:"source:utag", time:true, proc:"CP"}})
+    field(TSE, "-2")
 }

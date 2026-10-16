@@ -39,8 +39,10 @@ ConnBase::ConnBase(bool isClient, bool sendBE, bufferevent* bev, const SockAddr&
     ,txBody(__FILE__, __LINE__, evbuffer_new())
     ,state(Holdoff)
 {
-    if(bev) // true for server connection.  client will call connect() shortly
-        connect(bev);
+    if(bev) { // true for server connection.  client will call connect() shortly
+        decltype(this->bev) temp(__FILE__, __LINE__, bev);
+        connect(std::move(temp));
+    }
 }
 
 ConnBase::~ConnBase() {}
@@ -50,29 +52,29 @@ const char* ConnBase::peerLabel() const
     return isClient ? "Server" : "Client";
 }
 
-void ConnBase::connect(bufferevent* bev)
+void ConnBase::connect(ev_owned_ptr<bufferevent> &&bev)
 {
     if(!bev)
         throw BAD_ALLOC();
     assert(!this->bev && state==Holdoff);
 
-    this->bev.reset(bev);
-
-    readahead = evsocket::get_buffer_size(bufferevent_getfd(bev), false);
+    readahead = evsocket::get_buffer_size(bufferevent_getfd(bev.get()), false);
 
 #if LIBEVENT_VERSION_NUMBER >= 0x02010000
     // allow to drain OS socket buffer in a single read
-    (void)bufferevent_set_max_single_read(bev, readahead);
+    (void)bufferevent_set_max_single_read(bev.get(), readahead);
 #endif
 
     readahead *= tcp_readahead_mult;
 
 #if LIBEVENT_VERSION_NUMBER >= 0x02010000
     // allow attempt to write as much as is available
-    (void)bufferevent_set_max_single_write(bev, EV_SSIZE_MAX);
+    (void)bufferevent_set_max_single_write(bev.get(), EV_SIZE_MAX);
 #endif
 
     state = isClient ? Connecting : Connected;
+
+    this->bev = std::move(bev);
 
     // initially wait for at least a header
     bufferevent_setwatermark(this->bev.get(), EV_READ, 8, readahead);
@@ -156,7 +158,7 @@ void ConnBase::bevRead()
 
         if(header[0]!=0xca || header[1]==0
                 || (isClient ^ !!(header[2]&pva_flags::Server))) {
-            log_hex_printf(connio, Level::Err, header, sizeof(header),
+            log_hex_printf(connio, Level::Crit, header, sizeof(header),
                            "%s %s Protocol decode fault.  Force disconnect.\n", peerLabel(), peerName.c_str());
             bev.reset();
             break;

@@ -3,6 +3,106 @@
 Release Notes
 =============
 
+1.5.3 (Sept 2026)
+-----------------
+
+- `Value` field traverse syntax change.
+  When starting from a Union, a leading "->" to be omitted.
+  ``"->booleanValue"`` may be replaced with ``"booleanValue"``.
+- Fix build with RTEMS 6.3 (Sang Woo Kim)
+- client: Correct regression in 1.5.2 leading to omission of client credentials (Sang Woo Kim).
+- client: Fix slow resource leak through ``chanByCID`` (Claudio Bisegni)
+- server: With a `server::ChannelControl`.  Setting an ``onClose()`` function alone is no longer
+  enough for a channel to be considered "claimed".  It is necessary to set some GET/RPC/MONITOR/...
+  handler.
+- ioc: serve ``display.precision`` for boRecord.HIGH and mbbxDirect (Sang Woo Kim)
+- ioc: publish ``$PVAS_SERVER_PORT`` and ``$PVXS_SERVER_PORT`` with the IOC singleton server's TCP port.
+- ioc: Fix ``+type:"proc"`` mapping when field is not PP.
+       For backwards compatibility use ``+channel:"PROC"``.
+- tools: The CLI tools are now built only with epics-base >= 3.15 .
+- tools: pvxput now understand JSON syntax.
+- tools: CLI tool argument parsing now requires that option flags appear before positional arguments.
+
+1.5.2 (Jun 2026)
+----------------
+
+* interpret monitor ackAny percentage as a fraction (Sang Woo Kim)
+* client: query user/host name once on Context creation.
+  Previously, user/host name was queried each time a new TCP connection was opened.
+* server: report monitor squash count in MonitorStat::nSquash (Sang Woo Kim)
+* ioc: promote DBE_ALARM only to also fetch value.
+* ioc: Fix const field in non-atomic group get (Sang Woo Kim)
+* ioc: put fix permissions with non-atomic group (Sang Woo Kim)
+* ioc: SecurityLogger must restore dbChannel addr.pfield (Sang Woo Kim)
+* ioc: pvalink propagate userTag (Joao Paulo Martins, Sang Woo Kim)
+* ioc: fix single PUT with 'record[block=true, process=true]'
+
+1.5.1 (Feb 2026)
+----------------
+
+* Call ``epicsSignalInstallSigPipeIgnore()``.
+* When available, set ``SO_NOSIGPIPE`` on TCP sockets.
+* python: Handle setuptools v80 pkg_resources removal.
+
+1.5.0 (Jan 2026)
+----------------
+
+* server: plug channel cache leak when close Channel while reusing Connection.
+* server: disable one-sided attempt to handle saturated connection.
+* ioc: add `pvxs_log_config()` and `pvxs_log_reset()` IOCsh functions.
+* ioc: renamed semi-internal C symbol names to avoid conflicts with QSRV1:
+       ``dbpvar()`` -> ``dbpvxr()``, ``pvaLinkNWorkers`` -> ``pvxLinkNWorkers``.
+       Names in IOC shell remain unchanged.
+* ioc: fix PUT to scalar mapping
+* tools: pvxvct can use endpoint syntax to listen for multicast on a specific interface.
+         eg. ``pvxvct -B 224.1.2.23@eth0`` or ``pvxvct -B 224.1.2.23@10.1.1.100``.
+
+1.4.1 (Aug 2025)
+----------------
+
+* Restore lookup of host names in address lists (regression introduced with 1.4.0).
+* Fix builds where ``$(INSTALL_LOCATION) != $(TOP)``.
+* client: Avoid crash when calling `pvxs::client::Operation::name()` while disconnected.  (Thanks to Mike Smith)
+* client: Log ``Client context created with no search destinations`` when creating a client context which can never connect channels.
+* server: `pvxs::server::Server::clientConfig()` Avoid mixing TCP interface list with UDP search destination list.
+* server: do not mask initial update when empty.
+* ioc: PVA link respect environment variables.  Previously defaults always used.
+
+1.4.0 (July 2025)
+------------------
+
+* Rename generated CONFIG_SITE to TOOLCHAIN.
+  Existing clones need to remove previously generated ``configure/os/CONFIG_SITE.Common.*``.
+* Fix rendering of IPv6 addresses in QSRV credential (ACF and asTrapWrite/caputlog) and `pvxs::server::Source::Search`.
+* Add server to client remote logging.
+  Several `pvxs::server::Source` related objects gain the `pvxs::server::RemoteLogger` interface.
+* Add remote logging for some malformed pvRequest.
+* ioc: record._options.process accept numeric values as true/false.
+* server: handle protocol corner case of monitor create without initial ACK.
+* Add support for Python 3.13
+
+1.3.3 (Apr 2025)
+----------------
+
+* Client: search retry step reset on channel reconnection (Anze Zagar)
+* Various documentation improvements!  (Érico Nogueira)
+* Fix build with epics-base 7.0.7 (Rémi NICOLE)
+* Fix NTNDArray definition for floating point types (Joao Paulo Martins)
+* ioc: Fix dbLoadGroups (Érico Nogueira)
+* ioc: Fix handling of ``DBE_ARCHIVE`` when requested via ``records._options.DBE``
+* ioc: Fix pvalink targeting Union field (Joao Paulo Martins)
+
+1.3.2 (Oct 2024)
+------------------
+
+* Python 3.12 support
+* client: Avoid FD leak on failed connect()
+* Correctly set TCP_NODELAY on winsock
+* Fix copy of Any/Union
+* ioc: Workaround asTrapWrite clobbering dbChannel
+* ioc: ACF fix write permit when groups are present
+* server: correctly adjudicate collision bind() of specific port
+
 1.3.1 (Dec 2023)
 ----------------
 
@@ -30,7 +130,7 @@ Release Notes
   released promptly when that operation is ended.
 * server: relax post() after finish().  Return false instead of throwing ``std::logic_error``.
 * ioc: ensure db_cancel_event() before ~MonitorControlOp
-   * Workaround for [db_cancel_event()](https://github.com/epics-base/epics-base/issues/423) bug.
+   * Workaround for `db_cancel_event() <https://github.com/epics-base/epics-base/issues/423>`_ bug.
 * ioc: Fix typo preventing processing of DBR_STRING fields.
 * ioc: fix group put always `dbProcess()`.
 * ioc: fix block=true to DBF_ENUM.

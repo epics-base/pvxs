@@ -1,10 +1,6 @@
 TOP=..
 
 include $(TOP)/configure/CONFIG
-# cfg/ sometimes isn't correctly included due to a Base bug
-# so we do here (maybe again) as workaround
-include $(TOP)/configure/CONFIG_PVXS_MODULE
-include $(TOP)/configure/CONFIG_PVXS_VERSION
 #----------------------------------------
 #  ADD MACRO DEFINITIONS AFTER THIS LINE
 #=============================
@@ -54,6 +50,12 @@ TESTS += testtype
 TESTPROD_HOST += testdata
 testdata_SRCS += testdata.cpp
 TESTS += testdata
+
+ifdef BASE_3_15
+TESTPROD_HOST += testjson
+testjson_SRCS += testjson.cpp
+TESTS += testjson
+endif
 
 TESTPROD_HOST += testnt
 testnt_SRCS += testnt.cpp
@@ -123,6 +125,7 @@ benchdata_SRCS += benchdata.cpp
 
 TESTPROD_HOST += testpvalink
 testpvalink_SRCS += testpvalink.cpp
+testpvalink_SRCS += capturestd.cpp
 testpvalink_SRCS += testioc_registerRecordDeviceDriver.cpp
 testpvalink_LIBS += pvxsIoc pvxs $(EPICS_BASE_IOC_LIBS)
 TESTS += testpvalink
@@ -138,6 +141,7 @@ TESTFILES += $(COMMON_DIR)/testioc.dbd
 
 TESTPROD_HOST += testqsingle
 testqsingle_SRCS += testqsingle
+testqsingle_SRCS += capturestd.cpp
 testqsingle_SRCS += testioc_registerRecordDeviceDriver.cpp
 testqsingle_LIBS = pvxsIoc pvxs $(EPICS_BASE_IOC_LIBS)
 TESTFILES += ../testqsingle.db
@@ -152,6 +156,7 @@ ifdef BASE_7_0
 
 TESTPROD_HOST += testqgroup
 testqgroup_SRCS += testqgroup
+testqgroup_SRCS += capturestd.cpp
 testqgroup_SRCS += testioc_registerRecordDeviceDriver.cpp
 testqgroup_LIBS = pvxsIoc pvxs $(EPICS_BASE_IOC_LIBS)
 TESTFILES += ../table.db
@@ -160,6 +165,10 @@ TESTFILES += ../image.json
 TESTFILES += ../iq.db
 TESTFILES += ../ntenum.db
 TESTFILES += ../const.db
+TESTFILES += ../batch.db
+TESTFILES += ../secidxgroup.db
+TESTFILES += ../qgroup.cmd
+TESTFILES += ../qgroup.json
 TESTS += testqgroup
 
 PROD_SRCS_RTEMS += rtemsTestData.c
@@ -189,7 +198,6 @@ endif
 #===========================
 
 include $(TOP)/configure/RULES
-include $(TOP)/configure/RULES_PVXS_MODULE
 #----------------------------------------
 #  ADD RULES AFTER THIS LINE
 

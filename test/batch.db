@@ -1,0 +1,41 @@
+
+record(ao, "$(P)A") {
+    info(Q:group, {
+        "$(P)":{
+            "A":{+channel:"VAL", +putorder:0}
+        }
+    })
+}
+
+record(ao, "$(P)B") {
+    field(FLNK, "$(P)SUM")
+    info(Q:group, {
+        "$(P)":{
+            "B":{+channel:"VAL", +putorder:1}
+        }
+    })
+}
+
+record(ao, "$(P)C") {
+    info(Q:group, {
+        "$(P)":{
+            "C":{+channel:"VAL"} # omit +putorder to prevent write
+        }
+    })
+}
+
+record(calc, "$(P)SUM") {
+    field(INPA, "$(P)A NPP MSS")
+    field(INPB, "$(P)B NPP MSS")
+    field(INPC, "$(P)C NPP MSS")
+    field(CALC, "A+B+C")
+    info(Q:group, {
+        "$(P)":{
+            "SUM":{
+                +channel:"VAL",
+                +putorder:2,
+                +trigger:"*"
+            }
+        }
+    })
+}

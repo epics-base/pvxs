@@ -370,16 +370,24 @@ SigInt::~SigInt() {}
 #endif // !defined(__rtems__) && !defined(vxWorks)
 
 
-SockAddr::SockAddr(int af)
+SockAddr::SockAddr(int af, unsigned short port)
     :store{}
 {
     store.sa.sa_family = af;
-    if(af!=AF_INET
-#ifdef AF_INET6
-            && af!=AF_INET6
-#endif
-            && af!=AF_UNSPEC)
+    switch(af) {
+    case AF_INET:
+        store.in.sin_port = htons(port);
+        break;
+    case AF_INET6:
+        store.in6.sin6_port = htons(port);
+        break;
+    case AF_UNSPEC:
+        if(port)
+            throw std::invalid_argument("AF_UNSPEC can not specify port");
+        break;
+    default:
         throw std::invalid_argument("Unsupported address family");
+    }
 }
 
 SockAddr::SockAddr(const char *address, unsigned short port)
@@ -408,9 +416,7 @@ size_t SockAddr::size() const noexcept
 {
     switch(store.sa.sa_family) {
     case AF_INET: return sizeof(store.in);
-#ifdef AF_INET6
     case AF_INET6: return sizeof(store.in6);
-#endif
     default: // AF_UNSPEC and others
         return sizeof(store);
     }
@@ -420,9 +426,7 @@ unsigned short SockAddr::port() const noexcept
 {
     switch(store.sa.sa_family) {
     case AF_INET: return ntohs(store.in.sin_port);
-#ifdef AF_INET6
     case AF_INET6:return ntohs(store.in6.sin6_port);
-#endif
     default: return 0;
     }
 }
@@ -431,9 +435,7 @@ void SockAddr::setPort(unsigned short port)
 {
     switch(store.sa.sa_family) {
     case AF_INET: store.in.sin_port = htons(port); break;
-#ifdef AF_INET6
     case AF_INET6:store.in6.sin6_port = htons(port); break;
-#endif
     default:
         throw std::logic_error("SockAddr: set family before port");
     }
@@ -551,9 +553,7 @@ bool SockAddr::isAny() const noexcept
 {
     switch(store.sa.sa_family) {
     case AF_INET: return store.in.sin_addr.s_addr==htonl(INADDR_ANY);
-#ifdef AF_INET6
     case AF_INET6: return IN6_IS_ADDR_UNSPECIFIED(&store.in6.sin6_addr);
-#endif
     default: return false;
     }
 }
@@ -562,9 +562,7 @@ bool SockAddr::isLO() const noexcept
 {
     switch(store.sa.sa_family) {
     case AF_INET: return store.in.sin_addr.s_addr==htonl(INADDR_LOOPBACK);
-#ifdef AF_INET6
     case AF_INET6: return IN6_IS_ADDR_LOOPBACK(&store.in6.sin6_addr);
-#endif
     default: return false;
     }
 }
@@ -573,9 +571,7 @@ bool SockAddr::isMCast() const noexcept
 {
     switch(store.sa.sa_family) {
     case AF_INET: return IN_MULTICAST(ntohl(store.in.sin_addr.s_addr));
-#ifdef AF_INET6
     case AF_INET6: return IN6_IS_ADDR_MULTICAST(&store.in6.sin6_addr);
-#endif
     default: return false;
     }
 }
@@ -601,6 +597,23 @@ SockAddr SockAddr::map4to6() const
     return ret;
 }
 
+SockAddr SockAddr::map6to4() const
+{
+    constexpr uint8_t is4[12] = {0,0,0,0, 0,0,0,0, 0,0,0xff,0xff};
+    SockAddr ret;
+    if(family()==AF_INET6 && memcmp(store.in6.sin6_addr.s6_addr, is4, 12)==0) {
+        ret->in.sin_family = AF_INET;
+        memcpy(&ret->in.sin_addr.s_addr,
+               &store.in6.sin6_addr.s6_addr[12],
+                4);
+        ret->in.sin_port = store.in6.sin6_port;
+
+    } else {
+        ret = *this;
+    }
+    return ret;
+}
+
 std::string SockAddr::tostring() const
 {
     std::ostringstream strm;
@@ -616,12 +629,10 @@ SockAddr SockAddr::any(int af, unsigned port)
         ret->in.sin_addr.s_addr = htonl(INADDR_ANY);
         ret->in.sin_port = htons(port);
         break;
-#ifdef AF_INET6
     case AF_INET6:
         ret->in6.sin6_addr = IN6ADDR_ANY_INIT;
         ret->in6.sin6_port = htons(port);
         break;
-#endif
     default:
         throw std::invalid_argument("Unsupported address family");
     }
@@ -636,12 +647,10 @@ SockAddr SockAddr::loopback(int af, unsigned port)
         ret->in.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
         ret->in.sin_port = htons(port);
         break;
-#ifdef AF_INET6
     case AF_INET6:
         ret->in6.sin6_addr = IN6ADDR_LOOPBACK_INIT;
         ret->in6.sin6_port = htons(port);
         break;
-#endif
     default:
         throw std::invalid_argument("Unsupported address family");
     }
@@ -663,7 +672,6 @@ std::ostream& operator<<(std::ostream& strm, const SockAddr& addr)
             strm<<':'<<ntohs(addr->in.sin_port);
         break;
     }
-#ifdef AF_INET6
     case AF_INET6: {
             char buf[INET6_ADDRSTRLEN+1];
             if(evutil_inet_ntop(AF_INET6, &addr->in6.sin6_addr, buf, sizeof(buf))) {
@@ -679,7 +687,6 @@ std::ostream& operator<<(std::ostream& strm, const SockAddr& addr)
                 strm<<':'<<port;
             break;
     }
-#endif
     case AF_UNSPEC:
         strm<<"<>";
         break;
@@ -691,6 +698,9 @@ std::ostream& operator<<(std::ostream& strm, const SockAddr& addr)
 
 GetAddrInfo::GetAddrInfo(const char *name)
 {
+    // evutil_getaddrinfo() wrapper implicitly expects result pointer to be zerod
+    // when applying various compatibility "hacks" on some targets.
+    info = nullptr;
     if(auto err = evutil_getaddrinfo(name, nullptr, nullptr, &info)) {
         throw std::runtime_error(SB()<<"Error resolving \""<<escape(name)<<"\" : "<<evutil_gai_strerror(err));
     }

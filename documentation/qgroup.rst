@@ -40,8 +40,8 @@ Use ``dbLoadGroup()`` to load .json files. ::
     # Store in some .json
     {
         "grp:name": {
-            "X": {+channel:"rec:X.VAL"}, # full PV name
-            "Y": {+channel:"rec:Y.VAL"}
+            "X": {"+channel":"rec:X.VAL"}, # full PV name
+            "Y": {"+channel":"rec:Y.VAL"}
         }
     }
 
@@ -95,6 +95,8 @@ or a special key.
         })
     }
 
+.. note:: When using separate JSON files, mappings must be quoted: e.g. ``+id`` should be ``"+id"``.
+
 Mapping ``+type``:
 
 - ``scalar`` (default) places an NTScalar or NTScalarArray as a sub-structure.  (see :ref:`ntscalar`)
@@ -106,6 +108,8 @@ Mapping ``+type``:
 - ``proc`` places no fields.  The associated ``+channel`` is processed on PUT.
   "proc" mappings will almost always set ``+putorder`` to control the relative
   ordering of record processing.
+- ``const`` places the value of the ``+const`` mapping, so it doesn't use any
+  information from the enclosing record, if there is any.
 
 
 Mapping ``+channel``:
@@ -115,7 +119,7 @@ The most common record field to map is ``+channel: "VAL"``.
 When included in an ``info(Q:group, ...``, the ``+channel`` must only name a field of the enclosing record.
 (eg. ``+channel:"VAL"``)
 When in a separate JSON file, ``+channel`` must be a full PV name, beginning with a record or alias name.
-(eg. ``+channel:"record:name.VAL"``)
+(eg. ``"+channel":"record:name.VAL"``)
 
 Mapping ``+trigger``:
 
@@ -124,8 +128,8 @@ Triggers define when and which **changes to the constituent field are translated
 
 - ``""`` (default) means that changes to the field do not cause a subscription update.  (see note below)
 - ``"*"`` causes a subscription update containing the most recent values/meta-data of all group fields.
-- A comma separated list of field names causes an update with the most recent values of only the listed group fields.
-  eg. ``+trigger: "value.A, value.B"``.
+- A comma separated list of field names causes an update with the most recent values of **only** the listed group fields.
+  eg. ``+trigger: "value.A, value.B"`` doesn't update ``labels`` or ``timeStamp``.
 
 For a new group definition, including records from one or more record processing chains,
 the last record in that chain should have a ``+trigger`` mapping listing the group fields
@@ -136,7 +140,7 @@ then the last mapped record in that chain should have ``+trigger: "*"``.
 
 .. note:: As a special case.  A group with no ``+trigger`` mappings at all will function as if every mapping
           includes a ``+trigger`` mapping for itself.
-          This is done so that such a situation does not cause confusion be posting no monitor updates at all.
+          This is done so that such a situation does not cause confusion by posting no monitor updates at all.
           However, this situation will almost never give desired behaviour as changes to records which
           could otherwise be atomic will be split into multiple subscription updates.
 
@@ -149,6 +153,8 @@ the order in which the associated records are processed (in increasing order).
 Additionally, the values of ``+putorder`` also control the order of fields in the group PV definition.
 This control is necessary only in limited cases, such as the ``NTTable`` specification,
 where the iteration order of fields must match the order of the ``labels`` array.
+
+``+const`` must be set when using ``+type: "const"``. It accepts literals, e.g. integers, floats, and strings.
 
 .. _understandinggroups:
 

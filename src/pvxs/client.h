@@ -64,12 +64,14 @@ struct PVXS_API Connected : public std::runtime_error
     const epicsTime time;
 };
 
+//! Operation::interrupt() called
 struct PVXS_API Interrupted : public std::runtime_error
 {
     Interrupted();
     virtual ~Interrupted();
 };
 
+//! Operation::wait() exceeded timeout
 struct PVXS_API Timeout : public std::runtime_error
 {
     Timeout();
@@ -116,7 +118,10 @@ struct PVXS_API Operation {
     Operation& operator=(const Operation&) = delete;
     virtual ~Operation() =0;
 
-    //! PV name
+    /** PV name
+     *
+     * Returned reference is valid for the lifetime of the Operation
+     */
     virtual const std::string& name() =0;
 
     //! Explicitly cancel a pending operation.
@@ -131,8 +136,8 @@ struct PVXS_API Operation {
      *
      * @param timeout Time to wait prior to throwing TimeoutError.  cf. epicsEvent::wait(double)
      * @return result Value.  Always empty/invalid for put()
-     * @throws Timeout Timeout exceeded
-     * @throws Interrupted interrupt() called
+     * @throws pvxs::client::Timeout Timeout exceeded
+     * @throws pvxs::client::Interrupted interrupt() called
      */
     virtual Value wait(double timeout) =0;
 

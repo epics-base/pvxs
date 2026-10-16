@@ -71,8 +71,14 @@ struct PVXS_API SharedPV
     //! Reverse the effects of open() and force disconnect any remaining clients.
     void close();
 
-    //! Update the internal data value, and dispatch subscription updates to any clients.
+    /** Update the internal data value, and dispatch subscription updates to any clients.
+     *
+     * The value given as the argument must be created from the same `TypeDef`
+     * instance as the value given to open(). It is recommended that
+     * the same type is reused using by calling Value::cloneEmpty().
+     */
     void post(const Value& val);
+
     //! query the internal data value and update the provided Value.
     void fetch(Value& val) const;
     //! Return a (shallow) copy of the internal data value

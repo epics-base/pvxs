@@ -133,19 +133,22 @@ struct FmtTree {
         case TypeCode::Bool:
             strm<<(fld.as<bool>() ? "true" : "false");
             return;
-#define CASE(ENUM, TYPE) \
-        case TypeCode::ENUM : strm<<fld.as<TYPE>(); return
-            CASE(Int8, int8_t);
-            CASE(Int16, int16_t);
-            CASE(Int32, int32_t);
-            CASE(Int64, int64_t);
-            CASE(UInt8, uint8_t);
-            CASE(UInt16, uint16_t);
-            CASE(UInt32, uint32_t);
-            CASE(UInt64, uint64_t);
-            CASE(Float32, float);
-            CASE(Float64, double);
-#undef CASE
+        case TypeCode::Int8:
+        case TypeCode::Int16:
+        case TypeCode::Int32:
+        case TypeCode::Int64:
+            strm<<fld.as<int64_t>();
+            return;
+        case TypeCode::UInt8:
+        case TypeCode::UInt16:
+        case TypeCode::UInt32:
+        case TypeCode::UInt64:
+            strm<<fld.as<uint64_t>();
+            return;
+        case TypeCode::Float32:
+        case TypeCode::Float64:
+            strm<<fld.as<double>();
+            return;
         case TypeCode::String:
             strm<<"\""<<escape(fld.as<std::string>())<<"\"";
             return;

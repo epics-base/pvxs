@@ -112,10 +112,12 @@ int main(int argc, char *argv[])
             return 1;
         }
 
+        epicsEvent done;
+        std::atomic<int> remaining{argc-optind}; // query mode only
+
         auto ctxt(client::Context::fromEnv());
         auto conf = ctxt.config();
 
-        epicsEvent done;
         SigInt H([&done]() {
             done.signal();
         });
@@ -153,8 +155,6 @@ int main(int argc, char *argv[])
 
         } else { // query mode, fetch info from specific servers
 
-            std::atomic<int> remaining{argc-optind};
-
             for(auto n : range(optind, argc)) {
                 ops.push_back(ctxt.rpc("server")
                               .server(argv[n])
@@ -173,7 +173,7 @@ int main(int argc, char *argv[])
                                   if(top["implLang"].as(temp)) {
                                       std::cout<<" lang=\""<<escape(temp)<<"\"";
                                   };
-                                  std::cout<<"\n";
+                                  std::cout<<std::endl;
 
                               } else { // channels
                                   if(verbose)
@@ -205,7 +205,7 @@ int main(int argc, char *argv[])
         return 0;
 
     }catch(std::exception& e){
-        std::cerr<<"Error: "<<e.what()<<"\n";
+        std::cerr<<ERL_ERROR ": "<<e.what()<<"\n";
         return 1;
     }
 }

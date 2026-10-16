@@ -29,6 +29,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     # Set environment variables from matrix parameters
     env:
+      SET: ${{ matrix.set || 'defaults' }}
       CMP: ${{ matrix.cmp }}
       BCFG: ${{ matrix.configuration }}
       BASE: ${{ matrix.base }}
@@ -80,7 +81,7 @@ jobs:
             cross: "windows-x64-mingw"
 
           - name: RTEMS5
-            os: ubuntu-20.04
+            os: ubuntu-22.04
             cmp: gcc
             configuration: default
             base: "7.0"
@@ -104,25 +105,31 @@ jobs:
             cmp: gcc
             configuration: default
             base: "7.0"
-            libevent: "release-2.0.22-stable"
+            libevent: "release-2.1.12-stable"
 
           - name: Native Linux with 7.0.2
             os: ubuntu-latest
             cmp: gcc
             configuration: default
+            set: "nofortify"
             base: "R7.0.2"
+            extra: "CMD_CPPFLAGS=\"-U_FORTIFY_SOURCE\""
 
           - name: Native Linux with 3.15
             os: ubuntu-latest
             cmp: gcc
             configuration: default
+            set: "nofortify"
             base: "3.15"
+            extra: "CMD_CPPFLAGS=\"-U_FORTIFY_SOURCE\""
 
           - name: Native Linux with 3.14
             os: ubuntu-latest
             cmp: gcc
             configuration: default
+            set: "nofortify"
             base: "3.14"
+            extra: "CMD_CPPFLAGS=\"-U_FORTIFY_SOURCE\""
 
           - name: OSX
             os: macos-latest
@@ -130,28 +137,28 @@ jobs:
             configuration: default
             base: "7.0"
 
-          - name: vs2019 DLL
-            os: windows-2019
-            cmp: vs2019
+          - name: vs2022 DLL
+            os: windows-2022
+            cmp: vs2022
             configuration: debug
             base: "7.0"
-            extra: "CMD_CXXFLAGS=-analysis"
+            extra: "CMD_CXXFLAGS=-analyze"
 
-          - name: vs2019 static
-            os: windows-2019
-            cmp: vs2019
+          - name: vs2022 static
+            os: windows-2022
+            cmp: vs2022
             configuration: static-debug
             base: "7.0"
-            extra: "CMD_CXXFLAGS=-analysis"
+            extra: "CMD_CXXFLAGS=-analyze"
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v6
       with:
         submodules: true
     - name: "apt-get install"
       run: |
         sudo apt-get update
-        sudo apt-get -y install g++-mingw-w64-x86-64 cmake gdb qemu-system-x86
+        sudo apt-get -y install libreadline-dev g++-mingw-w64-x86-64 cmake gdb qemu-system-x86
       if: runner.os == 'Linux'
     - name: Automatic core dumper analysis
       uses: mdavidsaver/ci-core-dumper@master
@@ -170,9 +177,10 @@ jobs:
       if: ${{ always() && runner.os == 'macOS' }}
       run: otool -D -L -l bundle/usr/*/lib/*.dylib lib/*/*.dylib bin/*/pvxinfo
     - name: readelf
-      if: ${{ always() && runner.os == 'Linux' }}
+      if: ${{ always() && runner.os == 'Linux' && matrix.base != '3.14' }}
       run: find bundle/usr lib -name '*.so' -print0 | xargs -0 readelf -d bin/linux-*/pvxinfo
     - name: Host info
+      if: ${{ matrix.base != '3.14' }}
       run: python .ci/cue.py --add-path "{TOP}/bin/{EPICS_HOST_ARCH}" --add-path "{TOP}/bundle/usr/{EPICS_HOST_ARCH}/lib" exec pvxinfo -D
     - name: Test env setup
       run: echo "UBSAN_OPTIONS=log_path=$PWD/UBSAN:suppressions=$PWD/.ci-local/ubsan.supp:report_error_type=1:print_stacktrace=1" >> $GITHUB_ENV
@@ -202,16 +210,15 @@ jobs:
       run: grep . cfg/*
     - name: Upload tapfiles Artifact
       if: ${{ always() }}
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v7
       with:
         name: tapfiles ${{ matrix.name }}
         path: '**/O.*/*.tap'
+        if-no-files-found: ignore
 
   docker:
     name: ${{ matrix.name }}
     runs-on: ubuntu-latest
-    container:
-      image: ${{ matrix.image }}
     env:
       CMP: ${{ matrix.cmp }}
       BCFG: ${{ matrix.configuration }}
@@ -219,11 +226,12 @@ jobs:
       LIBEVENT_TAG: ${{ matrix.libevent }}
       EXTRA: ${{ matrix.extra }}
       VV: "1"
+
     strategy:
       fail-fast: false
       matrix:
         include:
-          - name: Linux centos 7
+          - name: Linux CentOS 7
             image: centos:7
             cmp: gcc
             configuration: default
@@ -236,52 +244,48 @@ jobs:
             base: "7.0"
 
     steps:
-    - name: "Build newer Git"
-      # actions/checkout@v2 wants git >=2.18
-      # centos:7 has 1.8
-      if: matrix.image=='centos:7'
-      run: |
-        yum -y install curl make gcc curl-devel expat-devel gettext-devel openssl-devel zlib-devel perl-ExtUtils-MakeMaker
-        curl https://mirrors.edge.kernel.org/pub/software/scm/git/git-2.29.0.tar.gz | tar -xz
-        cd git-*
-        make -j2 prefix=/usr/local all
-        make prefix=/usr/local install
-        cd ..
-        rm -rf git-*
-        type -a git
-        git --version
-    - name: "Redhat setup"
-      run: |
-        dnfyum() {
-            dnf -y "$@" || yum -y "$@"
-            return $?
-        }
-        dnfyum install python3 gdb make perl gcc-c++ glibc-devel readline-devel ncurses-devel perl-devel libevent-devel
-        git --version || dnfyum install git
-        # rather than just bite the bullet and link python3 -> python,
-        # people would rather just break all existing scripts...
-        [ -e /usr/bin/python ] || ln -sf /usr/bin/python3 /usr/bin/python
-        python --version
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v6
       with:
         submodules: true
-    - name: Automatic core dumper analysis
-      uses: mdavidsaver/ci-core-dumper@master
-    - name: Prepare and compile dependencies
-      run: python .ci/cue.py prepare
-    - name: Build main module
-      run: python .ci/cue.py build
-    - name: Host info
-      run: python .ci/cue.py --add-path "{TOP}/bin/{EPICS_HOST_ARCH}" exec pvxinfo -D
-    - name: Run main module tests
-      run: python -m ci_core_dumper exec python .ci/cue.py test
-    - name: Collect and show test results
-      run: python .ci/cue.py test-results
-    - name: CDT Check
-      run: ./.ci-local/cdt-check.sh
-    - name: Upload tapfiles Artifact
-      if: ${{ always() }}
-      uses: actions/upload-artifact@v3
-      with:
-        name: tapfiles ${{ matrix.name }}
-        path: '**/O.*/*.tap'
+
+    - name: Run...
+      run: |
+        env > env.list
+        cat <<EOF > runit.sh
+        #!/bin/sh
+        set -e -x
+        cd /io
+        id
+
+        if [ "${{ matrix.image }}" = "centos:7" ]
+        then
+            sed -i s/mirror.centos.org/vault.centos.org/g /etc/yum.repos.d/*.repo
+            sed -i s/^#.*baseurl=http/baseurl=http/g /etc/yum.repos.d/*.repo
+            sed -i s/^mirrorlist=http/#mirrorlist=http/g /etc/yum.repos.d/*.repo
+            yum -y install epel-release
+            alias dnf=yum
+        fi
+        dnf -y install \
+          curl make gcc curl-devel expat-devel gettext-devel openssl-devel zlib-devel perl-ExtUtils-MakeMaker \
+          python3 gdb make perl gcc-c++ glibc-devel readline-devel ncurses-devel perl-devel libevent-devel \
+          sudo re2c git
+
+        # fake out cue.py
+        ln -s /bin/true /usr/bin/apt-get
+
+        # quiet warnings spam from perl
+        export LANG=C
+
+        python3 --version
+        python3 .ci/cue.py prepare
+        python3 .ci/cue.py build
+        python3 .ci/cue.py -T 15M test
+        python3 .ci/cue.py test-results
+        EOF
+        chmod +x runit.sh
+        docker run --rm --quiet \
+         --pull=always \
+         --env-file env.list \
+         -v `pwd`:/io \
+         ${{ matrix.image }} \
+         /io/runit.sh

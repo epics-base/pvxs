@@ -121,7 +121,7 @@ void getArrayValue(dbChannel* pChannel,
                          Value& value)
 {
     auto final_type(dbChannelFinalFieldType(pChannel));
-    auto buf(std::make_shared<std::vector<char>>(dbChannelFinalElements(pChannel) * dbChannelFinalFieldSize(pChannel)));
+    auto buf(std::make_shared<std::vector<char>>(dbChannelFinalElements(pChannel) * dbValueSize(final_type)));
     long nReq = dbChannelFinalElements(pChannel);
 
     DBErrorMessage dbErrorMessage(dbChannelGet(pChannel, final_type,
@@ -288,9 +288,9 @@ void getProperties(dbChannel* pChannel, db_field_log *pfl, Value& node)
         if(options & DBR_GR_DOUBLE) {
             dlL = meta.lower_disp_limit;
             node["display.limitHigh"] = meta.upper_disp_limit;
-            if(options & DBR_PRECISION) {
-                node["display.precision"] = int32_t(meta.precision.dp);
-            }
+        }
+        if(options & DBR_PRECISION) {
+            node["display.precision"] = int32_t(meta.precision.dp);
         }
         if(options & DBR_CTRL_DOUBLE) {
             node["control.limitLow"] = meta.lower_ctrl_limit;
@@ -362,22 +362,11 @@ void IOCSource::get(Value& node, // node within top level structure addressed by
 void
 IOCSource::doPreProcessing(dbChannel* pDbChannel, SecurityLogger& securityLogger, const Credentials& credentials,
         const SecurityClient& securityClient) {
-    if (pDbChannel->addr.special == SPC_ATTRIBUTE) {
-        throw std::runtime_error("Unable to put value: Modifications not allowed: S_db_noMod");
-    } else if (pDbChannel->addr.precord->disp && pDbChannel->addr.pfield != &pDbChannel->addr.precord->disp) {
+    if (pDbChannel->addr.precord->disp && pDbChannel->addr.pfield != &pDbChannel->addr.precord->disp) {
         throw std::runtime_error("Unable to put value: Field Disabled: S_db_putDisabled");
     }
 
-    SecurityLogger asWritePvt(
-            asTrapWriteWithData((securityClient.cli)[0], // The user is the first element
-                    credentials.cred[0].c_str(),         // The user is the first element
-                    credentials.host.c_str(),
-                    pDbChannel,
-                    dbChannelFinalFieldType(pDbChannel),
-                    dbChannelFinalElements(pDbChannel),
-                    nullptr
-            )
-    );
+    SecurityLogger asWritePvt(pDbChannel, credentials, securityClient);
 
     securityLogger.swap(asWritePvt);
 
@@ -431,36 +420,29 @@ void IOCSource::doPostProcessing(dbChannel* pDbChannel, TriState forceProcessing
 
 /**
  * Set a flag that will force processing of record in the specified security control object
- *
- * @param pvRequest the request
- * @param securityControlObject the security control object to update
  */
-void IOCSource::setForceProcessingFlag(const Value& pvRequest,
-                                       const std::shared_ptr<SecurityControlObject>& securityControlObject)
+void IOCSource::setForceProcessingFlag(server::RemoteLogger *op,
+                                       const Value& pvRequest,
+                                       TriState& forceProc)
 {
     auto proc = pvRequest["record._options.process"];
-    switch(proc.type().code) {
-    case TypeCode::String: {
-        auto val(proc.as<std::string>());
-        if (val == "true") {
-            securityControlObject->forceProcessing = True;
-        } else if (val == "false") {
-            securityControlObject->forceProcessing = False;
-        } else if (val == "passive") {
-            securityControlObject->forceProcessing = Unset;
-        } else {
-            log_warn_printf(_log, "Ignoring unsupported record._options.process='%s'", val.c_str());
+    bool b;
+    std::string s;
+    if(!proc) {
+        return; // not provided
+
+    } else if(proc.as(b)) { // actual bool, integer, or string parsable to bool
+        forceProc = b ? True : False;
+        return;
+
+    } else if(proc.as(s)) {
+        if(s=="passive") {
+            forceProc = Unset;
+            return;
         }
-        break;
     }
-    case TypeCode::Bool:
-        securityControlObject->forceProcessing = proc.as<bool>() ? True : False;
-        break;
-    default:
-        log_warn_printf(_log, "Ignoring unsupported record._options.process type %s", proc.type().name());
-    case TypeCode::Null:
-        break;
-    }
+    // oops, unsupported type or unexpected value
+    op->logRemote(Level::Warn, SB()<<"Ignoring unsupported "<<pvRequest.nameOf(proc)<<": "<<proc);
 }
 
 static

@@ -4,6 +4,8 @@
  * in file LICENSE that is included with this distribution.
  */
 
+#include <limits>
+
 #include <testMain.h>
 
 #include <epicsUnitTest.h>
@@ -92,6 +94,8 @@ void testAssignUnion()
 
     val["->u16"] = 42;
     testEq(val.as<std::string>(), "42");
+    val["u16"] = 43;
+    testEq(val.as<uint16_t>(), 43);
     val["->s"] = "test";
     testEq(val.as<std::string>(), "test");
 
@@ -122,8 +126,20 @@ void testAssignAny()
 
     val = 42;
 
+    // automagic ANY assignment promotes to StoreType
+    testEq(val["->"].type(), TypeCode::Int64);
+    testEq(val.as<int64_t>(), 42);
+
+    {
+        auto us = TypeDef(TypeCode::UInt32).create();
+        us = -1;
+        val.from(us); // typed ANY assignment
+    }
+    testEq(val["->"].type(), TypeCode::UInt32);
+    testEq(val.as<uint64_t>(), 0xffffffff);
+
     testThrows<std::logic_error>([&val](){
-        val.from(val);
+        val.from(val); // self assignment would create infinite recursion
     });
 }
 
@@ -491,11 +507,64 @@ void testClear()
     testFalse(val.isMarked(true, true));
 }
 
+void test_cache_sync()
+{
+    testShow()<<__func__;
+
+    auto cache(TypeDef(TypeCode::Struct, {
+                           members::UInt32("int"),
+                           members::String("string"),
+                           members::UInt32A("arr"),
+                           members::Any("any"),
+                           Member(TypeCode::Union, "choice", {
+                               Member(TypeCode::Float32, "a"),
+                               Member(TypeCode::String, "b"),
+                           }),
+                       }).create());
+    auto delta(cache.cloneEmpty());
+
+    delta["int"] = 42;
+    delta["string"] = "hello";
+    delta["arr"] = shared_array<const uint32_t>({1, 2, 3});
+    delta["any"] = 5;
+    delta["choice->a"] = 6;
+
+    // updates cache <- delta
+    cache_sync(cache, delta);
+
+    testEq(delta["int"].as<uint32_t>(), 42u);
+    testEq(delta["string"].as<std::string>(), "hello");
+    testArrEq(delta["arr"].as<shared_array<const uint32_t>>(), shared_array<const uint32_t>({1, 2, 3}));
+    testEq(delta["any"].as<uint32_t>(), 5u);
+    testEq(delta["choice"].as<uint32_t>(), 6u);
+
+    testEq(cache["int"].as<uint32_t>(), 42u);
+    testEq(cache["string"].as<std::string>(), "hello");
+    testArrEq(cache["arr"].as<shared_array<const uint32_t>>(), shared_array<const uint32_t>({1, 2, 3}));
+    testEq(cache["any"].as<uint32_t>(), 5u);
+    testEq(cache["choice"].as<uint32_t>(), 6u);
+
+    delta = cache.cloneEmpty();
+
+    // updates cache -> delta
+    cache_sync(cache, delta);
+
+    testEq(delta["int"].as<uint32_t>(), 42u);
+    testEq(delta["string"].as<std::string>(), "hello");
+    testArrEq(delta["arr"].as<shared_array<const uint32_t>>(), shared_array<const uint32_t>({1, 2, 3}));
+    testEq(delta["any"].as<uint32_t>(), 5u);
+    testEq(delta["choice"].as<uint32_t>(), 6u);
+
+    // Any/Union should be copied to allow consumer of delta to modify
+    testFalse(delta["any"].as<Value>().equalInst(cache["any"].as<Value>()));
+    testFalse(delta["choice"].as<Value>().equalInst(cache["choice"].as<Value>()));
+}
+
 } // namespace
 
 MAIN(testdata)
 {
-    testPlan(156);
+    testPlan(196);
     testSetup();
     testTraverse();
     testAssign();
@@ -543,13 +612,44 @@ MAIN(testdata)
 #endif
     testConvertScalar2<int32_t, uint64_t, int64_t>(-2147483648, 0x80000000, -2147483648);
     testTodoEnd();
+    testConvertScalar2<int32_t, int32_t, uint64_t>(-2147483648, -2147483648, 0xffffffff80000000llu);
     testConvertScalar2<int32_t, uint64_t, int64_t>(0, 0x100000000llu, -0);
+    testTodoBegin("UB");
+    // test non-finite -> integer casts
+    // copy in
+    testConvertScalar2<int64_t, double, int32_t>(0,
+                                                 std::numeric_limits<double>::quiet_NaN(),
+                                                 0);
+    testConvertScalar2<int64_t, double, int32_t>(0x7fffffffffffffff,
+                                                 std::numeric_limits<double>::infinity(),
+                                                 0x7fffffff);
+    testConvertScalar2<int64_t, double, int32_t>(0x8000000000000000,
+                                                 -std::numeric_limits<double>::infinity(),
+                                                 0x80000000);
+    testConvertScalar2<uint64_t, double, uint32_t>(0xffffffffffffffff,
+                                                 std::numeric_limits<double>::infinity(),
+                                                 0xffffffff);
+    // copy out
+    testConvertScalar2<double, double, int32_t>(std::numeric_limits<double>::quiet_NaN(),
+                                                 std::numeric_limits<double>::quiet_NaN(),
+                                                 0);
+    testConvertScalar2<double, double, int32_t>(std::numeric_limits<double>::infinity(),
+                                                 std::numeric_limits<double>::infinity(),
+                                                 0x7fffffff);
+    testConvertScalar2<double, double, int32_t>(-std::numeric_limits<double>::infinity(),
+                                                 -std::numeric_limits<double>::infinity(),
+                                                 0x80000000);
+    testConvertScalar2<double, double, uint32_t>(std::numeric_limits<double>::infinity(),
+                                                 std::numeric_limits<double>::infinity(),
+                                                 0xffffffff);
+    testTodoEnd();
 
     testAssignSimilar();
     testAssignSimilarNDArray();
     testUnionMagicAssign();
     testExtract();
     testClear();
+    test_cache_sync();
     cleanup_for_valgrind();
     return testDone();
 }

@@ -10,6 +10,7 @@
 #include <string.h>
 
 #include <testMain.h>
+#include <alarm.h>
 #include <asDbLib.h>
 #include <dbAccess.h>
 #include <dbLock.h>
@@ -17,9 +18,13 @@
 #include <epicsExit.h>
 #include <asTrapWrite.h>
 #include <generalTimeSup.h>
+#include <iocsh.h>
 
+#include "dblocker.h"
 #include "testioc.h"
 #include "utilpvt.h"
+
+#include "capturestd.h"
 
 #if EPICS_VERSION_INT >= VERSION_INT(3, 15, 0, 2)
 #  define HAVE_lsi
@@ -51,7 +56,7 @@ void forceUTAG(const char *rec)
 {
     dbCommon *prec = testdbRecordPtr(rec);
     dbScanLock(prec);
-#ifdef DBR_UTAG
+#if DBR_UTAG
     prec->utag = 42;
 #endif
     dbScanUnlock(prec);
@@ -59,7 +64,7 @@ void forceUTAG(const char *rec)
 
 void checkUTAG(Value& v, int32_t expect=42)
 {
-#ifdef DBR_UTAG
+#if DBR_UTAG
     auto utag = v["timeStamp.userTag"];
     if(!utag.isMarked() || utag.as<int32_t>()!=expect)
         testFail("userTag not set");
@@ -143,6 +148,24 @@ void testGetScalar()
               "valueAlarm.highAlarmLimit double = 100\n"
             )<<" fetch VAL w/ meta-data.  delta output";
 
+    val = ctxt.get("test:precprop.HIGH").exec()->wait(5.0);
+    checkUTAG(val, 0);
+    testStrEq(std::string(SB()<<val.format().delta()),
+              "value double = 5\n"
+              "alarm.severity int32_t = 3\n"
+              "alarm.status int32_t = 2\n"
+              "alarm.message string = \"UDF\"\n"
+              "timeStamp.secondsPastEpoch int64_t = 631152000\n"
+              "timeStamp.nanoseconds int32_t = 0\n"
+              "display.description string = \"\"\n"
+              "display.units string = \"s\"\n"
+              "display.precision int32_t = 2\n"
+              "display.form.choices string[] = {7}[\"Default\", \"String\", \"Binary\", \"Decimal\", \"Hex\", \"Exponential\", \"Engineering\"]\n"
+              "control.limitLow double = 0\n"
+              "control.limitHigh double = 100000\n"
+            )<<" precprop.HIGH serves display.precision though bo NULLs "
+              "get_graphic_double; display.limitLow/limitHigh stay absent";
+
     val = ctxt.get("test:ai.DESC").exec()->wait(5.0);
     checkUTAG(val);
     testStrEq(std::string(SB()<<val.format()),
@@ -160,6 +183,47 @@ void testGetScalar()
               "    } timeStamp\n"
               "    struct {\n"
               "        string description = \"Analog input\"\n"
+              "        string units = \"\"\n"
+              "    } display\n"
+              "}\n");
+
+    val = ctxt.get("test:ai.EGU").exec()->wait(5.0);
+    checkUTAG(val);
+    testStrEq(std::string(SB()<<val.format()),
+              "struct \"epics:nt/NTScalar:1.0\" {\n"
+              "    string value = \"arb\"\n"
+              "    struct \"alarm_t\" {\n"
+              "        int32_t severity = 2\n"
+              "        int32_t status = 1\n"
+              "        string message = \"HIGH\"\n"
+              "    } alarm\n"
+              "    struct \"time_t\" {\n"
+              "        int64_t secondsPastEpoch = 643497678\n"
+              "        int32_t nanoseconds = 102030\n"
+              "        int32_t userTag = 0\n"
+              "    } timeStamp\n"
+              "    struct {\n"
+              "        string description = \"Analog input\"\n"
+              "        string units = \"\"\n"
+              "    } display\n"
+              "}\n");
+
+    val = ctxt.get("test:bo.ZNAM").exec()->wait(5.0);
+    testStrEq(std::string(SB()<<val.format()),
+              "struct \"epics:nt/NTScalar:1.0\" {\n"
+              "    string value = \"Zero\"\n"
+              "    struct \"alarm_t\" {\n"
+              "        int32_t severity = 3\n"
+              "        int32_t status = 2\n"
+              "        string message = \"UDF\"\n"
+              "    } alarm\n"
+              "    struct \"time_t\" {\n"
+              "        int64_t secondsPastEpoch = 631152000\n"
+              "        int32_t nanoseconds = 0\n"
+              "        int32_t userTag = 0\n"
+              "    } timeStamp\n"
+              "    struct {\n"
+              "        string description = \"\"\n"
               "        string units = \"\"\n"
               "    } display\n"
               "}\n");
@@ -273,7 +337,7 @@ void testGetScalar()
     forceUTAG("test:nsec"); // forced value should be ignored
 
     val = ctxt.get("test:nsec").exec()->wait(5.0);
-#ifdef DBR_UTAG
+#if DBR_UTAG
     testFldEq(val, "timeStamp.userTag", 142);
     val["timeStamp.userTag"].unmark();
 #else
@@ -588,6 +652,9 @@ void testPutLog()
         static
         void message(asTrapWriteMessage *pmessage,int after)
         {
+            testTrue(strcmp(pmessage->hostid, "127.0.0.1")==0 || strcmp(pmessage->hostid, "::1")==0)
+                    <<" asTrapWriteMessage "<<escape(pmessage->hostid);
+
             // caPutLog assumes "serverSpecific" is always available, and a dbChannel*
             // (or dbAddr* with 3.14)
             auto *pchan = (dbChannel*)pmessage->serverSpecific;
@@ -874,11 +941,146 @@ void testMonitorAIFilt(TestClient& ctxt)
     sub2.testEmpty();
 }
 
+void testMonitorDBEAlarm(TestClient& ctxt)
+{
+    testDiag("%s", __func__);
+
+    auto prec(testdbRecordPtr("test:ai"));
+    {
+        ioc::DBLocker L(prec);
+
+        prec->tpro = 50; // initial
+        prec->sevr = 0;
+        prec->stat = 0;
+    }
+
+    TestSubscription sub(ctxt.monitor("test:ai.TPRO")
+                             .record("DBE", DBE_ALARM)
+                             .maskConnected(true)
+                             .maskDisconnected(true));
+
+    auto val(sub.waitForUpdate());
+    testShow()<<"Initial\n"<<val.format().delta();
+    testEq(val["value"].as<int32_t>(), 50);
+    testEq(val["alarm.severity"].as<int32_t>(), 0);
+
+    {
+        ioc::DBLocker L(prec);
+
+        prec->tpro = 52; // event discarded
+        db_post_events(prec, &prec->tpro, DBE_VALUE);
+        prec->tpro = 53;
+        prec->sevr = MAJOR_ALARM;
+        prec->stat = READ_ALARM;
+        db_post_events(prec, &prec->tpro, DBE_VALUE|DBE_ALARM);
+    }
+
+    val = sub.waitForUpdate();
+    testShow()<<"Delta\n"<<val.format().delta();
+    testEq(val["value"].as<int32_t>(), 53);
+    testEq(val["alarm.severity"].as<int32_t>(), 2);
+}
+
+void testMonitorDBE(TestClient& ctxt)
+{
+    testDiag("%s", __func__);
+
+    TestSubscription sub(ctxt.monitor("test:ai.TPRO")
+                         .record("DBE", DBE_ARCHIVE)
+                         .maskConnected(true)
+                         .maskDisconnected(true));
+
+    auto val(sub.waitForUpdate());
+    testShow()<<val.format().delta();
+
+    auto prec(testdbRecordPtr("test:ai"));
+
+    {
+        ioc::DBLocker L(prec);
+
+        prec->tpro = 42; // event discarded
+        db_post_events(prec, &prec->tpro, DBE_VALUE);
+        prec->tpro = 43;
+        db_post_events(prec, &prec->tpro, DBE_VALUE|DBE_ARCHIVE);
+    }
+
+    val = sub.waitForUpdate();
+    testShow()<<val.format().delta();
+    testEq(val["value"].as<int32_t>(), 43);
+}
+
+void testMonitorNsecMask(TestClient& ctxt)
+{
+    testDiag("%s", __func__);
+
+    TestSubscription sub(ctxt.monitor("test:nsec")
+                         .maskConnected(true)
+                         .maskDisconnected(true));
+
+    auto val(sub.waitForUpdate());
+
+    // nsec:lsb:8 clears the low 8 bits: 102030 -> 101888, userTag -> 142
+    testFldEq(val, "timeStamp.nanoseconds", int32_t(101888));
+#if DBR_UTAG
+    testFldEq(val, "timeStamp.userTag", int32_t(142));
+#else
+    testSkip(1, "no UTAG");
+#endif
+}
+
+void testiocsh(TestClient& ctxt)
+{
+    testDiag("%s", __func__);
+
+    TestSubscription sub(ctxt.monitor("test:ai")
+                             .maskConnected(true)
+                             .maskDisconnected(true));
+
+    auto val(sub.waitForUpdate());
+
+    {
+        CaptureStd cap([](){
+            iocshCmd("pvxsr 5");
+        });
+        testStrEq(cap.err(), "");
+        testStrMatch(".*EPICS_PVAS_AUTO_BEACON_ADDR_LIST=NO.*", cap.out());
+        testStrMatch(".*Source: __server.*", cap.out());
+        testStrMatch(".*test:nsec.*", cap.out());
+        testStrMatch(".*State: Running TCP_Port:.*", cap.out());
+        testStrMatch(".*test:ai TX=.*", cap.out());
+    }
+    {
+        CaptureStd cap([](){
+            iocshCmd("pvxsi");
+        });
+        testStrEq(cap.err(), "");
+        testStrMatch(".*Toolchain.*", cap.out());
+        testStrMatch(".*epicsThreadGetCPUs.*", cap.out());
+        testStrMatch(".*EPICS_PVAS_AUTO_BEACON_ADDR_LIST=.*", cap.out());
+    }
+    {
+        CaptureStd cap([](){
+            iocshCmd("pvxrefshow");
+            iocshCmd("pvxrefsave");
+            iocshCmd("pvxrefdiff");
+        });
+        testStrEq(cap.err(), "");
+        testStrMatch(".*StructTop.*", cap.out());
+    }
+    {
+        CaptureStd cap([](){
+            iocshCmd("pvxsl 5");
+        });
+        testStrEq(cap.err(), "");
+        testStrMatch(".*RECORDS.*test:ai.*", cap.out());
+    }
+}
+
 } // namespace
 
 MAIN(testqsingle)
 {
-    testPlan(88);
+    testPlan(118);
     testSetup();
     pvxs::logger_config_env();
     generalTimeRegisterCurrentProvider("test", 1, &testTimeCurrent);
@@ -921,6 +1123,10 @@ MAIN(testqsingle)
             testMonitorAI(mctxt);
             testMonitorBO(mctxt);
             testMonitorAIFilt(mctxt);
+            testMonitorDBEAlarm(mctxt);
+            testMonitorDBE(mctxt);
+            testMonitorNsecMask(mctxt);
+            testiocsh(mctxt);
         }
         timeSim = false;
         testPutBlock();

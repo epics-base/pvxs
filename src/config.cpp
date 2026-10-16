@@ -60,7 +60,7 @@ SockEndpoint::SockEndpoint(const char* ep, uint16_t defport)
             iface = at+1;
     }
 
-    auto& ifmap = IfaceMap::instance();
+    auto ifmap(IfaceMap::instance());
 
     if(addr.family()==AF_INET6) {
         if(iface.empty() && addr->in6.sin6_scope_id) {
@@ -90,7 +90,7 @@ MCastMembership SockEndpoint::resolve() const
     if(!addr.isMCast())
         throw std::logic_error("not mcast");
 
-    auto& ifmap = IfaceMap::instance();
+    auto ifmap(IfaceMap::instance());
 
     MCastMembership m;
     m.af = addr.family();
@@ -141,10 +141,10 @@ bool operator==(const SockEndpoint& lhs, const SockEndpoint& rhs)
 
 namespace {
 
-/* Historically pvAccessCPP used $EPICS_PVA_CONN_TMO as the period
- * between sending CMD_ECHO.  *::Config::tcpTimeout is the actual
- * inactivity timeout period.  Apply a scaling factor to add a
- * go from one to the other.
+/* Historically pvAccessJava used $EPICS_PVA_CONN_TMO as the period
+ * between sending CMD_ECHO.  To avoid meta-stability apply a scaling
+ * factor.
+ * https://github.com/epics-base/pvAccessCPP/issues/171
  */
 constexpr double tmoScale = 4.0/3.0; // 40 second idle timeout / 30 configured
 
@@ -282,7 +282,8 @@ void printAddresses(std::vector<std::string>& out, const std::vector<SockEndpoin
 // Fill out address list by appending broadcast addresses
 // of any and all local interface addresses already included
 void expandAddrList(const std::vector<SockEndpoint>& ifaces,
-                    std::vector<SockEndpoint>& addrs)
+                    std::vector<SockEndpoint>& addrs,
+                    const IfaceMap& ifmap)
 {
     SockAttach attach;
     evsocket dummy(AF_INET, SOCK_DGRAM, 0);
@@ -307,9 +308,9 @@ void expandAddrList(const std::vector<SockEndpoint>& ifaces,
 }
 
 void addGroups(std::vector<SockEndpoint>& ifaces,
-               const std::vector<SockEndpoint>& addrs)
+               const std::vector<SockEndpoint>& addrs,
+               const IfaceMap& ifmap)
 {
-    auto& ifmap = IfaceMap::instance();
     std::set<std::string> allifaces;
 
     for(const auto& addr : addrs) {
@@ -492,7 +493,7 @@ void Config::expand()
         ifaces.emplace_back(SockAddr::any(AF_INET));
     }
 
-    auto& ifmap = IfaceMap::instance();
+    auto ifmap(IfaceMap::instance());
 
     for(size_t i=0; i<ifaces.size(); i++) {
         auto& ep = ifaces[i];
@@ -512,8 +513,8 @@ void Config::expand()
         // use interface list add ipv4 broadcast addresses to beaconDestinations.
         // 0.0.0.0 -> adds all bcasts
         // otherwise add bcast for each iface address
-        expandAddrList(ifaces, bdest);
-        addGroups(ifaces, bdest);
+        expandAddrList(ifaces, bdest, ifmap);
+        addGroups(ifaces, bdest, ifmap);
         auto_beacon = false;
     }
 
@@ -622,6 +623,8 @@ void Config::updateDefs(defs_t& defs) const
 
 void Config::expand()
 {
+    auto ifmap(IfaceMap::instance());
+
     if(udp_port==0)
         throw std::runtime_error("Client can't use UDP random port");
 
@@ -635,8 +638,8 @@ void Config::expand()
         ifaces.emplace_back(SockAddr::any(AF_INET));
 
     if(autoAddrList) {
-        expandAddrList(ifaces, addrs);
-        addGroups(ifaces, addrs);
+        expandAddrList(ifaces, addrs, ifmap);
+        addGroups(ifaces, addrs, ifmap);
         autoAddrList = false;
     }
 

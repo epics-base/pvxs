@@ -165,8 +165,9 @@ client::Config Server::clientConfig() const
     ret.udp_port = pvt->effective.udp_port;
     ret.tcp_port = pvt->effective.tcp_port;
     ret.interfaces = pvt->effective.interfaces;
-    ret.addressList = pvt->effective.interfaces;
-    ret.autoAddrList = false;
+    ret.addressList = pvt->effective.beaconDestinations;
+    ret.autoAddrList = pvt->effective.auto_beacon;
+    // pvt->effective.ignoreAddrs; no equivalent with client config
 
     return ret;
 }
@@ -321,6 +322,9 @@ std::ostream& operator<<(std::ostream& strm, const Server& serv)
                 auto& first = serv.pvt->interfaces.front();
                 strm<<" TCP_Port: "<<first.bind_addr.port();
             }
+            if(auto evmethod = event_base_get_method(serv.pvt->acceptor_loop.base)) {
+                strm<<" evmethod: "<<evmethod;
+            }
             strm<<"\n";
 
             Indented I(strm);
@@ -426,29 +430,7 @@ Server::Pvt::Pvt(const Config &conf)
             continue; // special case handling below
         }
 
-        if(addr.addr.family()==AF_INET && addr.addr.isAny()) {
-            // if listening on 0.0.0.0, also listen on [::]
-            auto any6(addr);
-            any6.addr = SockAddr::any(AF_INET6);
-
-            listeners.push_back(manager.onSearch(any6, cb));
-
-        } else if(addr.addr.family()==AF_INET6 && addr.addr.isAny()) {
-            // if listening on [::], also listen on 0.0.0.0
-            auto any4(addr);
-            any4.addr = SockAddr::any(AF_INET);
-
-            listeners.push_back(manager.onSearch(any4, cb));
-        }
-
-        if(evsocket::ipstack!=evsocket::Winsock
-                && addr.addr.family()==AF_INET && !addr.addr.isAny() && !addr.addr.isMCast()) {
-            /* An oddness of BSD sockets (not winsock) is that binding to
-             * INADDR_ANY will receive unicast and broadcast, but binding to
-             * a specific interface address receives only unicast.  The trick
-             * is to bind a second socket to the interface broadcast address,
-             * which will then receive only broadcasts.
-             */
+        if(addr.addr.family()==AF_INET && !addr.addr.isAny() && !addr.addr.isMCast()) {
             for(auto bcast : dummy.broadcasts(&addr.addr)) {
                 bcast.setPort(addr.addr.port());
                 listeners.push_back(manager.onSearch(bcast, cb));
@@ -505,9 +487,11 @@ Server::Pvt::Pvt(const Config &conf)
         }
 
         for(const auto& addr : effective.beaconDestinations) {
-            beaconDest.emplace_back(addr.c_str(), effective.udp_port);
+            beaconDest.emplace_back(std::piecewise_construct,
+                                    std::forward_as_tuple(addr.c_str(), effective.udp_port),
+                                    std::forward_as_tuple(true));
             log_debug_printf(serversetup, "Will send beacons to %s\n",
-                             std::string(SB()<<beaconDest.back()).c_str());
+                             std::string(SB()<<beaconDest.back().first).c_str());
         }
     });
 
@@ -672,27 +656,40 @@ void Server::Pvt::onSearch(const UDPManager::Search& msg)
     // on UDPManager worker
 
     for(const auto& addr : ignoreList) { // expected to be a short list
-        if(msg.src.family()!=addr.family()) {
+        if(msg.origSrc.family()!=addr.family()) {
             // skip
-        } else if(msg.src->in.sin_addr.s_addr != addr->in.sin_addr.s_addr) {
+        } else if(msg.origSrc->in.sin_addr.s_addr != addr->in.sin_addr.s_addr) {
             // skip
         } else if(addr->in.sin_port==0) {
             // ignore all ports
             return;
-        } else if(msg.src->in.sin_port == addr->in.sin_port) {
+        } else if(msg.origSrc->in.sin_port == addr->in.sin_port) {
             // ignore specific sender port
             return;
         }
     }
 
-    log_debug_printf(serverio, "%s searching\n", msg.src.tostring().c_str());
+    log_debug_printf(serverio, "%s searching\n", msg.origSrc.tostring().c_str());
 
     searchOp._names.resize(msg.names.size());
     for(auto i : range(msg.names.size())) {
         searchOp._names[i]._name = msg.names[i].name;
         searchOp._names[i]._claim = false;
     }
-    ipAddrToDottedIP(&msg.server->in, searchOp._src, sizeof(searchOp._src));
+    static_assert(sizeof(searchOp._src) >= INET6_ADDRSTRLEN+1, "");
+    switch(msg.replyDest.family()) {
+    case AF_INET:
+        evutil_inet_ntop(AF_INET, &msg.replyDest->in.sin_addr,
+                         searchOp._src, sizeof(searchOp._src)-1);
+        break;
+    case AF_INET6:
+        evutil_inet_ntop(AF_INET6, msg.replyDest->in6.sin6_addr.s6_addr,
+                         searchOp._src, sizeof(searchOp._src)-1);
+        break;
+    default:
+        strcpy(searchOp._src, "?");
+        break;
+    }
 
     {
         auto G(sourcesLock.lockReader());
@@ -777,7 +774,8 @@ void Server::Pvt::doBeacons(short evt)
 
     assert(M.good() && H.good());
 
-    for(const auto& dest : beaconDest) {
+    for(auto& dpair : beaconDest) {
+        const auto& dest = dpair.first;
         auto& sender = dest.addr.family()==AF_INET ? beaconSender4 : beaconSender6;
         sender.mcast_prep_sendto(dest);
 
@@ -786,17 +784,27 @@ void Server::Pvt::doBeacons(short evt)
         if(ntx<0) {
             int err = evutil_socket_geterror(sender.sock);
             auto lvl = Level::Warn;
-            if(err==EINTR || err==EPERM)
+            if(err==EINTR || !dpair.second) // downgrade repeated message
                 lvl = Level::Debug;
-            log_printf(serverio, lvl, "Beacon tx error (%d) %s\n",
+            dpair.second = false;
+            log_printf(serverio, lvl, "Beacon tx %s error (%d) %s\n",
+                       (SB()<<dest).str().c_str(),
                        err, evutil_socket_error_to_string(err));
 
         } else if(unsigned(ntx)<pktlen) {
-            log_warn_printf(serverio, "Beacon truncated %u < %u",
+            auto lvl = Level::Warn;
+            if(!dpair.second) // downgrade repeated message
+                lvl = Level::Debug;
+            dpair.second = false;
+            log_printf(serverio, lvl, "Beacon truncated %u < %u",
                        unsigned(ntx), unsigned(pktlen));
 
         } else {
-            log_debug_printf(serverio, "Beacon tx to %s\n", std::string(SB()<<dest).c_str());
+            auto lvl = Level::Debug;
+            if(!dpair.second) // upgrade message after previous failure
+                lvl = Level::Info;
+            dpair.second = true;
+            log_printf(serverio, lvl, "Beacon tx to %s\n", std::string(SB()<<dest).c_str());
         }
     }
 
@@ -839,6 +847,7 @@ void Source::show(std::ostream& strm)
 }
 
 OpBase::~OpBase() {}
+RemoteLogger::~RemoteLogger() {}
 
 ChannelControl::~ChannelControl() {}
 

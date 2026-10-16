@@ -66,9 +66,16 @@ void to_wire(Buffer& buf, const FieldDesc* cur)
     }
 }
 
+#if defined(__rtems__) || defined(vxWorks)
+// a lower limit on embedded targets
+static constexpr unsigned maxNestingDepth = 10u;
+#else
+static constexpr unsigned maxNestingDepth = 20u;
+#endif
+
 void from_wire(Buffer& buf, std::vector<FieldDesc>& descs, TypeStore& cache, unsigned depth)
 {
-    if(!buf.good() || depth>20) {
+    if(!buf.good() || depth>maxNestingDepth) {
         buf.fault(__FILE__, __LINE__);
         return;
     }
@@ -448,8 +455,12 @@ T from_wire_as(Buffer& buf)
 }
 
 static
-void from_wire_field(Buffer& buf, TypeStore& ctxt,  const FieldDesc* desc, const std::shared_ptr<FieldStorage>& store)
+void from_wire_field(Buffer& buf, TypeStore& ctxt,  const FieldDesc* desc, const std::shared_ptr<FieldStorage>& store, unsigned depth)
 {
+    if(depth>maxNestingDepth) {
+        buf.fault(__FILE__, __LINE__);
+        return;
+    }
     switch(store->code) {
     case StoreType::Null:
         switch(desc->code.code) {
@@ -459,7 +470,7 @@ void from_wire_field(Buffer& buf, TypeStore& ctxt,  const FieldDesc* desc, const
                 auto cdesc = desc + off;
                 std::shared_ptr<FieldStorage> cstore(store, store.get()+off); // TODO avoid shared_ptr/aliasing here
                 if(cdesc->code!=TypeCode::Struct) {
-                    from_wire_field(buf, ctxt, cdesc, cstore);
+                    from_wire_field(buf, ctxt, cdesc, cstore, depth+1);
                     cstore->valid = true;
                 }
             }
@@ -530,7 +541,7 @@ void from_wire_field(Buffer& buf, TypeStore& ctxt,  const FieldDesc* desc, const
                                                        &desc->members[desc->miter[select.index()].second]); // alias
                 fld = Value::Helper::build(stype, store, desc);
 
-                from_wire_full(buf, ctxt, fld);
+                from_wire_full(buf, ctxt, fld, depth+1);
                 return;
 
             } else { // invalid selection
@@ -542,7 +553,7 @@ void from_wire_field(Buffer& buf, TypeStore& ctxt,  const FieldDesc* desc, const
         case TypeCode::Any: {
             auto descs(std::make_shared<std::vector<FieldDesc>>());
 
-            from_wire(buf, *descs, ctxt);
+            from_wire(buf, *descs, ctxt, depth+1);
             if(!buf.good())
                 return;
 
@@ -554,7 +565,7 @@ void from_wire_field(Buffer& buf, TypeStore& ctxt,  const FieldDesc* desc, const
                 std::shared_ptr<const FieldDesc> stype(descs, descs->data()); // alias
                 fld = Value::Helper::build(stype);
 
-                from_wire_full(buf, ctxt, fld);
+                from_wire_full(buf, ctxt, fld, depth+1);
                 return;
 
             }
@@ -614,7 +625,7 @@ void from_wire_field(Buffer& buf, TypeStore& ctxt,  const FieldDesc* desc, const
                 if(from_wire_as<uint8_t>(buf)!=0) { // strictly 1 or 0
                     elem = Value::Helper::build(etype, store, desc);
 
-                    from_wire_full(buf, ctxt, elem);
+                    from_wire_full(buf, ctxt, elem, depth+1);
                 }
             }
 
@@ -640,7 +651,7 @@ void from_wire_field(Buffer& buf, TypeStore& ctxt,  const FieldDesc* desc, const
                                                                &cdesc->members[cdesc->miter[select.index()].second]); // alias
                         elem = Value::Helper::build(stype, store, desc);
 
-                        from_wire_full(buf, ctxt, elem);
+                        from_wire_full(buf, ctxt, elem, depth+1);
 
                     } else {
                         // invalid selector
@@ -662,7 +673,7 @@ void from_wire_field(Buffer& buf, TypeStore& ctxt,  const FieldDesc* desc, const
                 if(from_wire_as<uint8_t>(buf)!=0) { // strictly 1 or 0
                     auto descs(std::make_shared<std::vector<FieldDesc>>());
 
-                    from_wire(buf, *descs, ctxt);
+                    from_wire(buf, *descs, ctxt, depth+1);
                     if(!buf.good())
                         return;
 
@@ -671,7 +682,7 @@ void from_wire_field(Buffer& buf, TypeStore& ctxt,  const FieldDesc* desc, const
                         std::shared_ptr<const FieldDesc> stype(descs, descs->data()); // alias
                         elem = Value::Helper::build(stype, store, desc);
 
-                        from_wire_full(buf, ctxt, elem);
+                        from_wire_full(buf, ctxt, elem, depth+1);
                     }
                 }
             }
@@ -689,11 +700,11 @@ void from_wire_field(Buffer& buf, TypeStore& ctxt,  const FieldDesc* desc, const
     buf.fault(__FILE__, __LINE__);
 }
 
-void from_wire_full(Buffer& buf, TypeStore& ctxt, Value& val)
+void from_wire_full(Buffer& buf, TypeStore& ctxt, Value& val, unsigned depth)
 {
     assert(!!val);
 
-    from_wire_field(buf, ctxt, Value::Helper::desc(val), Value::Helper::store(val));
+    from_wire_field(buf, ctxt, Value::Helper::desc(val), Value::Helper::store(val), depth);
 }
 
 void from_wire_valid(Buffer& buf, TypeStore& ctxt, Value& val)
@@ -720,7 +731,7 @@ void from_wire_valid(Buffer& buf, TypeStore& ctxt, Value& val)
     {
         std::shared_ptr<FieldStorage> cstore(store, store.get()+bit);
         auto cdesc = desc + bit;
-        from_wire_field(buf, ctxt, cdesc, cstore);
+        from_wire_field(buf, ctxt, cdesc, cstore, 0);
         cstore->valid = true;
         bit = valid.findSet(bit + cdesc->size());
     }

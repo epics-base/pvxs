@@ -40,7 +40,7 @@ static inline void resetGroups() {}
 #if EPICS_VERSION_INT >= VERSION_INT(7, 0, 4, 0)
 #  define USE_DEINIT_HOOKS
 #endif
-#if EPICS_VERSION_INT > VERSION_INT(7, 0, 7, 0)
+#if EPICS_VERSION_INT >= VERSION_INT(7, 0, 8, 0)
 #  define USE_PREPARE_CLEANUP_HOOKS
 #endif
 
@@ -52,6 +52,17 @@ void testqsrvWaitForLinkConnected(struct link *plink, bool conn=true);
 PVXS_IOC_API
 void testqsrvWaitForLinkConnected(const char* pv, bool conn=true);
 
+/* Synchronize by waiting for subscription update to link.
+ *
+ * Create prior to the action which will cause the subscription update.
+ * Destructor will wait for an event.
+ *
+ * {
+ *     QSrvWaitForLinkUpdate S("myrec.INP"); // arm
+ *     testdbPutFieldOk("thesrc.PROC", DBF_INT, 0); // cause monitor
+ *     // ~QSrvWaitForLinkUpdate waits for update
+ * }
+ */
 class PVXS_IOC_API QSrvWaitForLinkUpdate final {
     struct link * const plink;
     unsigned seq;

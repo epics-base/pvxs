@@ -20,10 +20,21 @@
 #include <pvxs/sharedpv.h>
 #include <pvxs/source.h>
 #include <pvxs/nt.h>
+#include <pvxs/util.h>
 #include "evhelper.h"
 
 namespace {
 using namespace pvxs;
+
+void testEmptyName() {
+    client::Config conf;
+    conf.autoAddrList = false;
+    auto ctx(conf.build());
+    testThrowsMatch<std::logic_error>("Empty channel name",
+                                      [&](){
+                                          ctx.get("").exec();
+                                      });
+}
 
 struct Tester {
     Value initial;
@@ -300,6 +311,7 @@ struct Tester {
         cli.hurryUp();
 
         testOk1(!info->done.wait(2.1));
+        cli.close();
     }
 
     void orphan()
@@ -311,6 +323,15 @@ struct Tester {
         // clear Context to orphan in-progress operation
         cli = client::Context();
         op.reset();
+    }
+
+    void name()
+    {
+        testShow()<<__func__;
+
+        auto op = cli.get("nonexistent").exec();
+        auto op_name = op->name();
+        testEq(op_name, "nonexistent");
     }
 
     void manualExec()
@@ -448,11 +469,19 @@ struct Tester {
 
 struct ErrorSource : public server::Source
 {
-    const bool phase = false;
+    const enum phase_t {
+        phaseCreate,
+        phaseOp,
+        phaseGet,
+    } phase;
     const Value type;
-    explicit ErrorSource(bool phase)
-        :phase(phase)
+    epicsEvent& closedChan;
+    epicsEvent& closedOp;
+    explicit ErrorSource(phase_t pha, epicsEvent& clCh, epicsEvent& clOp)
+        :phase(pha)
         ,type(nt::NTScalar{TypeCode::Int32}.create())
+        ,closedChan(clCh)
+        ,closedOp(clOp)
     {}
 
     virtual void onSearch(Search &op) override final
@@ -465,8 +494,20 @@ struct ErrorSource : public server::Source
     {
         auto chan = std::move(op);
 
+        auto& clo(closedChan);
+        chan->onClose([&clo](const std::string&) {
+            clo.signal();
+        });
+
+        if(phase==phaseCreate)
+            throw std::runtime_error("Refuse create");
+
         chan->onOp([this](std::unique_ptr<server::ConnectOp>&& op) {
-            if(!phase) {
+            auto& clo(closedOp);
+            op->onClose([&clo](const std::string&) {
+                clo.signal();
+            });
+            if(phase==phaseOp) {
                 op->error("haha");
                 return;
             }
@@ -478,13 +519,14 @@ struct ErrorSource : public server::Source
     }
 };
 
-void testError(bool phase)
+void testError(ErrorSource::phase_t phase)
 {
     testShow()<<__func__<<" phase="<<phase;
 
+    epicsEvent closedChan, closedOp;
     auto serv = server::Config::isolated()
             .build()
-            .addSource("err", std::make_shared<ErrorSource>(phase))
+            .addSource("err", std::make_shared<ErrorSource>(phase, closedChan, closedOp))
             .start();
 
     auto cli = serv.clientConfig().build();
@@ -501,7 +543,11 @@ void testError(bool phase)
 
     cli.hurryUp();
 
-    if(testOk1(done.wait(5.0))) {
+    if(phase==ErrorSource::phaseCreate) {
+        // client will silently re-try until cancelled
+        testSkip(2, "client will silently re-try create until cancelled");
+
+    } else if(testOk1(done.wait(5.0))) {
         testThrows<client::RemoteError>([&actual]() {
             auto val = actual();
             testShow()<<"unexpected result\n"<<val;
@@ -510,16 +556,120 @@ void testError(bool phase)
     } else {
         testSkip(1, "timeout");
     }
+    if(phase==ErrorSource::phaseCreate) {
+        // early failure during channel creation
+        testSkip(2, "Op not yet created");
+    } else {
+        // later failure during op creation or execution
+        testOk(closedOp.wait(2.0), "wait for operation onClose phase=%d", phase);
+        testOk(!closedChan.tryWait(), "channel not failed");
+        op->cancel();
+        cli.cacheClear("", client::Context::Disconnect); // force close channel
+    }
+    testOk(closedChan.wait(2.0), "wait for channel onClose phase=%d", phase);
+}
+
+struct DisconnSource : public server::Source
+{
+    const Value type;
+    std::atomic<unsigned> closecount{0u};
+    explicit DisconnSource()
+        :type(nt::NTScalar{TypeCode::Int32}.create())
+    {}
+
+    virtual void onSearch(Search &op) override final
+    {
+        for(auto& name : op) {
+            name.claim();
+        }
+    }
+    virtual void onCreate(std::unique_ptr<server::ChannelControl> &&op) override final
+    {
+        std::shared_ptr<server::ChannelControl> chan(std::move(op));
+
+        chan->onOp([this, chan](std::unique_ptr<server::ConnectOp>&& op) {
+            op->onGet([this, chan](std::unique_ptr<server::ExecOp>&& op) {
+                testDiag("Force close!");
+                closecount++;
+                chan->close();
+            });
+            op->connect(type);
+        });
+    }
+};
+
+void testServerClose()
+{
+    testShow()<<__func__;
+
+    auto source(std::make_shared<DisconnSource>());
+    auto serv = server::Config::isolated()
+                    .build()
+                    .addSource("disconn", source)
+                    .start();
+
+    auto cli = serv.clientConfig().build();
+
+    epicsEvent econn, edisconn;
+
+    auto connop = cli.connect("mailbox")
+                  .onConnect([&](){
+                          testDiag("Connect");
+                          econn.signal();
+                      })
+                  .onDisconnect([&](){
+                          testDiag("Disconn");
+                          edisconn.signal();
+                      })
+                  .exec();
+
+    testTrue(edisconn.wait(5.0))<<" Initially Disconnected";
+
+    testTrue(econn.wait(5.0))<<" Connected";
+
+    auto op = cli.get("mailbox")
+                  .exec();
+
+    testTrue(edisconn.wait(5.0))<<" Disconnected";
+
+    testEq(source->closecount, 1u);
+}
+
+void testWhoAmI()
+{
+    testShow()<<__func__;
+
+    auto prototype(nt::NTScalar{TypeCode::String}.create());
+    auto pv(server::SharedPV::buildMailbox());
+    pv.onPut([](server::SharedPV& pv, std::unique_ptr<server::ExecOp>&& op, Value&& val) {
+        testDiag("Poke whoami");
+        auto cred(op->credentials());
+        pv.post(val.cloneEmpty().update("value", cred->account));
+        op->reply();
+    });
+
+    pv.open(prototype);
+    auto serv(server::Config::isolated()
+                  .build()
+                  .addPV("whoami", pv)
+                  .start());
+    auto cli(serv.clientConfig().build());
+
+    cli.put("whoami").exec()->wait(5.0);
+    auto val(cli.get("whoami").exec()->wait(5.0));
+    auto whoami(val["value"].as<std::string>());
+    testTrue(!whoami.empty())<<" whoami \""<<escape(whoami)<<"\"";
 }
 
 } // namespace
 
 MAIN(testget)
 {
-    testPlan(62);
+    testPlan(80);
     testSetup();
     logger_config_env();
     const bool canIPv6 = pvxs::impl::evsocket::canIPv6;
+    testEmptyName();
     Tester().testConnector();
     Tester().testWaiter();
     Tester(AF_INET).loopback();
@@ -533,12 +683,16 @@ MAIN(testget)
     Tester().cancel();
     Tester().asyncCancel();
     Tester().orphan();
+    Tester().name();
     Tester().manualExec();
     Tester().badRequest();
     Tester().delayExec();
     Tester().ordering();
-    testError(false);
-    testError(true);
+    testError(ErrorSource::phaseCreate);
+    testError(ErrorSource::phaseOp);
+    testError(ErrorSource::phaseGet);
+    testServerClose();
+    testWhoAmI();
     cleanup_for_valgrind();
     return testDone();
 }

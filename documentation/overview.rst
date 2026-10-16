@@ -93,7 +93,7 @@ Comparison with pvDataCPP
 -------------------------
 
 The data component (`pvxs::Value`) of PVXS corresponds with the `pvDataCPP <https://github.com/epics-base/pvDataCPP>`_ module.
-It also incorporates parts of the `normativeTypesCPP <https://github.com/epics-base/normativeTypesCPP>`_ module (cf. `ntapi`).
+It also incorporates parts of the `normativeTypesCPP <https://github.com/epics-base/normativeTypesCPP>`_ module (cf. :ref:`ntapi`).
 
 The most obvious difference in the design of pvData vs. PVXS is that the "class PVField" hierarchy is replaced
 with the single `pvxs::Value` class.
@@ -187,7 +187,7 @@ Testing for changed fields
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 While the PVA protocol is based around the idea of transferring partial updates
-to some structure fields, the PVField container classes don't incorporate this.
+to some structure fields, the PVField container classes do not incorporate this.
 Instead, it is necessary to handle an separate BitSet object provided alongside each PVStructure.
 
 With PVXS, tracking of changed (or valid) fields is built into the Value class.
@@ -331,11 +331,11 @@ Comparison with pvAccessCPP
 ---------------------------
 
 The client and server components of PVXS are heavily influenced by the `pvac <http://epics-base.github.io/pvAccessCPP/group__pvac.html>`_ and `pvas <http://epics-base.github.io/pvAccessCPP/group__pvas.html>`_ APIs of pvAccessCPP.
-eg. the analog of pvac::ClientProvider is `pvxs::client::Context`, while pvas::Server and pvas::SharedPV correspond with `pvxs::server::Server` and `pvxs::server::SharedPV`.
+eg. the analog of pvac::ClientProvider is `pvxs::client::Context`, while pvas::Server and ``pvas::SharedPV`` correspond with `pvxs::server::Server` and `pvxs::server::SharedPV`.
 
 The principle practical difference is that PVXS uses functors where the other APIs using interface classes.
 
-For example, sub-classing pvac::ClientChannel::GetCallback to provide a getDone() callback.
+For example, sub-classing ``pvac::ClientChannel::GetCallback`` to provide a getDone() callback.
 
 .. code-block:: c++
 

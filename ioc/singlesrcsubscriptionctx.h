@@ -16,11 +16,12 @@
 #include "fieldconfig.h"
 #include "subscriptionctx.h"
 #include "utilpvt.h"
+#include "securityclient.h"
 
 namespace pvxs {
 namespace ioc {
 
-struct SingleInfo : public MappingInfo {
+struct SingleInfo : public MappingInfo, public SingleSecurityCache {
     Channel chan;
     INST_COUNTER(SingleInfo);
 
@@ -43,7 +44,7 @@ public:
     // This is used to store the current value.  Each subscription event simply merges
     // new fields into this value
     Value currentValue{};
-    std::shared_ptr<SingleInfo> info;
+    const std::shared_ptr<SingleInfo> info;
     epicsMutex eventLock{};
     std::unique_ptr<server::MonitorControlOp> subscriptionControl{};
     bool eventsEnabled = false;

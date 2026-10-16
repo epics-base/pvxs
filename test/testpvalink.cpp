@@ -4,10 +4,14 @@
  * in file LICENSE that is included with this distribution.
  */
 
+#include "epicsTime.h"
 #include <testMain.h>
 #include <epicsExit.h>
+#include <iocsh.h>
 #include <dbLock.h>
 #include <dbLink.h>
+#include <recGbl.h>
+#include <dbAccess.h>
 #include <dbUnitTest.h>
 #include <aiRecord.h>
 #include <aaoRecord.h>
@@ -17,6 +21,7 @@
 #include <longinRecord.h>
 #include <longoutRecord.h>
 #include <stringoutRecord.h>
+#include <registryFunction.h>
 
 #define PVXS_ENABLE_EXPERT_API
 
@@ -31,6 +36,8 @@
 #include "dblocker.h"
 #include "qsrvpvt.h"
 #include "pvalink.h"
+#include "capturestd.h"
+#include "testioc.h"
 
 using namespace pvxs::ioc;
 using namespace pvxs;
@@ -338,7 +345,13 @@ namespace {
             src->tse = epicsTimeEventDeviceTime;
             src->time.secPastEpoch = 0x12345678;
             src->time.nsec = 0x10203040;
+#ifdef dbGetTimeStampTag
+            src->utag = 0x00010002;
+#endif
             src->val = 7;
+#ifdef HAS_ALARM_MESSAGE
+            strcpy(src->amsg, "Test");
+#endif
             dbProcess((dbCommon*)src);
             dbScanUnlock((dbCommon*)src);
         }
@@ -346,7 +359,6 @@ namespace {
 
         long ret, nelem;
         epicsEnum16 stat, sevr;
-        epicsTimeStamp time;
         char egu[10] = "";
         short prec;
         double val, lolo, low, high, hihi;
@@ -364,9 +376,42 @@ namespace {
                  && stat==LINK_ALARM && sevr==INVALID_ALARM)
                 <<" ret="<<ret<<" stat="<<stat<<" sevr="<<sevr;
 
-        testTrue((ret=dbGetTimeStamp(&inp->inp, &time))==0
-                 && time.secPastEpoch==0 && time.nsec==0)
-                <<" ret="<<ret<<" sec="<<time.secPastEpoch<<" ns="<<time.nsec;
+#ifdef HAS_ALARM_MESSAGE
+        {
+            char amsg[DB_AMSG_SIZE];
+            amsg[sizeof(amsg)-1] = '\0';
+            testTrue((ret=dbGetAlarmMsg(&inp->inp, &stat, &sevr, amsg, sizeof(amsg)-1))==0
+                     && stat==LINK_ALARM && sevr==INVALID_ALARM
+                     && strncmp(amsg, "", sizeof(amsg))==0)
+                    <<" ret="<<ret<<" stat="<<stat<<" sevr="<<sevr<<" amsg="<<amsg;
+        }
+#else
+        testSkip(1, "No AMSG");
+#endif
+
+        auto checkTime = [](DBLINK *plink,
+                            epicsUInt32 sec, epicsUInt32 ns,
+                            epicsUTag utag)
+        {
+            epicsTimeStamp actualT;
+            long ret;
+
+#ifdef dbGetTimeStampTag
+            epicsUTag actualU;
+            testTrue((ret=dbGetTimeStampTag(plink, &actualT, &actualU))==0
+                     && actualT.secPastEpoch==sec
+                     && actualT.nsec==ns
+                     && actualU==utag)
+                <<" ret="<<ret<<" sec="<<actualT.secPastEpoch<<" ns="<<actualT.nsec<<" utag="<<actualU;
+#else
+            testTrue((ret=dbGetTimeStamp(plink, &actualT))==0
+                     && actualT.secPastEpoch==sec
+                     && actualT.nsec==ns)
+                <<" ret="<<ret<<" sec="<<actualT.secPastEpoch<<" ns="<<actualT.nsec;
+#endif
+        };
+
+        checkTime(&inp->inp, 0, 0, 0);
 
         testTrue((ret=dbGetLink(&inp->inp, DBR_DOUBLE, &val, nullptr, nullptr))==0
                  && val==7.0)<<" ret="<<ret<<" val="<<val;
@@ -376,9 +421,20 @@ namespace {
                  && stat==LINK_ALARM && sevr==MINOR_ALARM)
                 <<" ret="<<ret<<" stat="<<stat<<" sevr="<<sevr;
 
-        testTrue((ret=dbGetTimeStamp(&inp->inp, &time))==0
-                 && time.secPastEpoch==0x12345678 && time.nsec==0x10203040)
-                <<" ret="<<ret<<" sec="<<time.secPastEpoch<<" ns="<<time.nsec;
+#ifdef HAS_ALARM_MESSAGE
+        {
+            char amsg[DB_AMSG_SIZE];
+            amsg[sizeof(amsg)-1] = '\0';
+            testTrue((ret=dbGetAlarmMsg(&inp->inp, &stat, &sevr, amsg, sizeof(amsg)-1))==0
+                     && stat==LINK_ALARM && sevr==MINOR_ALARM
+                     && strncmp(amsg, "HIGH", sizeof(amsg))==0)
+                    <<" ret="<<ret<<" stat="<<stat<<" sevr="<<sevr<<" amsg="<<amsg;
+        }
+#else
+        testSkip(1, "No AMSG");
+#endif
+
+        checkTime(&inp->inp, 0x12345678, 0x10203040, 0x00010002);
 
         testTrue((ret=dbGetGraphicLimits(&inp->inp, &low, &high))==0 && low==-9 && high==9)
                 <<" ret="<<ret<<" low="<<low<<" high="<<high;
@@ -398,6 +454,66 @@ namespace {
 
         testTrue((ret=dbGetNelements(&inp->inp, &nelem))==0 && nelem==1)
                 <<" ret="<<ret<<" nelem='"<<nelem<<"'";
+
+        dbScanUnlock((dbCommon*)inp);
+    }
+
+    long setAMSG(dbCommon *prec)
+    {
+        (void)recGblSetSevrMsg(prec, READ_ALARM, MAJOR_ALARM, "%s", __func__);
+        prec->time.secPastEpoch = 0x12345678;
+        prec->time.nsec = 0x10203041;
+        return 0;
+    }
+
+    void testMetaMS()
+    {
+        testDiag("==== %s ====", __func__);
+
+        testqsrvWaitForLinkConnected("meta:inp:ms.INP");
+
+        {
+            QSrvWaitForLinkUpdate U("meta:inp:ms.INP");
+            testdbPutFieldOk("meta:src:ms.PROC", DBR_LONG, 0);
+        }
+        auto inp = (aiRecord*)testdbRecordPtr("meta:inp:ms");
+
+        dbScanLock((dbCommon*)inp);
+
+        testTrue(dbIsLinkConnected(&inp->inp)!=0);
+
+        testEq(dbGetLinkDBFtype(&inp->inp), DBF_DOUBLE);
+
+        testOk(inp->nsev==0 && inp->nsta==0
+#ifdef HAS_ALARM_MESSAGE
+               && inp->namsg[0]==0
+#endif
+                ,
+               "NSEVR=%u NSTAT=%u NAMSG=\"%s\"", inp->nsev, inp->nsta,
+#ifdef HAS_ALARM_MESSAGE
+                inp->namsg
+#else
+                "N/A"
+#endif
+                );
+
+        long ret;
+        double val;
+        testTrue((ret=dbGetLink(&inp->inp, DBR_DOUBLE, &val, nullptr, nullptr))==0
+                 && val==0.0)<<" ret="<<ret<<" val="<<val;
+
+        testOk(inp->nsev==MAJOR_ALARM && inp->nsta==LINK_ALARM
+#ifdef HAS_ALARM_MESSAGE
+               && strcmp(inp->namsg, "setAMSG")==0
+#endif
+               ,
+               "NSEVR=%u NSTAT=%u NAMSG=\"%s\"", inp->nsev, inp->nsta,
+#ifdef HAS_ALARM_MESSAGE
+               inp->namsg
+#else
+               "N/A"
+#endif
+               );
 
         dbScanUnlock((dbCommon*)inp);
     }
@@ -477,13 +593,126 @@ namespace {
         testdbGetFieldEqual("enum:tgt:b", DBR_STRING, "one");
         testTodoEnd();
     }
+
+    void testNTNDArray()
+    {
+        testDiag("==== %s ====", __func__);
+        auto serv(ioc::server());
+
+        auto ntndarray(server::SharedPV::buildReadonly());
+        auto top = nt::NTNDArray{}.create();
+        top["value->floatValue"] = shared_array<const float>({0.0});
+        ntndarray.open(top);
+        serv.addPV("source:ntndarray", ntndarray);
+
+        testqsrvWaitForLinkConnected("target:ntndarray_inp.INP");
+
+        {
+            QSrvWaitForLinkUpdate A("target:ntndarray_inp.INP");
+            auto update = ntndarray.fetch().cloneEmpty();
+            update["value->floatValue"] = shared_array<const float>({0.1, 0.2, 0.3, 0.4, 0.5});
+            ntndarray.post(update);
+        }
+        static const epicsFloat32 expected_float_A[] = {0.1, 0.2, 0.3, 0.4, 0.5};
+        testdbGetArrFieldEqual("target:ntndarray_inp", DBF_FLOAT, 5, 5, expected_float_A);
+
+        {
+            QSrvWaitForLinkUpdate B("target:ntndarray_inp.INP");
+            auto update = ntndarray.fetch().cloneEmpty();
+            update["value->floatValue"] = shared_array<const float>({0.6, 0.7, 0.8, 0.9, 0.91});
+            ntndarray.post(update);
+        }
+        static const epicsFloat32 expected_float_B[] = {0.6, 0.7, 0.8, 0.9, 0.91};
+        testdbGetArrFieldEqual("target:ntndarray_inp", DBF_FLOAT, 5, 5, expected_float_B);
+
+        serv.removePV("source:ntndarray");
+        ntndarray.close();
+    }
+
+    void testiocsh()
+    {
+        testDiag("==== %s ====", __func__);
+
+        {
+            CaptureStd cap([](){
+                iocshCmd("dbpvar \"\" 5");
+            });
+            testStrEq(cap.err(), "");
+            testStrMatch(".*PVA links in all records.*async:target conn=T.*", cap.out());
+        }
+        {
+            CaptureStd cap([](){
+                iocshCmd("dbjlr \"\" 5");
+            });
+            testStrEq(cap.err(), "");
+            testStrMatch(".*\'pva\': testToFromString:str1.*", cap.out());
+        }
+    }
+
+    void testUserTag()
+    {
+        testDiag("==== %s ====", __func__);
+        auto serv(ioc::server());
+        TestClient ctxt;
+
+        // create SharedPV to manipulate userTag
+        auto srcutag_shpv(server::SharedPV::buildReadonly());
+        auto top = nt::NTScalar{TypeCode::Int32}.create();
+        top["value"] = 0;
+        top["timeStamp.secondsPastEpoch"] = 0;
+        top["timeStamp.nanoseconds"] = 0;
+        top["timeStamp.userTag"] = 0;
+        srcutag_shpv.open(top);
+        serv.addPV("source:utag", srcutag_shpv);
+
+        // routine check if link is connected
+        testqsrvWaitForLinkConnected("target:utag.INP");
+
+        // publish update to be reflected in target:utag
+        {
+            auto update = top.cloneEmpty();
+            update["value"] = 42;
+            update["timeStamp.secondsPastEpoch"] = 0x12345678;
+            update["timeStamp.nanoseconds"] = 0x10203040;
+            update["timeStamp.userTag"] = 0x90010002;
+            QSrvWaitForLinkUpdate A("target:utag.INP");
+            srcutag_shpv.post(update);
+        }
+
+        // Check if record was updated with timeStamp + userTag from link
+        auto prec(testdbRecordPtr("target:utag"));
+        {
+            ioc::DBLocker L(prec);
+            testEq(prec->time.secPastEpoch, (0x12345678u-POSIX_TIME_AT_EPICS_EPOCH));
+            testEq(prec->time.nsec, 0x10203040u);
+#if DBR_UTAG
+            testEq(prec->utag, 0x90010002u);
+#else
+            testSkip(1, "No UTAG");
+#endif
+        }
+
+        // get PV from target:utag and verify if timeStamp is the same from source:utag
+        auto val(ctxt.get("target:utag").exec()->wait(5.0));
+        testEq(val["value"].as<int32_t>(), 42);
+        testEq(val["timeStamp.secondsPastEpoch"].as<int64_t>(), 0x12345678);
+        testEq(val["timeStamp.nanoseconds"].as<int32_t>(), 0x10203040);
+#if DBR_UTAG
+        testEq(val["timeStamp.userTag"].as<int32_t>(), (int32_t)0x90010002);
+#else
+        testSkip(1, "No UTAG");
+#endif
+        ctxt.close();
+    }
+
+
 } // namespace
 
 extern "C" void testioc_registerRecordDeviceDriver(struct dbBase *);
 
 MAIN(testpvalink)
 {
-    testPlan(92);
+    testPlan(113);
     testSetup();
     pvxs::logger_config_env();
 
@@ -493,6 +722,7 @@ MAIN(testpvalink)
 
         testdbReadDatabase("testioc.dbd", NULL, NULL);
         testioc_registerRecordDeviceDriver(pdbbase);
+        registryFunctionAdd("setAMSG", (REGISTRYFUNCTION)&setAMSG);
         testdbReadDatabase("testpvalink.db", NULL, NULL);
 
         IOC.init();
@@ -509,9 +739,13 @@ MAIN(testpvalink)
         testPutAsync();
         testDisconnect();
         testMeta();
+        testMetaMS();
         testFwd();
         testAtomic();
         testEnum();
+        testNTNDArray();
+        testiocsh();
+        testUserTag();
     }
     catch (std::exception &e)
     {
