@@ -7,13 +7,13 @@ DIRS += configure
 DIRS += bundle
 
 DIRS += setup
-setup_DEPEND_DIRS = configure
+setup_DEPEND_DIRS = configure bundle
 
 DIRS += setup2
 setup2_DEPEND_DIRS = setup
 
 DIRS += src
-src_DEPEND_DIRS = setup2 bundle
+src_DEPEND_DIRS = setup2
 
 DIRS += tools
 tools_DEPEND_DIRS = src
