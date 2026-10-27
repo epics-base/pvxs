@@ -30,6 +30,8 @@ pvxsIoc_SRCS += iochooks.cpp
 
 ifdef BASE_3_15
 
+DBDINC += qstringinRecord
+
 pvxsIoc_SRCS += credentials.cpp
 pvxsIoc_SRCS += channel.cpp
 pvxsIoc_SRCS += demo.cpp
@@ -42,6 +44,9 @@ pvxsIoc_SRCS += singlesource.cpp
 pvxsIoc_SRCS += singlesourcehooks.cpp
 pvxsIoc_SRCS += singlesrcsubscriptionctx.cpp
 pvxsIoc_SRCS += typeutils.cpp
+pvxsIoc_SRCS += qfield.cpp
+pvxsIoc_SRCS += qstringinRecord.cpp
+pvxsIoc_SRCS += devQSISoft.cpp
 
 ifdef BASE_7_0
 
@@ -97,3 +102,5 @@ $(COMMON_DIR)/pvxsIoc.dbd: ../$(PVXS_DBD)
 
 pvxsIoc.dbd$(DEP):
 	echo "$(COMMONDEP_TARGET): ../Makefile" > $@
+
+qstringinRecord$(DEP): $(COMMON_DIR)/qstringinRecord.h
