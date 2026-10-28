@@ -16,10 +16,12 @@ namespace ioc {
 void single_enable();
 void dbRegisterQSRV2();
 void addSingleSrc();
+void qfield_enable();
 #else
 static inline void single_enable() {}
 static inline void dbRegisterQSRV2() {}
 static inline void addSingleSrc() {}
+static inline void qfield_enable() {}
 #endif
 
 #if EPICS_VERSION_INT >= VERSION_INT(7, 0, 0 ,0)
