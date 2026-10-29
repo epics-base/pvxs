@@ -528,6 +528,11 @@ void from_wire(Buffer& buf, shared_array<const void>& varr)
 {
     Size slen{};
     from_wire(buf, slen);
+    // A valid array cannot contain more elements than there are bytes remaining in the
+    // message (each element occupies >= 1 byte on the wire).  Bound the declared count
+    // before allocating so a crafted count cannot drive an unbounded allocation.
+    if(slen.size > (size_t)buf.size())
+        slen.size = buf.size();
     shared_array<E> arr(slen.size);
 
     if(std::is_pod<C>::value) {
