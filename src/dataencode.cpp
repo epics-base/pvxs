@@ -153,6 +153,9 @@ void from_wire(Buffer& buf, std::vector<FieldDesc>& descs, TypeStore& cache, uns
             {
                 auto& fld = descs.back();
 
+                // bound child count to bytes remaining before reserving (see note in pvaproto.h)
+                if(nfld.size > (size_t)buf.size())
+                    nfld.size = buf.size();
                 fld.miter.reserve(nfld.size);
             }
 
@@ -618,6 +621,9 @@ void from_wire_field(Buffer& buf, TypeStore& ctxt,  const FieldDesc* desc, const
         case TypeCode::StructA:{
             Size alen{};
             from_wire(buf, alen);
+            // bound element count to bytes remaining before allocating (see note in pvaproto.h)
+            if(alen.size > (size_t)buf.size())
+                alen.size = buf.size();
             shared_array<Value> arr(alen.size);
             std::shared_ptr<const FieldDesc> etype(store->top->desc,
                                                    &desc->members[0]); // alias
@@ -635,6 +641,9 @@ void from_wire_field(Buffer& buf, TypeStore& ctxt,  const FieldDesc* desc, const
         case TypeCode::UnionA: {
             Size alen{};
             from_wire(buf, alen);
+            // bound element count to bytes remaining before allocating (see note in pvaproto.h)
+            if(alen.size > (size_t)buf.size())
+                alen.size = buf.size();
             shared_array<Value> arr(alen.size);
             auto cdesc = &desc->members[0];
 
@@ -667,6 +676,9 @@ void from_wire_field(Buffer& buf, TypeStore& ctxt,  const FieldDesc* desc, const
         case TypeCode::AnyA:{
             Size alen{};
             from_wire(buf, alen);
+            // bound element count to bytes remaining before allocating (see note in pvaproto.h)
+            if(alen.size > (size_t)buf.size())
+                alen.size = buf.size();
             shared_array<Value> arr(alen.size);
 
             for(auto& elem : arr) {
