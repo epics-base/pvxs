@@ -502,6 +502,7 @@ void pvxsBaseRegistrar() noexcept {
 
         if(enableQ) {
             single_enable();
+            qfield_enable();
             group_enable();
             pvalink_enable();
         }

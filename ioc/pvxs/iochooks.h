@@ -27,6 +27,7 @@
 #endif
 
 namespace pvxs {
+class Value;
 namespace server {
 class Server;
 }
@@ -164,6 +165,15 @@ public:
     inline
     bool running() const { return isRunning; }
 };
+
+/** Post update to special record field
+ * @param fldaddr Address of record instance field
+ *
+ * Call from record support.
+ *
+ * @since UNRELEASED
+ */
+void qfield_post(Value* fldaddr);
 
 #endif // base >= 3.15
 

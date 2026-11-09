@@ -1,0 +1,56 @@
+#*************************************************************************
+# Copyright (c) 2002 The University of Chicago, as Operator of Argonne
+#     National Laboratory.
+# Copyright (c) 2002 The Regents of the University of California, as
+#     Operator of Los Alamos National Laboratory.
+# Copyright (c) 2026 Michael Davidsaver
+# EPICS BASE is distributed subject to a Software License Agreement found
+# in file LICENSE that is included with this distribution.
+#*************************************************************************
+
+menu(qstringinPOST) {
+    choice(qstringinPOST_OnChange,"On Change")
+    choice(qstringinPOST_Always,"Always")
+}
+recordtype(qstringin) {
+    include "dbCommon.dbd"
+    %#include <pvxs/data.h>
+    %/* Declare Device Support Entry Table */
+    %struct qstringinRecord;
+    %typedef struct qstringindset {
+    %    dset common; /*init_record returns: (-1,0)=>(failure,success)*/
+    %    long (*read_qstringin)(struct qstringinRecord *prec); /*returns: (-1,0)=>(failure,success)*/
+    %} qstringindset;
+    %#define HAS_qstringindset
+    %
+    field(VAL,DBF_NOACCESS) {
+        prompt("Current Value")
+        promptgroup("40 - Input")
+        asl(ASL0)
+        pp(TRUE)
+        extra("::pvxs::Value val")
+    }
+    field(OVAL,DBF_NOACCESS) {
+        prompt("Previous Value")
+        special(SPC_NOMOD)
+        interest(3)
+        extra("::pvxs::Value oval")
+    }
+    field(INP,DBF_INLINK) {
+        prompt("Input Specification")
+        promptgroup("40 - Input")
+        interest(1)
+    }
+    field(MPST,DBF_MENU) {
+        prompt("Post Value Monitors")
+        promptgroup("80 - Display")
+        interest(1)
+        menu(qstringinPOST)
+    }
+    field(SIOL,DBF_INLINK) {
+        prompt("Simulation Input Link")
+        promptgroup("90 - Simulate")
+        interest(1)
+    }
+}
+device(qstringin, CONSTANT, devQSISoft, "Soft Channel")

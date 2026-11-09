@@ -1,0 +1,10 @@
+record(qstringin, "qsi1") {
+    field(INP, {const:"initial"})
+}
+record(stringin, "si2") {
+    field(VAL , "special")
+    field(FLNK, "qsi2")
+}
+record(qstringin, "qsi2") {
+    field(INP, "si2")
+}

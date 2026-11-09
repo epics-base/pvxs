@@ -150,6 +150,13 @@ TESTFILES += ../testqsinglelsi.db
 TESTFILES += ../testioc.acf
 TESTS += testqsingle
 
+TESTPROD_HOST += testqfield
+testqfield_SRCS += testqfield.cpp
+testqfield_SRCS += testioc_registerRecordDeviceDriver.cpp
+testqfield_LIBS = pvxsIoc pvxs $(EPICS_BASE_IOC_LIBS)
+TESTFILES += ../testqfield.db
+TESTS += testqfield
+
 endif
 
 ifdef BASE_7_0
