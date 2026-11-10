@@ -19,6 +19,7 @@
 #include <system_error>
 #include <deque>
 #include <limits>
+#include <list>
 #include <algorithm>
 
 #include <event2/event.h>
@@ -735,6 +736,7 @@ struct IfMapDaemon : private epicsThreadRunable {
     epicsMutex lock;
     epicsEvent wake;
     std::shared_ptr<const IfaceMap::Current> latest;
+    std::list<std::function<void(const IfaceMap::Current&)>> listeners;
     bool stop = false;
     epicsThread worker;
     IfMapDaemon()
@@ -765,7 +767,18 @@ struct IfMapDaemon : private epicsThreadRunable {
                     epicsGuardRelease<epicsMutex> U(G);
                     wake.wait(15.0); // arbitrary period...
                     next = IfaceMap::refresh();
+                    if(*latest==*next)
+                        continue;
+
+                    for(auto& l : listeners) {
+                        try {
+                            l(*next); // next, previous
+                        } catch (std::exception& e) {
+                            log_exc_printf(logiface, "Unhandled exc %s : %s\n", typeid(e).name(), e.what());
+                        }
+                    }
                 }
+                log_warn_printf(logiface, "NIC configuration change detected %zu\n", next->byIndex.size());
                 latest.swap(next);
 
             } catch(std::exception& e){
@@ -904,6 +917,46 @@ std::set<std::string> IfaceMap::all_external() const
     return ret;
 }
 
+struct IfaceMap::Changer {
+    decltype(IfMapDaemon::listeners)::const_iterator it;
+    ~Changer() {
+        Guard G(ifmapper->lock);
+        ifmapper->listeners.erase(it);
+    }
+};
+
+std::shared_ptr<IfaceMap::Changer>
+IfaceMap::onChange(std::function<void (const IfaceMap::Current &)> &&fn)
+{
+    auto ret(std::make_shared<Changer>());
+    threadOnce<&mapInit>();
+    assert(ifmapper);
+    Guard G(ifmapper->lock);
+    ret->it = ifmapper->listeners.insert(ifmapper->listeners.end(), std::move(fn));
+    return ret;
+}
+
+bool IfaceMap::Iface::operator==(const Iface &o) const
+{
+    using P = decltype(addrs)::value_type;
+    auto comp = [](const P& l, const P& r) -> bool {
+        return l.first==r.first && l.second.compare(r.second, false)==0;
+    };
+    return name==o.name
+        && index==o.index
+        && isLO==o.isLO
+        && addrs.size()==o.addrs.size()
+        && std::equal(addrs.begin(), addrs.end(), o.addrs.begin(), comp)
+        && bcast.size()==o.bcast.size()
+        && std::equal(bcast.begin(), bcast.end(), o.bcast.begin(), comp);
+}
+
+bool IfaceMap::Current::operator==(const Current &o) const
+{
+    return byIndex.size()==o.byIndex.size()
+        && std::equal(byIndex.begin(), byIndex.end(), o.byIndex.begin());
+    // assume byName and byAddr indices are consistent
+}
 
 void to_wire(Buffer& buf, const SockAddr& val)
 {
