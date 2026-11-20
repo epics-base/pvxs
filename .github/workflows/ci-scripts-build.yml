@@ -108,7 +108,7 @@ jobs:
             libevent: "release-2.1.12-stable"
 
           - name: Native Linux with 7.0.2
-            os: ubuntu-latest
+            os: ubuntu-24.04
             cmp: gcc
             configuration: default
             set: "nofortify"
@@ -116,7 +116,7 @@ jobs:
             extra: "CMD_CPPFLAGS=\"-U_FORTIFY_SOURCE\""
 
           - name: Native Linux with 3.15
-            os: ubuntu-latest
+            os: ubuntu-24.04
             cmp: gcc
             configuration: default
             set: "nofortify"
@@ -124,7 +124,7 @@ jobs:
             extra: "CMD_CPPFLAGS=\"-U_FORTIFY_SOURCE\""
 
           - name: Native Linux with 3.14
-            os: ubuntu-latest
+            os: ubuntu-24.04
             cmp: gcc
             configuration: default
             set: "nofortify"
