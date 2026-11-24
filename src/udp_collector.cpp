@@ -83,7 +83,6 @@ struct UDPManager::Pvt {
     SockAttach attach;
 
     evbase loop;
-    IfaceMap ifmap;
 
     // only manipulate from loop worker thread
     // key'd by address family and port#
@@ -91,7 +90,6 @@ struct UDPManager::Pvt {
 
     Pvt()
         :loop("PVXUDP", epicsThreadPriorityCAServerLow-4)
-        ,ifmap(IfaceMap::instance())
     {}
     ~Pvt()
     {
@@ -217,7 +215,7 @@ void UDPCollector::handle_static(evutil_socket_t fd, short ev, void *raw)
         if(!(ev&EV_READ))
             return;
 
-        auto ifmap(self->manager->ifmap.current);
+        auto ifmap(IfaceMap::instance().current);
 
         // bound number of packets handled before going back to the reactor
         for(unsigned i=0; i<16 && self->handle_one(*ifmap); i++) {}
